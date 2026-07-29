@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ko" class="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>마켓로그 (MarketLog) - AI 전통시장 연계 소비 플랫폼</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    
+    <!-- Google Fonts & Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />   
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block" rel="stylesheet" />
+    <!-- 📍 네이버 지도 API SDK (NCP Client ID 적용) -->
+     <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=8iw3o3ksqx&submodules=geocoding"></script>
+    
+
+    <!-- Pretendard Web Font -->
+    <style>
+      @font-face {
+        font-family: 'Pretendard';
+        font-weight: 400;
+        font-display: swap;
+        src: local('Pretendard Regular'), url('https://cdn.jsdelivr.net/gh/Project-Noonnu/noonfonts_2107@1.1/Pretendard-Regular.woff') format('woff');
+      }
+      @font-face {
+        font-family: 'Pretendard';
+        font-weight: 600;
+        font-display: swap;
+        src: local('Pretendard SemiBold'), url('https://cdn.jsdelivr.net/gh/Project-Noonnu/noonfonts_2107@1.1/Pretendard-SemiBold.woff') format('woff');
+      }
+      @font-face {
+        font-family: 'Pretendard';
+        font-weight: 700;
+        font-display: swap;
+        src: local('Pretendard Bold'), url('https://cdn.jsdelivr.net/gh/Project-Noonnu/noonfonts_2107@1.1/Pretendard-Bold.woff') format('woff');
+      }
+      @font-face {
+        font-family: 'Pretendard';
+        font-weight: 800;
+        font-display: swap;
+        src: local('Pretendard ExtraBold'), url('https://cdn.jsdelivr.net/gh/Project-Noonnu/noonfonts_2107@1.1/Pretendard-ExtraBold.woff') format('woff');
+      }
+
+      body {
+        font-family: 'Pretendard', 'Helvetica Neue', Arial, sans-serif;
+        background-color: #F1F5F9;
+        color: #1E293B;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
+      .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+
+      /* Scanning animation */
+      @keyframes scanline {
+        0% { transform: translateY(-100%); opacity: 0; }
+        10% { opacity: 1; }
+        90% { opacity: 1; }
+        100% { transform: translateY(240px); opacity: 0; }
+      }
+      .animate-scanline {
+        animation: scanline 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      }
+
+      @keyframes pulse-ring {
+        0% { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+        70% { transform: scale(1.02); box-shadow: 0 0 0 16px rgba(16, 185, 129, 0); }
+        100% { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+      }
+      .animate-pulse-ring {
+        animation: pulse-ring 2s infinite;
+      }
+
+      /* Coupon styling */
+      .coupon-ticket {
+        position: relative;
+        background: #ffffff;
+        border-radius: 0.75rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        overflow: hidden;
+        border-left: 6px solid #0052FF;
+      }
+      .coupon-ticket::before,
+      .coupon-ticket::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        width: 18px;
+        height: 18px;
+        background-color: #F8FAFC;
+        border-radius: 50%;
+        transform: translateY(-50%);
+      }
+      .coupon-ticket::before { left: -9px; }
+      .coupon-ticket::after { right: -9px; }
+      .coupon-divider { border-left: 2px dashed #E2E8F0; }
+
+      /* Hide scrollbar */
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "trust-blue": "#3B82F6",
+              "safe-emerald": "#10B981",
+              "caution-amber": "#F59E0B",
+              "alert-rose": "#EF4444",
+              "background-slate": "#F1F5F9",
+              "surface-white": "#FFFFFF",
+              "surface-container-low": "#F8FAFC",
+              "surface-container": "#F1F5F9",
+              "surface-container-high": "#E2E8F0",
+              "on-surface": "#1E293B",
+              "on-surface-variant": "#475569",
+              "outline": "#64748B",
+              "outline-variant": "#E2E8F0"
+            }
+          }
+        }
+      }
+    </script>
+    <script type="module" crossorigin src="/assets/index-C0I2XVvs.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BuxOuwKI.css">
+  </head>
+  <body class="bg-background-slate min-h-screen text-on-surface antialiased">
+    <div id="root"></div>
+  </body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "name": "마켓로그",
+  "description": "AI 신뢰 검증 및 실시간 태깅 기반 전통시장 연쇄 소비 유도 플랫폼",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

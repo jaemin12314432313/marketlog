@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node
+node_modules/
+build/
+dist/
+coverage/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Backend runtime/data (not source)
+marketlog-backend07.25/marketlog.db
+marketlog-backend07.25/uploads/
+marketlog-backend07.25/checkpoints/
+marketlog-backend07.25/ai_engine/weights/
+
+# Misc
+.DS_Store
+*.log
+
+# Claude Code local-only settings
+.claude/settings.local.json
