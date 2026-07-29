@@ -129,6 +129,6 @@ SQLite 파일(`marketlog-backend07.25/marketlog.db`, git-ignore됨). 서버 최�
 2. `git init` + `.gitignore` 정리 (secrets, `node_modules`, AI 모델 가중치, DB 파일 제외) 후 초기 커밋
 3. 상품 피드를 메모리 리스트(`feed_db`)에서 `Product` DB 테이블로 이전 — 서버 재시작해도 상품/찜이 유지되도록 수정
 4. `Market`/`Store` 모델 통합 — 지도 점포 데이터와 가게 스토리를 하나의 소스로 정리, 시장별 필터링 버그(어떤 시장을 골라도 양동시장 데이터만 나오던 문제) 수정
-5. 상인 업로드 API에 인증 연결 — `kakao-register`/`merchant/upload`는 이제 `role=merchant` 계정 로그인 필요, `shopName`은 요청 값이 아니라 로그인 계정의 `shop_name`으로 서버에서 자동 지정
-6. `AiScanModal`의 카메라 버튼 배선 수정 — 중앙 셔터 버튼이 실제 카메라를 열지 않고 그냥 샘플 이미지로 재분석만 하던 버그, 갤러리용 input을 분리해 해결
 5. 프론트 지역 필터 버그 발견 — 백엔드 상품에 `marketId`/`region`이 없어 기본 지역에서 피드가 안 보이던 문제, `Product` 모델에 필드 추가로 해결
+6. 상인 업로드 API에 인증 연결 — `kakao-register`/`merchant/upload`는 이제 `role=merchant` 계정 로그인 필요, `shopName`은 요청 값이 아니라 로그인 계정의 `shop_name`으로 서버에서 자동 지정
+7. `AiScanModal`의 카메라 버튼 배선 수정 — 중앙 셔터 버튼이 실제 카메라를 열지 않고 그냥 샘플 이미지로 재분석만 하던 버그, 갤러리용 input을 분리해 해결
