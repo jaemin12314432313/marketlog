@@ -6,12 +6,19 @@ from dotenv import load_dotenv
 from api.map import router as map_router
 import os
 from api import merchant, consumer, recommend, auth, saved
-from db import Base, engine
+from db import Base, engine, SessionLocal
 import models  # noqa: F401  (모델을 등록해야 create_all에서 테이블이 생성됨)
+from seed import seed_if_empty
 
 load_dotenv()
 
 Base.metadata.create_all(bind=engine)
+
+_seed_db = SessionLocal()
+try:
+    seed_if_empty(_seed_db)
+finally:
+    _seed_db.close()
 
 app = FastAPI(title="MarketLog API Server", version="2.0.0")
 

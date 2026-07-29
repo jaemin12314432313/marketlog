@@ -5,9 +5,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from db import get_db
-from models import Bookmark, ScannedProduct, User
+from models import Bookmark, ScannedProduct, User, Product, product_to_dict
 from api.auth import get_current_user
-from api.consumer import feed_db
 
 router = APIRouter(prefix="/api/v1/saved", tags=["Saved"])
 
@@ -37,13 +36,16 @@ def scanned_to_dict(item: ScannedProduct) -> dict:
 @router.get("/bookmarks")
 def list_bookmarks(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     bookmarks = db.query(Bookmark).filter(Bookmark.user_id == current_user.id).all()
-    feed_by_id = {p["id"]: p for p in feed_db}
-    return [feed_by_id[b.product_id] for b in bookmarks if b.product_id in feed_by_id]
+    product_ids = [b.product_id for b in bookmarks]
+    if not product_ids:
+        return []
+    products = db.query(Product).filter(Product.id.in_(product_ids)).all()
+    return [product_to_dict(p) for p in products]
 
 
 @router.post("/bookmarks/{product_id}")
 def add_bookmark(product_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if not any(p["id"] == product_id for p in feed_db):
+    if not db.query(Product).filter(Product.id == product_id).first():
         raise HTTPException(status_code=404, detail="상품을 찾을 수 없습니다.")
 
     existing = (

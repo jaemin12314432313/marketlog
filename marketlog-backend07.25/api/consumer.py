@@ -1,11 +1,15 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Optional
+from sqlalchemy.orm import Session
 import torch
 import base64
 import io
 import os
 from PIL import Image
+
+from db import get_db
+from models import Product, Store, product_to_dict
 
 router = APIRouter(tags=["Consumer"])
 
@@ -83,37 +87,6 @@ SCAN_MOCK = {
     }
 }
 
-# ★ 실시간 메모리 DB
-feed_db: List[dict] = [
-    {
-        "id": "prod-1", "title": "제주 은갈치 대자 2마리", "shopName": "양동수산",
-        "distance": "800m", "timeAgo": "방금 전", "price": 18000, "publicPrice": 19500,
-        "priceTag": "공공 시세 대비 10% 저렴", "grade": "A+", "category": "수산물",
-        "imageUrl": "https://lh3.googleusercontent.com/aida-public/AB6AXuBPBsS9pCM36y_2W6Vey0_5EC88SbxJT0t7GhjPXTqlYnaqTLo0NcPV6LFPJH4p8pI2sVispE0SOUUZyXGM7sHnAfTR02l7Ecz_PaENAV0UotAJL_GFQ2-MlPFcyoWoDVhUhvNa5dMeWWVko5qNl4VottlwisP_V2H8J6BvPu4fkLyQ-lAczaPkDamw8VL1R4HpBabcEkOJK7MtMocMNcOhlDpmlg45ZYg8F7B_zr9m5nvPktBbJxjvUA",
-        "freshnessScore": 98, "defectScore": 95, "uniformityScore": 92,
-        "description": "새벽 목포 수협 위판장에서 경매로 낙찰받아 즉송된 완도산 은갈치입니다.",
-        "isMerchantUploaded": False
-    },
-    {
-        "id": "prod-2", "title": "논산 설향 딸기 500g", "shopName": "싱싱청과",
-        "distance": "1.2km", "timeAgo": "10분 전", "price": 12500, "publicPrice": 13000,
-        "priceTag": "시세와 비슷한 수준", "grade": "B+", "category": "과일",
-        "imageUrl": "https://lh3.googleusercontent.com/aida-public/AB6AXuDPrTKft45sE79PKyzcNxkpR7jiC94SaLZBeIpOho8PS6MfxcM24FBq5mPUD-KQhGgWNaVSPodpYSrMEPgddi0FNoTIy5QByRJ1O29bN2GoPyZ_bHdyNd5oLvlWDvbU1IxCuntiDyiletIj2q2SHcDwhgzncBso0wtlMj6iVE_kmfeXMGwbx6c0QNetTRXhf0m91HziI7YK5e-OWXOgc84THY9rQc3IN9xQ2glKexbCJmw0SCF4BrhWOw",
-        "freshnessScore": 94, "defectScore": 92, "uniformityScore": 91,
-        "description": "당도가 높아 과즙이 풍부하며 무름 현상이 없는 우수한 상품입니다.",
-        "isMerchantUploaded": False
-    },
-    {
-        "id": "prod-3", "title": "한돈 삼겹살 600g (냉장)", "shopName": "우리축산",
-        "distance": "300m", "timeAgo": "방금 전", "price": 16800, "publicPrice": 19800,
-        "priceTag": "공공 시세 대비 15% 저렴", "grade": "A+", "category": "정육",
-        "imageUrl": "https://lh3.googleusercontent.com/aida-public/AB6AXuDfqKKJROFYLfdHz4E-dhGPYRcjGFgyiVvPNDRmUVShw2Z2MABEaTDMc3Yh-oO77txFIhM4Fko4dPgwWTc4rYljeZnxkIfQcnrLP9JEOVhqXwiVmd5UxKDOBLXFugDB2zSgwLp4FR-guYiZtxriswvRdiFTkbxW2WcC9swB-xuvAG4kr3R3OIomDMdUDdfW0t8d2__fEnZGUFSVN-2Y6i8MIpXxpixAPZcIYGT2pHfzOSqTFdiVjw5Bfg",
-        "freshnessScore": 98, "defectScore": 96, "uniformityScore": 95,
-        "description": "선홍빛 마블링이 우수하며 지방 비율이 매우 균일한 1등급 한돈입니다.",
-        "isMerchantUploaded": False
-    }
-]
-
 def run_ai_inference(image: Image.Image) -> dict:
     if item_model is None:
         return None
@@ -137,8 +110,9 @@ def run_ai_inference(image: Image.Image) -> dict:
 
 # 피드 조회
 @router.get("/api/v1/consumer/feed")
-async def get_feeds():
-    return feed_db
+async def get_feeds(db: Session = Depends(get_db)):
+    products = db.query(Product).order_by(Product.created_at.desc()).all()
+    return [product_to_dict(p) for p in products]
 
 # AI 스캔 (base64 이미지)
 class ScanRequest(BaseModel):
@@ -212,13 +186,8 @@ async def docent_story(request: DocentRequest):
 
 # 가게 스토리
 @router.get("/api/v1/consumer/store/{store_id}/story")
-async def get_store_story(store_id: str):
-    stories = {
-        "fish_12": "양동수산은 30년 전통의 수산물 전문점으로, 매일 새벽 목포 위판장에서 직송된 신선한 활어를 취급합니다.",
-        "meat_05": "우리축산은 지리산 청정 농가에서 직접 가져온 최고급 한돈을 전문으로 합니다.",
-        "veg_01": "싱싱야채는 전남 나주 산지 직송 채소를 당일 공수하여 신선도를 보장합니다."
-    }
-    return {
-        "store_name": store_id,
-        "story_text": stories.get(store_id, "전통시장의 오랜 역사와 함께한 신뢰할 수 있는 가게입니다.")
-    }
+async def get_store_story(store_id: str, db: Session = Depends(get_db)):
+    store = db.query(Store).filter(Store.id == store_id).first()
+    if not store:
+        raise HTTPException(status_code=404, detail="가게를 찾을 수 없습니다.")
+    return {"store_name": store.name, "story_text": store.story_text}
