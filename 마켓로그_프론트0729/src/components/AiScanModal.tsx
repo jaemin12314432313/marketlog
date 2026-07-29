@@ -46,6 +46,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
   });
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
@@ -206,12 +207,19 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
         )}
       </div>
 
-      {/* Hidden Native File Input */}
+      {/* Hidden Native File Inputs */}
       <input
         ref={cameraInputRef}
         type="file"
         accept="image/*"
         capture="environment"
+        onChange={handleCameraFileChange}
+        className="hidden"
+      />
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
         onChange={handleCameraFileChange}
         className="hidden"
       />
@@ -231,7 +239,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
           <div className="flex items-center justify-center gap-8 px-6 pt-2">
             {/* Left Gallery Thumbnail Button */}
             <button
-              onClick={() => cameraInputRef.current?.click()}
+              onClick={() => galleryInputRef.current?.click()}
               className="w-12 h-12 rounded-full border-2 border-white/90 overflow-hidden bg-black/60 flex items-center justify-center p-0.5 shadow-lg active:scale-90 transition-transform group"
               title="갤러리 사진 선택"
             >
@@ -242,9 +250,9 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
               />
             </button>
 
-            {/* Main Center Camera Shutter Button (Triggers AI Analysis) */}
+            {/* Main Center Camera Shutter Button (Opens Camera, Then Triggers AI Analysis) */}
             <button
-              onClick={() => handleSnapCamera()}
+              onClick={() => cameraInputRef.current?.click()}
               disabled={isAnalyzing}
               className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center p-1.5 border border-white/40 cursor-pointer active:scale-95 transition-transform shadow-xl"
               title="카메라 AI 촬영 및 분석"

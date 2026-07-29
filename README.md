@@ -86,13 +86,13 @@ SQLite 파일(`marketlog-backend07.25/marketlog.db`, git-ignore됨). 서버 최�
 | GET | `/config` | 네이버 지도 client id |
 | GET | `/stores?market_name=...` | 해당 시장의 점포 핀 + 중심좌표 (시장명 불일치 시 양동시장으로 폴백) |
 
-### 상인
+### 상인 (전부 Bearer 필요, `role=merchant` 계정만 가능)
 | Method | Path | 설명 |
 |---|---|---|
 | POST | `/api/kakao-register` | 카카오톡 채팅/이미지로 상품 등록 (Gemini 연동 예정, 현재 스텁) |
 | POST | `/api/v1/merchant/upload` | 사진 업로드로 상품 등록 |
 
-⚠️ 위 두 엔드포인트는 **로그인 없이 누구나 호출 가능** — 인증 연결이 아직 안 됨 (아래 TODO 참고).
+등록되는 상품의 `shopName`은 요청 본문이 아니라 **로그인한 계정의 `shop_name`**에서 자동으로 채워진다(가짜 이름으로 상품 등록 불가). `customer` 계정으로 호출하면 403.
 
 ### 추천 `/api/v1/recommend?item=...`
 정적 규칙 기반 연관상품 추천 (삼겹살/은갈치/딸기).
@@ -108,7 +108,6 @@ SQLite 파일(`marketlog-backend07.25/marketlog.db`, git-ignore됨). 서버 최�
 
 ## 알려진 이슈 / TODO
 
-- 상인 업로드 API(`kakao-register`, `merchant/upload`)에 로그인 인증 연결 필요 (지금은 누구나 아무 이름으로 상품 등록 가능)
 - 지갑(퀘스트/쿠폰) — 구매/이벤트를 기록하는 흐름이 없어서 보류 중. 먼저 주문/이벤트 기록이 필요
 - 망원/자갈치 시장은 `Store` 실데이터 없음
 - `api/consumer.py`의 이모지 `print`문이 Windows 콘솔(cp949)에서 서버를 죽이는 기존 버그가 있음 → `PYTHONIOENCODING=utf-8`로 우회 중, 근본 수정은 안 함
@@ -130,4 +129,6 @@ SQLite 파일(`marketlog-backend07.25/marketlog.db`, git-ignore됨). 서버 최�
 2. `git init` + `.gitignore` 정리 (secrets, `node_modules`, AI 모델 가중치, DB 파일 제외) 후 초기 커밋
 3. 상품 피드를 메모리 리스트(`feed_db`)에서 `Product` DB 테이블로 이전 — 서버 재시작해도 상품/찜이 유지되도록 수정
 4. `Market`/`Store` 모델 통합 — 지도 점포 데이터와 가게 스토리를 하나의 소스로 정리, 시장별 필터링 버그(어떤 시장을 골라도 양동시장 데이터만 나오던 문제) 수정
+5. 상인 업로드 API에 인증 연결 — `kakao-register`/`merchant/upload`는 이제 `role=merchant` 계정 로그인 필요, `shopName`은 요청 값이 아니라 로그인 계정의 `shop_name`으로 서버에서 자동 지정
+6. `AiScanModal`의 카메라 버튼 배선 수정 — 중앙 셔터 버튼이 실제 카메라를 열지 않고 그냥 샘플 이미지로 재분석만 하던 버그, 갤러리용 input을 분리해 해결
 5. 프론트 지역 필터 버그 발견 — 백엔드 상품에 `marketId`/`region`이 없어 기본 지역에서 피드가 안 보이던 문제, `Product` 모델에 필드 추가로 해결

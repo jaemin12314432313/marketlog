@@ -1,28 +1,41 @@
-from fastapi import APIRouter, UploadFile, File, Form, Depends
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 import shutil, os
 
 from db import get_db
-from models import Product, product_to_dict
+from models import Product, User, product_to_dict
+from api.auth import get_current_user
 
 router = APIRouter(tags=["Merchant"])
 os.makedirs("uploads", exist_ok=True)
+
+
+def require_merchant(current_user: User) -> str:
+    if current_user.role != "merchant":
+        raise HTTPException(status_code=403, detail="판매자 계정만 상품을 등록할 수 있습니다.")
+    return current_user.shop_name or current_user.display_name
+
 
 # 카카오 등록
 class KakaoRegisterRequest(BaseModel):
     chatText: str = ""
     imageBase64: str = None
-    merchantName: str = "양동수산"
 
 @router.post("/api/kakao-register")
-async def kakao_register(request: KakaoRegisterRequest, db: Session = Depends(get_db)):
+async def kakao_register(
+    request: KakaoRegisterRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    shop_name = require_merchant(current_user)
+
     # 나중에 Gemini API 연동할 자리
     product = Product(
         market_id="yangdong",
         region="광주광역시",
         title=request.chatText[:20] if request.chatText else "산지직송 싱싱한 제철 상품",
-        shop_name=request.merchantName,
+        shop_name=shop_name,
         distance="300m",
         time_ago="방금 전",
         price=18000,
@@ -46,11 +59,13 @@ async def kakao_register(request: KakaoRegisterRequest, db: Session = Depends(ge
 # 사진 업로드
 @router.post("/api/v1/merchant/upload")
 async def upload_product(
-    store_name: str = Form("양동수산"),
     price: int = Form(18000),
     file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    shop_name = require_merchant(current_user)
+
     file_path = f"uploads/{file.filename}"
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -59,7 +74,7 @@ async def upload_product(
         market_id="yangdong",
         region="광주광역시",
         title="AI 분석 상품",
-        shop_name=store_name,
+        shop_name=shop_name,
         distance="300m",
         time_ago="방금 전",
         price=price,

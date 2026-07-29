@@ -107,10 +107,11 @@ export interface KakaoRegisterResponse {
   product: ProductItem;
 }
 
+// 판매자(merchant) 계정으로 로그인한 상태여야 호출 가능 (Authorization 토큰 필요).
+// 등록되는 상품의 shopName은 로그인 계정의 shop_name으로 서버에서 자동 지정됨.
 export function kakaoRegister(payload: {
   chatText?: string;
   imageBase64?: string;
-  merchantName?: string;
 }): Promise<KakaoRegisterResponse> {
   return apiFetch<KakaoRegisterResponse>("/api/kakao-register", {
     method: "POST",
