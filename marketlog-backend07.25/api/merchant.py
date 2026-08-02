@@ -17,6 +17,105 @@ def require_merchant(current_user: User) -> str:
     return current_user.shop_name or current_user.display_name
 
 
+# 수동 상품 등록/수정/삭제 (MerchantView 직접 입력 폼)
+class ProductIn(BaseModel):
+    title: str
+    category: str = "AI 추천상품"
+    price: int = 0
+    publicPrice: int = 0
+    priceTag: str = ""
+    grade: str = "A"
+    imageUrl: str = ""
+    freshnessScore: int = 0
+    defectScore: int = 0
+    uniformityScore: int = 0
+    description: str = ""
+    distance: str = "양동전통시장 내 점포"
+    timeAgo: str = "방금 전 등록"
+
+
+@router.post("/api/v1/merchant/products")
+def create_product(
+    payload: ProductIn,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    shop_name = require_merchant(current_user)
+    product = Product(
+        market_id="yangdong",
+        region="광주광역시",
+        title=payload.title,
+        shop_name=shop_name,
+        distance=payload.distance,
+        time_ago=payload.timeAgo,
+        price=payload.price,
+        public_price=payload.publicPrice,
+        price_tag=payload.priceTag,
+        grade=payload.grade,
+        category=payload.category,
+        image_url=payload.imageUrl,
+        freshness_score=payload.freshnessScore,
+        defect_score=payload.defectScore,
+        uniformity_score=payload.uniformityScore,
+        description=payload.description,
+        is_merchant_uploaded=True,
+    )
+    db.add(product)
+    db.commit()
+    db.refresh(product)
+    return {"success": True, "product": product_to_dict(product)}
+
+
+@router.put("/api/v1/merchant/products/{product_id}")
+def update_product(
+    product_id: str,
+    payload: ProductIn,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    shop_name = require_merchant(current_user)
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="상품을 찾을 수 없습니다.")
+    if product.shop_name != shop_name:
+        raise HTTPException(status_code=403, detail="본인 점포의 상품만 수정할 수 있습니다.")
+
+    product.title = payload.title
+    product.distance = payload.distance
+    product.time_ago = payload.timeAgo
+    product.price = payload.price
+    product.public_price = payload.publicPrice
+    product.price_tag = payload.priceTag
+    product.grade = payload.grade
+    product.category = payload.category
+    product.image_url = payload.imageUrl
+    product.freshness_score = payload.freshnessScore
+    product.defect_score = payload.defectScore
+    product.uniformity_score = payload.uniformityScore
+    product.description = payload.description
+    db.commit()
+    db.refresh(product)
+    return {"success": True, "product": product_to_dict(product)}
+
+
+@router.delete("/api/v1/merchant/products/{product_id}")
+def delete_product(
+    product_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    shop_name = require_merchant(current_user)
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="상품을 찾을 수 없습니다.")
+    if product.shop_name != shop_name:
+        raise HTTPException(status_code=403, detail="본인 점포의 상품만 삭제할 수 있습니다.")
+
+    db.delete(product)
+    db.commit()
+    return {"success": True}
+
+
 # 카카오 등록
 class KakaoRegisterRequest(BaseModel):
     chatText: str = ""

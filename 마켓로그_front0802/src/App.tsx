@@ -13,8 +13,22 @@ import {
   INITIAL_QUESTS,
   INITIAL_COUPONS,
 } from "./data/initialData";
+import {
+  fetchFeed,
+  fetchBookmarks,
+  fetchScannedProducts,
+  addBookmark,
+  removeBookmark,
+  addScannedProduct,
+  removeScannedProduct,
+  createMerchantProduct,
+  updateMerchantProduct,
+  deleteMerchantProduct,
+  getAuthToken,
+} from "./lib/api";
 import { Header } from "./components/Header";
 import { HomeFeed } from "./components/HomeFeed";
+import { MerchantView } from "./components/MerchantView";
 import { MapView } from "./components/MapView";
 import { AiScanModal } from "./components/AiScanModal";
 import { MyWallet } from "./components/MyWallet";
@@ -22,12 +36,12 @@ import { SavedView } from "./components/SavedView";
 import { ProductDetailModal } from "./components/ProductDetailModal";
 import { BottomNav } from "./components/BottomNav";
 import { LoginModal, UserRole } from "./components/LoginModal";
-import { fetchFeed } from "./lib/api";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>("home");
   const [userRole, setUserRole] = useState<UserRole>("customer");
   const [userDisplayName, setUserDisplayName] = useState<string>("");
+  const [userShopName, setUserShopName] = useState<string>("");
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(true);
   const [selectedRegion, setSelectedRegion] = useState<string>("광주광역시");
   const [selectedMarket, setSelectedMarket] = useState<MarketInfo>(MARKETS_DATA[0]);
@@ -44,20 +58,6 @@ export default function App() {
     }
   };
   const [products, setProducts] = useState<ProductItem[]>(INITIAL_PRODUCTS);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchFeed()
-      .then((feed) => {
-        if (!cancelled && feed.length > 0) setProducts(feed);
-      })
-      .catch((err) => {
-        console.error("상품 피드를 불러오지 못했습니다. 임시 데이터로 표시합니다.", err);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
   const [scannedProducts, setScannedProducts] = useState<ProductItem[]>([
     {
       id: "scan-sample-1",
@@ -82,6 +82,24 @@ export default function App() {
     INITIAL_PRODUCTS[1],
   ]);
   const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(null);
+
+  // 상품 피드는 로그인 여부와 무관하게 백엔드에서 불러온다. 실패 시 목업 데이터로 폴백.
+  useEffect(() => {
+    fetchFeed()
+      .then(setProducts)
+      .catch((err) => console.error("상품 피드를 불러오지 못했습니다.", err));
+  }, []);
+
+  // 로그인 상태가 되면(토큰 발급 후) 내 찜/AI스캔 저장목록을 백엔드에서 불러온다.
+  useEffect(() => {
+    if (isLoginModalOpen || !getAuthToken()) return;
+    fetchBookmarks()
+      .then(setBookmarkedProducts)
+      .catch((err) => console.error("찜 목록을 불러오지 못했습니다.", err));
+    fetchScannedProducts()
+      .then(setScannedProducts)
+      .catch((err) => console.error("AI 스캔 저장목록을 불러오지 못했습니다.", err));
+  }, [isLoginModalOpen]);
   const [isAiScanOpen, setIsAiScanOpen] = useState(false);
   const [cartItems, setCartItems] = useState<ProductItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -89,41 +107,91 @@ export default function App() {
   const [quests] = useState<QuestItem[]>(INITIAL_QUESTS);
   const [coupons, setCoupons] = useState<CouponItem[]>(INITIAL_COUPONS);
 
-  const handleLoginSuccess = (role: UserRole, displayName: string) => {
+  const handleLoginSuccess = (role: UserRole, displayName: string, shopName?: string) => {
     setUserRole(role);
     setUserDisplayName(displayName);
+    setUserShopName(shopName || "");
     setIsLoginModalOpen(false);
+    setActiveTab("home");
   };
 
   const handleAddToCart = (product: ProductItem) => {
     setCartItems((prev) => [...prev, product]);
   };
 
-  const handleSaveScannedProduct = (scannedProduct: ProductItem) => {
-    setScannedProducts((prev) => [scannedProduct, ...prev]);
+  const handleSaveScannedProduct = async (scannedProduct: ProductItem) => {
+    try {
+      const { id, ...rest } = scannedProduct;
+      const res = await addScannedProduct(rest);
+      setScannedProducts((prev) => [res.product, ...prev]);
+    } catch (err) {
+      console.error("AI 스캔 저장 실패", err);
+    }
   };
 
-  const handleRemoveScannedProduct = (id: string) => {
-    setScannedProducts((prev) => prev.filter((p) => p.id !== id));
+  const handleRemoveScannedProduct = async (id: string) => {
+    try {
+      await removeScannedProduct(id);
+      setScannedProducts((prev) => prev.filter((p) => p.id !== id));
+    } catch (err) {
+      console.error("AI 스캔 저장목록 삭제 실패", err);
+    }
   };
 
-  const handleToggleBookmarkProduct = (product: ProductItem) => {
-    setBookmarkedProducts((prev) => {
-      const exists = prev.some((p) => p.id === product.id);
+  const handleToggleBookmarkProduct = async (product: ProductItem) => {
+    const exists = bookmarkedProducts.some((p) => p.id === product.id);
+    try {
       if (exists) {
-        return prev.filter((p) => p.id !== product.id);
+        await removeBookmark(product.id);
+        setBookmarkedProducts((prev) => prev.filter((p) => p.id !== product.id));
       } else {
-        return [product, ...prev];
+        await addBookmark(product.id);
+        setBookmarkedProducts((prev) => [product, ...prev]);
       }
-    });
+    } catch (err) {
+      console.error("찜 처리 실패", err);
+    }
   };
 
-  const handleRemoveBookmarkedProduct = (id: string) => {
-    setBookmarkedProducts((prev) => prev.filter((p) => p.id !== id));
+  const handleRemoveBookmarkedProduct = async (id: string) => {
+    try {
+      await removeBookmark(id);
+      setBookmarkedProducts((prev) => prev.filter((p) => p.id !== id));
+    } catch (err) {
+      console.error("찜 삭제 실패", err);
+    }
   };
 
-  const handleProductRegistered = (newProduct: ProductItem) => {
-    setProducts((prev) => [newProduct, ...prev]);
+  const handleProductRegistered = async (newProduct: ProductItem) => {
+    try {
+      const { id, shopName, isMerchantUploaded, region, marketId, ...rest } = newProduct;
+      const res = await createMerchantProduct(rest);
+      setProducts((prev) => [res.product, ...prev]);
+    } catch (err) {
+      console.error("상품 등록 실패", err);
+      alert("상품 등록에 실패했습니다. 판매자 계정으로 로그인되어 있는지 확인해주세요.");
+    }
+  };
+
+  const handleProductUpdated = async (updatedProduct: ProductItem) => {
+    try {
+      const { id, shopName, isMerchantUploaded, region, marketId, ...rest } = updatedProduct;
+      const res = await updateMerchantProduct(id, rest);
+      setProducts((prev) => prev.map((p) => (p.id === id ? res.product : p)));
+    } catch (err) {
+      console.error("상품 수정 실패", err);
+      alert("상품 수정에 실패했습니다.");
+    }
+  };
+
+  const handleDeleteProduct = async (id: string) => {
+    try {
+      await deleteMerchantProduct(id);
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+    } catch (err) {
+      console.error("상품 삭제 실패", err);
+      alert("상품 삭제에 실패했습니다.");
+    }
   };
 
   const handleUseCoupon = (couponId: string) => {
@@ -169,20 +237,32 @@ export default function App() {
 
       {/* Main Tab View Canvas */}
       <main className="w-full">
-        {activeTab === "home" && (
-          <HomeFeed
-            products={products}
-            selectedRegion={selectedRegion}
-            selectedMarket={selectedMarket}
-            onSelectProduct={(p) => setSelectedProduct(p)}
-            onOpenAiScan={() => setIsAiScanOpen(true)}
-            userRole={userRole}
-            userDisplayName={userDisplayName}
-            onOpenLogin={() => setIsLoginModalOpen(true)}
-            bookmarkedProductIds={bookmarkedProducts.map((p) => p.id)}
-            onToggleBookmark={handleToggleBookmarkProduct}
-          />
-        )}
+        {activeTab === "home" &&
+          (userRole === "merchant" ? (
+            <MerchantView
+              products={products}
+              userDisplayName={userShopName || userDisplayName}
+              onOpenAiScan={() => setIsAiScanOpen(true)}
+              onAddProduct={handleProductRegistered}
+              onUpdateProduct={handleProductUpdated}
+              onDeleteProduct={handleDeleteProduct}
+              onOpenLogin={() => setIsLoginModalOpen(true)}
+              onSelectProduct={(p) => setSelectedProduct(p)}
+            />
+          ) : (
+            <HomeFeed
+              products={products}
+              selectedRegion={selectedRegion}
+              selectedMarket={selectedMarket}
+              onSelectProduct={(p) => setSelectedProduct(p)}
+              onOpenAiScan={() => setIsAiScanOpen(true)}
+              userRole={userRole}
+              userDisplayName={userDisplayName}
+              onOpenLogin={() => setIsLoginModalOpen(true)}
+              bookmarkedProductIds={bookmarkedProducts.map((p) => p.id)}
+              onToggleBookmark={handleToggleBookmarkProduct}
+            />
+          ))}
 
         {activeTab === "map" && (
           <MapView
@@ -220,6 +300,7 @@ export default function App() {
       <BottomNav
         activeTab={activeTab}
         isAiScanOpen={isAiScanOpen}
+        userRole={userRole}
         onSelectTab={(tab) => {
           setIsAiScanOpen(false);
           setActiveTab(tab);
@@ -234,6 +315,11 @@ export default function App() {
         onClose={() => setIsAiScanOpen(false)}
         onSaveToSavedList={handleSaveScannedProduct}
         onNavigateToSavedTab={() => setActiveTab("saved")}
+        userRole={userRole}
+        userDisplayName={userDisplayName}
+        onMerchantRegisterProduct={(newProduct) => {
+          handleProductRegistered(newProduct);
+        }}
       />
 
       {/* 2. Product Detail Inspection Modal */}

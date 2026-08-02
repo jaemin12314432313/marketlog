@@ -190,4 +190,34 @@ export function removeScannedProduct(id: string): Promise<{ success: boolean }> 
   return apiFetch(`/api/v1/saved/scanned/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
+// ---------- 상인 상품 등록/수정/삭제 ----------
+
+export type MerchantProductInput = Omit<
+  ProductItem,
+  "id" | "shopName" | "isMerchantUploaded" | "region" | "marketId"
+>;
+
+export function createMerchantProduct(
+  payload: MerchantProductInput
+): Promise<{ success: boolean; product: ProductItem }> {
+  return apiFetch("/api/v1/merchant/products", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateMerchantProduct(
+  id: string,
+  payload: MerchantProductInput
+): Promise<{ success: boolean; product: ProductItem }> {
+  return apiFetch(`/api/v1/merchant/products/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteMerchantProduct(id: string): Promise<{ success: boolean }> {
+  return apiFetch(`/api/v1/merchant/products/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
 export const API_BASE_URL = API_BASE;

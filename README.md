@@ -25,8 +25,7 @@ pip install -r requirements.txt
 
 # marketlog-backend07.25/.env 에 아래 값 설정 (아래 "환경변수" 절 참고)
 
-# Windows 콘솔이 UTF-8이 아니면(cp949) 이모지 print에서 서버가 죽으므로 아래처럼 실행 권장
-PYTHONIOENCODING=utf-8 python -m uvicorn main:app --reload --port 8000
+python -m uvicorn main:app --reload --port 8000
 ```
 
 - Swagger 문서: http://localhost:8000/docs
@@ -110,7 +109,6 @@ SQLite 파일(`marketlog-backend07.25/marketlog.db`, git-ignore됨). 서버 최�
 
 - 지갑(퀘스트/쿠폰) — 구매/이벤트를 기록하는 흐름이 없어서 보류 중. 먼저 주문/이벤트 기록이 필요
 - 망원/자갈치 시장은 `Store` 실데이터 없음
-- `api/consumer.py`의 이모지 `print`문이 Windows 콘솔(cp949)에서 서버를 죽이는 기존 버그가 있음 → `PYTHONIOENCODING=utf-8`로 우회 중, 근본 수정은 안 함
 - 프론트 LoginModal에 이메일/비밀번호 입력 폼이 없음 (지금은 role만 선택하는 데모 UI) — 실계정 인증을 쓰려면 폼 추가 필요
 
 ## 환경변수
