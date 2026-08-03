@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -7,6 +9,7 @@ from api.map import router as map_router
 import os
 from api import merchant, consumer, recommend, auth, saved
 from db import Base, engine, SessionLocal
+import kamis
 import models  # noqa: F401  (모델을 등록해야 create_all에서 테이블이 생성됨)
 from seed import seed_if_empty
 
@@ -57,6 +60,10 @@ def serve_frontend():
 @app.get("/api/health")
 def health_check():
     return {"status": "ok", "service": "MarketLog Backend"}
+
+@app.on_event("startup")
+async def start_kamis_auto_refresh():
+    asyncio.create_task(kamis.auto_refresh_loop())
 
 if __name__ == "__main__":
     import uvicorn

@@ -10,7 +10,7 @@ import json
 from PIL import Image
 
 from db import get_db
-from models import Product, Store, product_to_dict
+from models import Market, Product, Store, product_to_dict
 from kamis import get_public_price as get_kamis_price
 
 router = APIRouter(tags=["Consumer"])
@@ -73,12 +73,12 @@ CROSS_SELL_MAP = {
 DEFAULT_CROSS_SELL = {"itemName": "제철 채소 모둠", "shopName": "호남상회", "distance": "50m", "discountOffer": "10% OFF", "recipeName": "제철 요리 패키지"}
 
 # SCAN_MOCK의 sampleId -> KAMIS 조회용 순수 품목명.
-# KAMIS 가격은 kamis.ITEM_CONFIG 기준 "낱개/1kg" 단위인데, 데모 상품명은
-# "5개입"/"2kg"처럼 묶음 단위라서 pack_multiplier로 맞춰 비교해야 priceDiffPercent가 말이 됨.
+# get_kamis_price는 이제 항상 원/kg을 반환하므로, 데모 상품명의 실제 중량(pack_weight_kg)을
+# 곱해야 "5개입"/"2kg" 같은 묶음 단위와 비교 가능한 금액이 나온다.
 SAMPLE_TO_KAMIS_ITEM = {
-    "radish": {"item": "무", "pack_multiplier": 1},       # "1단" ≈ 낱개 1개로 근사
-    "apple": {"item": "사과", "pack_multiplier": 5},       # "5개입"
-    "potato": {"item": "감자", "pack_multiplier": 2},      # "2kg" (kamis 기준 1kg 단가 * 2)
+    "radish": {"item": "무", "pack_weight_kg": 1.5},   # "1단" ≈ 무 1개(kamis.ITEM_CONFIG 기준 1.5kg)
+    "apple": {"item": "사과", "pack_weight_kg": 1.5},   # "5개입" ≈ 5 × 300g
+    "potato": {"item": "감자", "pack_weight_kg": 2},    # "2kg" 그대로
 }
 
 # Mock 데이터 (카메라/모델을 쓸 수 없을 때의 폴백 — 품목 인식 모델의 실제 10개 클래스 기준)
@@ -283,7 +283,7 @@ async def analyze_product(request: ScanRequest):
     kamis_config = SAMPLE_TO_KAMIS_ITEM.get(request.sampleId)
     kamis_unit_price = get_kamis_price(kamis_config["item"], data["grade"]) if kamis_config else None
     if kamis_unit_price is not None:
-        kamis_price = round(kamis_unit_price * kamis_config["pack_multiplier"])
+        kamis_price = round(kamis_unit_price * kamis_config["pack_weight_kg"])
         data["publicMarketPrice"] = kamis_price
         data["priceDiffPercent"] = round((kamis_price - data["sellingPrice"]) / kamis_price * 100)
         data["publicGuarantee"] = "농산물유통정보(KAMIS) 소매가격 실시간 연동"
@@ -296,12 +296,50 @@ class DocentRequest(BaseModel):
     marketName: str
     alleyName: str = "수산물 골목"
 
+
+def generate_docent_script(market_name: str, alley_name: str, stores: list[Store]) -> str:
+    """실제 DB 점포 데이터를 근거로 도슨트 해설을 생성한다.
+    Gemini 키가 없거나 호출이 실패하면 같은 데이터로 만든 템플릿 문장으로 폴백한다.
+    """
+    highlights = [f"{s.name}({s.notice})" if s.notice else s.name for s in stores[:4]]
+
+    client = get_gemini_client()
+    if client is not None and highlights:
+        try:
+            prompt = (
+                f"당신은 전통시장 오디오 도슨트 해설자입니다. '{market_name}' 안의 '{alley_name}' 구역을 "
+                f"둘러보는 손님에게 들려줄 자연스러운 한국어 해설을 2~3문장으로 작성하세요. "
+                f"이 구역에는 다음 실제 점포들이 있습니다: {', '.join(highlights)}. "
+                f"실제 점포명과 취급 품목을 자연스럽게 언급하며 친근하고 생동감 있는 구어체로 "
+                f"작성하고, 없는 사실을 지어내지 마세요. 따옴표로 감싸지 마세요."
+            )
+            response = client.models.generate_content(
+                model="gemini-3.6-flash",
+                contents=[prompt],
+            )
+            text = (response.text or "").strip()
+            if text:
+                return f'"{text}"'
+        except Exception as e:
+            print(f"Gemini 도슨트 생성 실패 (템플릿으로 폴백): {e}")
+
+    if highlights:
+        joined = ", ".join(highlights[:3])
+        return f'"{alley_name}에 오신 것을 환영합니다. {joined} 등 다양한 점포를 만나보세요."'
+    return f'"{market_name}의 {alley_name}에 오신 것을 환영합니다."'
+
+
 @router.post("/api/docent-story")
-async def docent_story(request: DocentRequest):
-    return {
-        "success": True,
-        "script": f'"{request.marketName}의 {request.alleyName}에 오신 것을 환영합니다. 매일 새벽 산지에서 직송된 신선한 제철 상품을 만나보세요."'
-    }
+async def docent_story(request: DocentRequest, db: Session = Depends(get_db)):
+    market = db.query(Market).filter(Market.name == request.marketName).first()
+    stores = (
+        db.query(Store)
+        .filter(Store.market_id == market.id, Store.alley == request.alleyName)
+        .all()
+        if market
+        else []
+    )
+    return {"success": True, "script": generate_docent_script(request.marketName, request.alleyName, stores)}
 
 # 가게 스토리
 @router.get("/api/v1/consumer/store/{store_id}/story")

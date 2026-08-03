@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 
 from models import Market, Store, Product
+from gwangju_market_data import load_yangdong_stores
 
 MARKETS = [
     {
@@ -53,57 +54,8 @@ MARKETS = [
     },
 ]
 
-# 양동시장 실 점포 데이터 (기존 api/map.py 하드코딩 값을 이전)
-YANGDONG_STORES = [
-    {
-        "id": "store_1",
-        "market_id": "yangdong",
-        "name": "양동수산",
-        "subtitle": "특대 은갈치",
-        "lat": 35.1537,
-        "lng": 126.9038,
-        "category": "fish",
-        "icon": "set_meal",
-        "badge_color": "#3B82F6",
-        "grade": "A+",
-        "notice": "오늘 들어온 활어 세일중!",
-        "notice_time": "새소식 2시간 전",
-        "alley": "수산물 골목",
-        "story_text": "양동수산은 30년 전통의 수산물 전문점으로, 매일 새벽 목포 위판장에서 직송된 신선한 활어를 취급합니다.",
-    },
-    {
-        "id": "store_2",
-        "market_id": "yangdong",
-        "name": "호남상회",
-        "subtitle": "가을무",
-        "lat": 35.1528,
-        "lng": 126.9022,
-        "category": "vegetable",
-        "icon": "eco",
-        "badge_color": "#10B981",
-        "grade": "A",
-        "notice": "가을무 20% OFF 쿠폰",
-        "notice_time": "퀘스트 연관 추천 (50m)",
-        "alley": "야채 채소 골목",
-        "story_text": "호남상회는 전남 나주 산지 직송 채소를 당일 공수하여 신선도를 보장하는 야채 전문점입니다.",
-    },
-    {
-        "id": "store_3",
-        "market_id": "yangdong",
-        "name": "상록회관",
-        "subtitle": "잡화/청과",
-        "lat": 35.1526,
-        "lng": 126.9033,
-        "category": "store",
-        "icon": "storefront",
-        "badge_color": "#F59E0B",
-        "grade": "B",
-        "notice": "신선한 과일 입고",
-        "notice_time": "1시간 전",
-        "alley": "잡화 골목",
-        "story_text": "상록회관은 전통시장의 오랜 역사와 함께한 신뢰할 수 있는 잡화·청과 매장입니다.",
-    },
-]
+# 양동시장 실 점포 데이터 (광주광역시 전통시장 점포 현황 공공데이터, 2021-11-19 기준)
+YANGDONG_STORES = load_yangdong_stores()
 
 # 상품 피드 시드 — 품목 인식 모델이 실제로 학습한 10개 클래스
 # (무·배추·양파·마늘·양배추·감·사과·배·감귤·감자) 기준으로 구성.

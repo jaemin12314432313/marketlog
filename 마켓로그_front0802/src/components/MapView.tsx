@@ -9,22 +9,19 @@ interface MapViewProps {
 }
 
 const NAVER_SCRIPT_ID = "naver-maps-sdk";
+// Stores sit only meters apart inside the same market building, so pins overlap
+// badly when zoomed out. Only show them once the user has zoomed in close enough
+// to tell them apart.
+const MIN_ZOOM_FOR_MARKERS = 19;
 
 function buildMarkerContent(store: MapStorePin): string {
   return `
     <div class="flex flex-col items-center cursor-pointer group">
-      <div class="bg-white px-3 py-2 rounded-xl shadow-md border flex flex-col mb-1 min-w-[130px]" style="border-color:${store.badge_color}4D">
-        <span class="text-[10px] font-bold mb-0.5 flex items-center justify-between gap-2" style="color:${store.badge_color}">
-          <span>${store.notice_time}</span>
-          <span class="px-1.5 py-0.5 rounded font-bold text-white text-[9px]" style="background:${store.badge_color}">${store.grade}</span>
-        </span>
-        <span class="text-xs font-bold text-on-surface line-clamp-1">${store.notice}</span>
-      </div>
       <div class="w-9 h-9 text-white rounded-full flex items-center justify-center shadow-md border-2 border-white group-hover:scale-110 transition-transform" style="background:${store.badge_color}">
         <span class="material-symbols-outlined text-lg">${store.icon}</span>
       </div>
       <span class="text-xs font-bold bg-white px-2 py-0.5 rounded-md mt-0.5 shadow-sm border border-[#E2E8F0]" style="color:${store.badge_color}">
-        ${store.name} (${store.subtitle})
+        ${store.name}
       </span>
     </div>
   `;
@@ -46,6 +43,7 @@ export const MapView: React.FC<MapViewProps> = ({
   const [naverLoaded, setNaverLoaded] = useState(false);
   const [stores, setStores] = useState<MapStorePin[]>([]);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
+  const [currentZoom, setCurrentZoom] = useState(17);
 
   const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
   const dragOffsetYRef = useRef<number>(0);
@@ -194,11 +192,21 @@ export const MapView: React.FC<MapViewProps> = ({
       logoControl: false,
       mapDataControl: false,
     });
+    naver.maps.Event.addListener(mapRef.current, "zoom_changed", (zoom: number) => {
+      setCurrentZoom(zoom);
+    });
   }, [naverLoaded, mapCenter]);
 
-  // Render store pins as real markers positioned by lat/lng, replacing old markers when the list changes.
+  // Render store pins as real markers positioned by lat/lng, once zoomed in close
+  // enough to tell neighboring stalls apart; replaced whenever the list or zoom changes.
   useEffect(() => {
-    if (!naverLoaded || !mapRef.current || stores.length === 0) return;
+    if (!naverLoaded || !mapRef.current) return;
+
+    if (currentZoom < MIN_ZOOM_FOR_MARKERS || stores.length === 0) {
+      markersRef.current.forEach((marker) => marker.setMap(null));
+      markersRef.current = [];
+      return;
+    }
 
     const naver = (window as any).naver;
 
@@ -209,7 +217,7 @@ export const MapView: React.FC<MapViewProps> = ({
         map: mapRef.current,
         icon: {
           content: buildMarkerContent(store),
-          anchor: new naver.maps.Point(45, 78),
+          anchor: new naver.maps.Point(40, 18),
         },
       });
 
@@ -227,7 +235,7 @@ export const MapView: React.FC<MapViewProps> = ({
       markersRef.current = [];
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [naverLoaded, stores]);
+  }, [naverLoaded, stores, currentZoom]);
 
   // Audio Progress Bar Simulation
   useEffect(() => {
@@ -337,6 +345,12 @@ export const MapView: React.FC<MapViewProps> = ({
   return (
     <div className="relative w-full h-screen overflow-hidden bg-[#F0F3F4] text-on-surface">
       <div ref={mapElement} className="absolute inset-0 w-full h-full z-0" />
+
+      {currentZoom < MIN_ZOOM_FOR_MARKERS && stores.length > 0 && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 bg-white/95 text-[#334155] text-xs font-semibold px-3 py-1.5 rounded-full shadow-md border border-[#E2E8F0] pointer-events-none">
+          더 확대하면 점포가 표시됩니다
+        </div>
+      )}
 
       {/* Top Floating Search Bar */}
       <div className="absolute top-4 left-4 right-4 z-30 max-w-lg mx-auto flex items-center gap-2">

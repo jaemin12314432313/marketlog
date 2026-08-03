@@ -9,6 +9,9 @@ router = APIRouter(prefix="/api/v1/map", tags=["map"])
 
 DEFAULT_MARKET_ID = "yangdong"
 
+# 지도가 너무 빽빽해지는 일반 도소매/소매 점포는 지도 핀에서는 제외 (DB에는 그대로 유지).
+MAP_EXCLUDED_CATEGORIES = ["store"]
+
 
 # 1. 네이버 지도 Client ID 등 환경설정 전달
 @router.get("/config")
@@ -26,7 +29,13 @@ def get_map_stores(market_name: str = "양동시장", db: Session = Depends(get_
     if not market:
         market = db.query(Market).filter(Market.id == DEFAULT_MARKET_ID).first()
 
-    stores = db.query(Store).filter(Store.market_id == market.id).all() if market else []
+    stores = (
+        db.query(Store)
+        .filter(Store.market_id == market.id, Store.category.notin_(MAP_EXCLUDED_CATEGORIES))
+        .all()
+        if market
+        else []
+    )
 
     return {
         "status": "success",
