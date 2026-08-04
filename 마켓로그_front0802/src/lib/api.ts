@@ -48,6 +48,7 @@ export interface MapStorePin {
   notice: string;
   notice_time: string;
   alley: string;
+  products: { id: string; title: string; price: number; image_url: string }[];
 }
 
 export interface MapStoresResponse {
@@ -95,6 +96,7 @@ export interface DocentStoryResponse {
 export function fetchDocentStory(payload: {
   marketName: string;
   alleyName?: string;
+  storeId?: string;
 }): Promise<DocentStoryResponse> {
   return apiFetch<DocentStoryResponse>("/api/docent-story", {
     method: "POST",

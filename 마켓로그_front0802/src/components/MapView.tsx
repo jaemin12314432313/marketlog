@@ -13,12 +13,31 @@ const NAVER_SCRIPT_ID = "naver-maps-sdk";
 // badly when zoomed out. Only show them once the user has zoomed in close enough
 // to tell them apart.
 const MIN_ZOOM_FOR_MARKERS = 19;
+// Web Speech API에는 재생 전 실제 길이를 알려주는 값이 없어서, 텍스트 길이로 추정한다.
+// rate=0.95 기준 한국어 TTS 체감 속도로 보정한 값 — 브라우저/음성엔진마다 다를 수 있는 근사치.
+const SPEECH_RATE = 0.95;
+const KOREAN_CHARS_PER_SECOND = 6;
+
+function estimateSpeechSeconds(text: string): number {
+  return Math.max(1, Math.round(text.length / KOREAN_CHARS_PER_SECOND));
+}
+
+function formatSeconds(totalSeconds: number): string {
+  const clamped = Math.max(0, Math.round(totalSeconds));
+  const minutes = Math.floor(clamped / 60);
+  const seconds = clamped % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
 
 function buildMarkerContent(store: MapStorePin): string {
+  const productBadge = store.products.length
+    ? `<span class="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-bold flex items-center justify-center border border-white">${store.products.length}</span>`
+    : "";
   return `
     <div class="flex flex-col items-center cursor-pointer group">
-      <div class="w-9 h-9 text-white rounded-full flex items-center justify-center shadow-md border-2 border-white group-hover:scale-110 transition-transform" style="background:${store.badge_color}">
+      <div class="relative w-9 h-9 text-white rounded-full flex items-center justify-center shadow-md border-2 border-white group-hover:scale-110 transition-transform" style="background:${store.badge_color}">
         <span class="material-symbols-outlined text-lg">${store.icon}</span>
+        ${productBadge}
       </div>
       <span class="text-xs font-bold bg-white px-2 py-0.5 rounded-md mt-0.5 shadow-sm border border-[#E2E8F0]" style="color:${store.badge_color}">
         ${store.name}
@@ -33,7 +52,9 @@ export const MapView: React.FC<MapViewProps> = ({
   onSelectShop,
 }) => {
   const [isPlayingDocent, setIsPlayingDocent] = useState(false);
-  const [docentProgress, setDocentProgress] = useState(38); // percent
+  const [docentElapsedSec, setDocentElapsedSec] = useState(0);
+  const [docentTotalSec, setDocentTotalSec] = useState(() => estimateSpeechSeconds(selectedMarket.docentScript));
+  const docentProgress = docentTotalSec > 0 ? Math.min(100, (docentElapsedSec / docentTotalSec) * 100) : 0;
   const [currentScript, setCurrentScript] = useState(selectedMarket.docentScript);
   const [isDocentExpanded, setIsDocentExpanded] = useState(false); // 기본적으로 하단 배너 위에 살짝 나와있게 시작
   const [touchStartY, setTouchStartY] = useState<number | null>(null);
@@ -44,8 +65,22 @@ export const MapView: React.FC<MapViewProps> = ({
   const [stores, setStores] = useState<MapStorePin[]>([]);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [currentZoom, setCurrentZoom] = useState(17);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const trimmedQuery = searchQuery.trim();
+  const searchResults = trimmedQuery
+    ? stores
+        .filter(
+          (s) =>
+            s.name.includes(trimmedQuery) ||
+            s.subtitle.includes(trimmedQuery) ||
+            s.notice.includes(trimmedQuery)
+        )
+        .slice(0, 8)
+    : [];
 
   const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const speechStartRef = useRef<number | null>(null);
   const dragOffsetYRef = useRef<number>(0);
   const touchStartYRef = useRef<number | null>(null);
   const isDocentExpandedRef = useRef<boolean>(isDocentExpanded);
@@ -122,6 +157,8 @@ export const MapView: React.FC<MapViewProps> = ({
 
   useEffect(() => {
     setCurrentScript(selectedMarket.docentScript);
+    setDocentTotalSec(estimateSpeechSeconds(selectedMarket.docentScript));
+    setDocentElapsedSec(0);
   }, [selectedMarket]);
 
   // Load the Naver Maps SDK dynamically using the client ID from the backend,
@@ -224,7 +261,7 @@ export const MapView: React.FC<MapViewProps> = ({
       naver.maps.Event.addListener(marker, "click", () => {
         setActivePin(store.name);
         onSelectShop(store.name);
-        handleFetchAiDocent(store.alley);
+        handleFetchAiDocent(store);
       });
 
       return marker;
@@ -237,38 +274,67 @@ export const MapView: React.FC<MapViewProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [naverLoaded, stores, currentZoom]);
 
-  // Audio Progress Bar Simulation
+  // Elapsed time is derived from a real wall-clock start time (speechStartRef), not a
+  // fixed 1%/sec loop -- Web Speech API gives no true duration, so "seeking" below works
+  // by shifting that start time rather than actually scrubbing the audio.
   useEffect(() => {
-    let interval: any;
-    if (isPlayingDocent) {
-      interval = setInterval(() => {
-        setDocentProgress((prev) => (prev >= 100 ? 0 : prev + 1));
-      }, 1000);
-    } else {
-      clearInterval(interval);
-    }
+    if (!isPlayingDocent) return;
+    const interval = setInterval(() => {
+      if (speechStartRef.current === null) return;
+      const elapsed = (Date.now() - speechStartRef.current) / 1000;
+      setDocentElapsedSec(Math.min(docentTotalSec, elapsed));
+    }, 250);
     return () => clearInterval(interval);
-  }, [isPlayingDocent]);
+  }, [isPlayingDocent, docentTotalSec]);
+
+  const speakDocent = (text: string) => {
+    if (!("speechSynthesis" in window)) {
+      setIsPlayingDocent(true);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const textToSpeak = text.replace(/"/g, "");
+    const totalSec = estimateSpeechSeconds(textToSpeak);
+    setDocentTotalSec(totalSec);
+    setDocentElapsedSec(0);
+
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    utterance.lang = "ko-KR";
+    utterance.rate = SPEECH_RATE;
+    utterance.onstart = () => {
+      speechStartRef.current = Date.now();
+    };
+    utterance.onend = () => {
+      speechStartRef.current = null;
+      setDocentElapsedSec(totalSec);
+      setIsPlayingDocent(false);
+    };
+    synthRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
+    setIsPlayingDocent(true);
+  };
 
   const toggleDocentPlay = () => {
-    if ("speechSynthesis" in window) {
-      if (isPlayingDocent) {
-        window.speechSynthesis.cancel();
-        setIsPlayingDocent(false);
-      } else {
-        window.speechSynthesis.cancel();
-        const textToSpeak = currentScript.replace(/"/g, "");
-        const utterance = new SpeechSynthesisUtterance(textToSpeak);
-        utterance.lang = "ko-KR";
-        utterance.rate = 0.95;
-        utterance.onend = () => setIsPlayingDocent(false);
-        synthRef.current = utterance;
-        window.speechSynthesis.speak(utterance);
-        setIsPlayingDocent(true);
-      }
+    if (isPlayingDocent) {
+      window.speechSynthesis.cancel();
+      speechStartRef.current = null;
+      setIsPlayingDocent(false);
     } else {
-      setIsPlayingDocent(!isPlayingDocent);
+      speakDocent(currentScript);
     }
+  };
+
+  // Shifts the tracked start time so the displayed elapsed/total jumps by deltaSec --
+  // there is no real seek API for in-flight speech synthesis, so this only moves the
+  // on-screen clock, not the actual audio position.
+  const seekDocentBy = (deltaSec: number) => {
+    if (speechStartRef.current === null) {
+      setDocentElapsedSec((prev) => Math.max(0, Math.min(docentTotalSec, prev + deltaSec)));
+      return;
+    }
+    const nextElapsed = Math.max(0, Math.min(docentTotalSec, docentElapsedSec + deltaSec));
+    speechStartRef.current = Date.now() - nextElapsed * 1000;
+    setDocentElapsedSec(nextElapsed);
   };
 
   const handleGoToCurrentLocation = () => {
@@ -320,26 +386,37 @@ export const MapView: React.FC<MapViewProps> = ({
     mapRef.current.setZoom(mapRef.current.getZoom() + delta);
   };
 
-  const handleFetchAiDocent = async (alley: string) => {
+  const handleFetchAiDocent = async (store: MapStorePin) => {
     try {
       const data = await fetchDocentStory({
         marketName: selectedMarket.name,
-        alleyName: alley,
+        alleyName: store.alley,
+        storeId: store.id,
       });
       if (data.success && data.script) {
-        setCurrentScript(`"${data.script}"`);
-        setDocentProgress(0);
-        setIsPlayingDocent(true);
-        if ("speechSynthesis" in window) {
-          window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance(data.script);
-          utterance.lang = "ko-KR";
-          window.speechSynthesis.speak(utterance);
-        }
+        setCurrentScript(data.script);
+        speakDocent(data.script);
       }
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const handleSelectSearchResult = (store: MapStorePin) => {
+    setSearchQuery("");
+    setShowSearchResults(false);
+
+    if (mapRef.current) {
+      const naver = (window as any).naver;
+      mapRef.current.setCenter(new naver.maps.LatLng(store.lat, store.lng));
+      if (mapRef.current.getZoom() < MIN_ZOOM_FOR_MARKERS) {
+        mapRef.current.setZoom(MIN_ZOOM_FOR_MARKERS);
+      }
+    }
+
+    setActivePin(store.name);
+    onSelectShop(store.name);
+    handleFetchAiDocent(store);
   };
 
   return (
@@ -353,22 +430,69 @@ export const MapView: React.FC<MapViewProps> = ({
       )}
 
       {/* Top Floating Search Bar */}
-      <div className="absolute top-4 left-4 right-4 z-30 max-w-lg mx-auto flex items-center gap-2">
-        <div className="flex-1 bg-white rounded-full shadow-lg flex items-center px-4 h-12 border border-outline-variant/30">
-          <span className="material-symbols-outlined text-outline mr-2">search</span>
-          <input
-            type="text"
-            placeholder={`점포, 편의시설, 주차장 검색`}
-            className="flex-1 bg-transparent border-none focus:outline-none text-sm text-on-surface placeholder-outline"
-          />
+      <div className="absolute top-4 left-4 right-4 z-30 max-w-lg mx-auto flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <div className="flex-1 bg-white rounded-full shadow-lg flex items-center px-4 h-12 border border-outline-variant/30">
+            <span className="material-symbols-outlined text-outline mr-2">search</span>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setShowSearchResults(true);
+              }}
+              onFocus={() => setShowSearchResults(true)}
+              onBlur={() => setShowSearchResults(false)}
+              placeholder="점포, 편의시설, 주차장 검색"
+              className="flex-1 bg-transparent border-none focus:outline-none text-sm text-on-surface placeholder-outline"
+            />
+            {searchQuery && (
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setSearchQuery("")}
+                className="text-outline hover:text-on-surface"
+                title="지우기"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            )}
+          </div>
+          <button
+            className="w-11 h-11 bg-white rounded-full shadow-md flex items-center justify-center text-[#2563EB] border border-[#E2E8F0]"
+            title="현재 위치"
+            onClick={handleGoToCurrentLocation}
+          >
+            <span className="material-symbols-outlined">my_location</span>
+          </button>
         </div>
-        <button
-          className="w-11 h-11 bg-white rounded-full shadow-md flex items-center justify-center text-[#2563EB] border border-[#E2E8F0]"
-          title="현재 위치"
-          onClick={handleGoToCurrentLocation}
-        >
-          <span className="material-symbols-outlined">my_location</span>
-        </button>
+
+        {showSearchResults && trimmedQuery && (
+          <div className="bg-white rounded-2xl shadow-lg border border-[#E2E8F0] max-h-72 overflow-y-auto">
+            {searchResults.length > 0 ? (
+              searchResults.map((store) => (
+                <button
+                  key={store.id}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleSelectSearchResult(store)}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 text-left border-b border-[#F1F5F9] last:border-b-0"
+                >
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white shrink-0"
+                    style={{ background: store.badge_color }}
+                  >
+                    <span className="material-symbols-outlined text-base">{store.icon}</span>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold text-on-surface truncate">{store.name}</div>
+                    <div className="text-xs text-outline truncate">{store.subtitle}</div>
+                  </div>
+                </button>
+              ))
+            ) : (
+              <div className="px-4 py-3 text-sm text-outline text-center">검색 결과가 없습니다</div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Floating Action Map Controls (Left Middle) */}
@@ -415,8 +539,10 @@ export const MapView: React.FC<MapViewProps> = ({
         </button>
       </div>
 
-      {/* AI Docent Audio Player Bottom Sheet */}
-      {(() => {
+      {/* AI Docent Audio Player Bottom Sheet — 점포를 하나도 클릭하지 않은 상태에서는
+          정적 기본 스크립트를 마치 실제 도슨트처럼 보여주면 안 되므로, activePin(클릭한
+          점포)이 있을 때만 렌더링한다. */}
+      {activePin && (() => {
         // 닫혀있을 때는 상단 미니 바 (높이 약 64px)만 남기고 아래로 숨김
         // translateY: 닫힌 상태 -> calc(100% - 64px), 펼친 상태 -> 0px
         const baseTranslate = isDocentExpanded ? "0px" : "calc(100% - 64px)";
@@ -463,7 +589,7 @@ export const MapView: React.FC<MapViewProps> = ({
                         <span className="text-[10px] font-medium text-slate-400">| 스와이프하여 {isDocentExpanded ? "접기" : "열기"}</span>
                       </div>
                       <span className="text-xs font-bold text-slate-800 truncate">
-                        {selectedMarket.docentStoryTitle || "양동시장 수산길 이야기"}
+                        {activePin}
                       </span>
                     </div>
                   </div>
@@ -497,13 +623,14 @@ export const MapView: React.FC<MapViewProps> = ({
 
                 {/* Progress Bar Row */}
                 <div className="flex items-center gap-2.5 mt-1">
-                  <span className="text-xs font-semibold text-[#64748B] min-w-[36px]">01:24</span>
+                  <span className="text-xs font-semibold text-[#64748B] min-w-[36px]">{formatSeconds(docentElapsedSec)}</span>
                   <div
                     className="flex-1 h-1.5 bg-[#DBEAFE] rounded-full overflow-hidden cursor-pointer"
                     onClick={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
                       const clickX = e.clientX - rect.left;
-                      setDocentProgress(Math.max(0, Math.min(100, (clickX / rect.width) * 100)));
+                      const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+                      seekDocentBy(ratio * docentTotalSec - docentElapsedSec);
                     }}
                   >
                     <div
@@ -511,13 +638,13 @@ export const MapView: React.FC<MapViewProps> = ({
                       style={{ width: `${docentProgress}%` }}
                     ></div>
                   </div>
-                  <span className="text-xs font-semibold text-[#64748B] min-w-[36px] text-right">03:45</span>
+                  <span className="text-xs font-semibold text-[#64748B] min-w-[36px] text-right">{formatSeconds(docentTotalSec)}</span>
                 </div>
 
                 {/* Controls Row */}
                 <div className="flex items-center justify-center gap-8 mt-1 pt-0.5">
                   <button
-                    onClick={() => setDocentProgress(Math.max(0, docentProgress - 10))}
+                    onClick={() => seekDocentBy(-10)}
                     className="p-1 text-[#334155] hover:text-[#0052FF] transition-colors"
                   >
                     <span className="material-symbols-outlined text-2xl">skip_previous</span>
@@ -533,7 +660,7 @@ export const MapView: React.FC<MapViewProps> = ({
                   </button>
 
                   <button
-                    onClick={() => setDocentProgress(Math.min(100, docentProgress + 10))}
+                    onClick={() => seekDocentBy(10)}
                     className="p-1 text-[#334155] hover:text-[#0052FF] transition-colors"
                   >
                     <span className="material-symbols-outlined text-2xl">skip_next</span>

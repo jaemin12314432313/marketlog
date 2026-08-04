@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.orm import Session
+from datetime import datetime, timedelta
 import torch
 import base64
 import io
@@ -278,14 +279,19 @@ async def analyze_product(request: ScanRequest):
         except Exception as e:
             print(f"base64 처리 오류: {e}")
 
-    # Mock 데이터 반환 (모델 없거나 이미지 없을 때) — 공공시세만큼은 가능하면 KAMIS 실데이터로 교체
+    # Mock 데이터 반환 (모델 없거나 이미지 없을 때) — 공공시세만큼은 가능하면 KAMIS 실데이터로 교체.
+    # sellingPrice는 실제 판매자가 매긴 값이 아니라 데모용 임의값이므로, 고정해야 할 것은
+    # 절대 금액이 아니라 SCAN_MOCK에 이미 있는 "목표 할인율"(priceDiffPercent)이다.
+    # 라이브 공공시세는 매일 바뀌므로 sellingPrice를 그 기준으로 역산해야, 어느 날 시연해도
+    # "공공시세 대비 N% 저렴" 스토리가 유지된다 (절대값을 고정하면 부호가 뒤집힐 수 있음).
     data = dict(SCAN_MOCK.get(request.sampleId, SCAN_MOCK["apple"]))
+    target_discount_percent = data["priceDiffPercent"]
     kamis_config = SAMPLE_TO_KAMIS_ITEM.get(request.sampleId)
     kamis_unit_price = get_kamis_price(kamis_config["item"], data["grade"]) if kamis_config else None
     if kamis_unit_price is not None:
         kamis_price = round(kamis_unit_price * kamis_config["pack_weight_kg"])
         data["publicMarketPrice"] = kamis_price
-        data["priceDiffPercent"] = round((kamis_price - data["sellingPrice"]) / kamis_price * 100)
+        data["sellingPrice"] = round(kamis_price * (1 - target_discount_percent / 100))
         data["publicGuarantee"] = "농산물유통정보(KAMIS) 소매가격 실시간 연동"
     else:
         data["publicGuarantee"] = "참고 시세 (KAMIS 데이터 없음 — 자체 추정치)"
@@ -295,6 +301,57 @@ async def analyze_product(request: ScanRequest):
 class DocentRequest(BaseModel):
     marketName: str
     alleyName: str = "수산물 골목"
+    storeId: Optional[str] = None
+
+
+# Gemini 무료 티어는 분당 5회 호출로 제한된다. 지도에서 핀을 연달아 클릭하면 금방 한도를
+# 넘기므로, 같은 점포는 잠깐 동안 재사용해서 실제 호출 횟수를 줄인다.
+_DOCENT_CACHE_TTL = timedelta(minutes=30)
+_docent_cache: dict = {}
+
+
+def _cached_or_generate(cache_key: str, generate) -> str:
+    cached = _docent_cache.get(cache_key)
+    if cached and datetime.now() - cached[1] < _DOCENT_CACHE_TTL:
+        return cached[0]
+    script = generate()
+    _docent_cache[cache_key] = (script, datetime.now())
+    return script
+
+
+def generate_docent_script_for_store(market_name: str, store: Store) -> str:
+    """클릭한 '그 점포 하나'에 대한 도슨트를 생성한다 (구역 전체가 아니라).
+    Gemini 실패 시 같은 점포 데이터로 만든 템플릿 문장으로 폴백한다.
+    """
+    highlight = store.notice or store.category
+
+    client = get_gemini_client()
+    if client is not None:
+        try:
+            from google.genai import types
+
+            prompt = (
+                f"당신은 전통시장 오디오 도슨트 해설자입니다. 손님이 방금 '{market_name}'의 "
+                f"'{store.alley}' 구역에 있는 점포 '{store.name}' 앞에 멈춰 섰습니다. "
+                f"이 점포가 취급하는 품목은 '{highlight}'입니다.\n"
+                f"참고 정보: {store.story_text or '추가 정보 없음'}\n\n"
+                f"다른 점포는 언급하지 말고 이 점포 하나에 집중해서, 3~4문장의 자연스러운 "
+                f"한국어 구어체 해설을 작성하세요. 참고 정보에 있는 사실(위치, 골목 분위기 등)을 "
+                f"자연스럽게 녹여서 매번 다른 인상을 주도록 하고, '안녕하세요, 지금 서 계신 곳은' "
+                f"같은 뻔한 도입부를 반복하지 마세요. 없는 사실을 지어내지 말고, 따옴표로 감싸지 마세요."
+            )
+            response = client.models.generate_content(
+                model="gemini-3.6-flash",
+                contents=[prompt],
+                config=types.GenerateContentConfig(temperature=1.1),
+            )
+            text = (response.text or "").strip()
+            if text:
+                return f'"{text}"'
+        except Exception as e:
+            print(f"Gemini 도슨트 생성 실패 (템플릿으로 폴백): {e}")
+
+    return f'"{store.name}에 오신 것을 환영합니다. {highlight}을(를) 만나보세요."'
 
 
 def generate_docent_script(market_name: str, alley_name: str, stores: list[Store]) -> str:
@@ -332,6 +389,17 @@ def generate_docent_script(market_name: str, alley_name: str, stores: list[Store
 @router.post("/api/docent-story")
 async def docent_story(request: DocentRequest, db: Session = Depends(get_db)):
     market = db.query(Market).filter(Market.name == request.marketName).first()
+
+    if market and request.storeId:
+        store = db.query(Store).filter(Store.id == request.storeId, Store.market_id == market.id).first()
+        if store:
+            script = _cached_or_generate(
+                f"store:{store.id}",
+                lambda: generate_docent_script_for_store(request.marketName, store),
+            )
+            return {"success": True, "script": script}
+
+    # storeId가 없거나 못 찾은 경우 — 기존처럼 구역 단위로 폴백
     stores = (
         db.query(Store)
         .filter(Store.market_id == market.id, Store.alley == request.alleyName)
@@ -339,7 +407,11 @@ async def docent_story(request: DocentRequest, db: Session = Depends(get_db)):
         if market
         else []
     )
-    return {"success": True, "script": generate_docent_script(request.marketName, request.alleyName, stores)}
+    script = _cached_or_generate(
+        f"alley:{request.marketName}:{request.alleyName}",
+        lambda: generate_docent_script(request.marketName, request.alleyName, stores),
+    )
+    return {"success": True, "script": script}
 
 # 가게 스토리
 @router.get("/api/v1/consumer/store/{store_id}/story")

@@ -1,10 +1,11 @@
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-import shutil, os
+import os
+import uuid
 
 from db import get_db
-from models import Product, User, product_to_dict
+from models import Product, Store, User, product_to_dict
 from api.auth import get_current_user
 
 router = APIRouter(tags=["Merchant"])
@@ -15,6 +16,18 @@ def require_merchant(current_user: User) -> str:
     if current_user.role != "merchant":
         raise HTTPException(status_code=403, detail="판매자 계정만 상품을 등록할 수 있습니다.")
     return current_user.shop_name or current_user.display_name
+
+
+def resolve_store_id(db: Session, market_id: str, shop_name: str) -> "str | None":
+    """상인의 shop_name과 같은 이름의 점포를 같은 시장 안에서 찾아 지도 핀과 연결한다.
+    못 찾으면 None — 상품은 그대로 등록되고, 지도에는 안 뜨는 것으로 조용히 넘어간다.
+    """
+    store = (
+        db.query(Store)
+        .filter(Store.market_id == market_id, Store.name == shop_name)
+        .first()
+    )
+    return store.id if store else None
 
 
 # 수동 상품 등록/수정/삭제 (MerchantView 직접 입력 폼)
@@ -43,6 +56,7 @@ def create_product(
     shop_name = require_merchant(current_user)
     product = Product(
         market_id="yangdong",
+        store_id=resolve_store_id(db, "yangdong", shop_name),
         region="광주광역시",
         title=payload.title,
         shop_name=shop_name,
@@ -132,6 +146,7 @@ async def kakao_register(
     # 나중에 Gemini API 연동할 자리
     product = Product(
         market_id="yangdong",
+        store_id=resolve_store_id(db, "yangdong", shop_name),
         region="광주광역시",
         title=request.chatText[:20] if request.chatText else "산지직송 싱싱한 제철 상품",
         shop_name=shop_name,
@@ -156,6 +171,10 @@ async def kakao_register(
     return {"success": True, "product": product_to_dict(product)}
 
 # 사진 업로드
+ALLOWED_UPLOAD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10MB
+
+
 @router.post("/api/v1/merchant/upload")
 async def upload_product(
     price: int = Form(18000),
@@ -165,12 +184,24 @@ async def upload_product(
 ):
     shop_name = require_merchant(current_user)
 
-    file_path = f"uploads/{file.filename}"
+    # 클라이언트가 보낸 파일명을 경로에 그대로 쓰면 안 된다 (path traversal).
+    # 확장자만 원본에서 취하고, 실제 파일명은 서버가 새로 발급한다.
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="지원하지 않는 이미지 형식입니다 (jpg/png/webp만 허용).")
+
+    contents = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="이미지 용량은 10MB를 초과할 수 없습니다.")
+
+    safe_filename = f"{uuid.uuid4().hex}{ext}"
+    file_path = os.path.join("uploads", safe_filename)
     with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        buffer.write(contents)
 
     product = Product(
         market_id="yangdong",
+        store_id=resolve_store_id(db, "yangdong", shop_name),
         region="광주광역시",
         title="AI 분석 상품",
         shop_name=shop_name,
@@ -181,7 +212,7 @@ async def upload_product(
         price_tag="공공 시세 대비 10% 저렴",
         grade="A+",
         category="수산물",
-        image_url=f"/uploads/{file.filename}",
+        image_url=f"/uploads/{safe_filename}",
         freshness_score=98,
         defect_score=95,
         uniformity_score=92,

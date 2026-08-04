@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from db import get_db
-from models import Market, Store
+from models import Market, Product, Store
 
 router = APIRouter(prefix="/api/v1/map", tags=["map"])
 
@@ -37,6 +37,15 @@ def get_map_stores(market_name: str = "양동시장", db: Session = Depends(get_
         else []
     )
 
+    # 점포에 연결된 상인 등록 상품 (있으면 핀에 같이 표시할 수 있도록)
+    store_ids = [s.id for s in stores]
+    products_by_store: dict = {}
+    if store_ids:
+        for p in db.query(Product).filter(Product.store_id.in_(store_ids)).all():
+            products_by_store.setdefault(p.store_id, []).append(
+                {"id": p.id, "title": p.title, "price": p.price, "image_url": p.image_url}
+            )
+
     return {
         "status": "success",
         "market_name": market.name if market else market_name,
@@ -58,6 +67,7 @@ def get_map_stores(market_name: str = "양동시장", db: Session = Depends(get_
                 "notice": s.notice,
                 "notice_time": s.notice_time,
                 "alley": s.alley,
+                "products": products_by_store.get(s.id, []),
             }
             for s in stores
         ],

@@ -39,14 +39,19 @@ ITEM_CONFIG = {
 # KAMIS 소매가는 상품(고급)/중품(중급) 두 단계만 제공해서 완전히 대응되진 않는다.
 GRADE_TO_RANK = {"특": "상품", "상": "상품", "보통": "중품"}
 
-_cache: dict = {"date": None, "prices": {}}
+_cache: dict = {"date": None, "prices": {}, "retry_after": None}
+_RETRY_COOLDOWN = timedelta(minutes=5)
 
 
-def _fetch_category(category: str, regday: str) -> list:
+def _fetch_category(category: str, regday: str) -> "tuple[list, bool]":
+    """반환값의 두 번째 항목(ok)은 '호출이 정상적으로 응답을 받았는지'를 뜻한다.
+    네트워크/타임아웃 등 일시적 실패와 '정상 응답이지만 데이터가 없음'을 구분해야,
+    일시적 실패일 때만 재시도하고 진짜 휴장일 등은 하루치로 캐싱할 수 있다.
+    """
     cert_key = os.getenv("KAMIS_CERT_KEY")
     cert_id = os.getenv("KAMIS_CERT_ID")
     if not cert_key or not cert_id:
-        return []
+        return [], True  # 설정 자체가 없는 건 재시도해도 달라지지 않음
     params = {
         "action": "dailyPriceByCategoryList",
         "p_product_cls_code": "01",  # 01=소매, 02=도매
@@ -64,15 +69,21 @@ def _fetch_category(category: str, regday: str) -> list:
         )
         data = resp.json().get("data")
         if isinstance(data, dict):
-            return data.get("item", [])
+            return data.get("item", []), True
+        return [], True
     except Exception as e:
         print(f"KAMIS API 호출 실패 (category={category}, regday={regday}): {e}")
-    return []
+        return [], False
 
 
-def _build_prices_for_date(regday: str) -> dict:
+def _build_prices_for_date(regday: str) -> "tuple[dict, bool]":
     categories = {cfg["category"] for cfg in ITEM_CONFIG.values()}
-    items_by_category = {cat: _fetch_category(cat, regday) for cat in categories}
+    items_by_category: dict = {}
+    all_ok = True
+    for cat in categories:
+        items, ok = _fetch_category(cat, regday)
+        items_by_category[cat] = items
+        all_ok = all_ok and ok
 
     prices: dict = {}
     for item_name, cfg in ITEM_CONFIG.items():
@@ -92,19 +103,27 @@ def _build_prices_for_date(regday: str) -> dict:
                 continue
         if by_rank:
             prices[item_name] = by_rank
-    return prices
+    return prices, all_ok
 
 
 def _refresh_cache() -> None:
     today = date.today()
-    prices = {}
+    prices: dict = {}
+    had_failure = False
     for days_back in range(5):
         regday = (today - timedelta(days=days_back)).isoformat()
-        prices = _build_prices_for_date(regday)
+        prices, ok = _build_prices_for_date(regday)
+        had_failure = had_failure or not ok
         if prices:
             break
-    _cache["date"] = today
     _cache["prices"] = prices
+    if had_failure:
+        # 일시적 실패 — 오늘 날짜로 확정 짓지 않고, 쿨다운 후 같은 날 안에도 다시 시도한다.
+        _cache["date"] = None
+        _cache["retry_after"] = datetime.now() + _RETRY_COOLDOWN
+    else:
+        _cache["date"] = today
+        _cache["retry_after"] = None
 
 
 async def auto_refresh_loop() -> None:
@@ -121,7 +140,9 @@ def get_public_price(item_name: str, grade_kor: str) -> "int | None":
     데이터가 없으면(휴장일, 비계절 품목, 인증키 미설정, API 실패 등) None —
     호출부는 이 경우 기존 정적 PUBLIC_PRICE_MAP으로 폴백해야 한다.
     """
-    if _cache["date"] != date.today():
+    is_stale = _cache["date"] != date.today()
+    cooldown_elapsed = _cache["retry_after"] is None or datetime.now() >= _cache["retry_after"]
+    if is_stale and cooldown_elapsed:
         _refresh_cache()
 
     by_rank = _cache["prices"].get(item_name)

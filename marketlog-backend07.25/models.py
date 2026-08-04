@@ -107,6 +107,7 @@ class Product(Base):
 
     id = Column(String, primary_key=True, default=gen_uuid)
     market_id = Column(String, ForeignKey("markets.id"), nullable=True)
+    store_id = Column(String, ForeignKey("stores.id"), nullable=True)
     region = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -147,4 +148,5 @@ def product_to_dict(product: Product) -> dict:
         "isMerchantUploaded": product.is_merchant_uploaded,
         "region": product.region,
         "marketId": product.market_id,
+        "storeId": product.store_id,
     }
