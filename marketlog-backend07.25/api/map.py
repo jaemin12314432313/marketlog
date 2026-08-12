@@ -67,8 +67,32 @@ def get_map_stores(market_name: str = "양동시장", db: Session = Depends(get_
                 "notice": s.notice,
                 "notice_time": s.notice_time,
                 "alley": s.alley,
+                "phone": s.phone,
+                "hours": s.hours,
                 "products": products_by_store.get(s.id, []),
             }
             for s in stores
         ],
+    }
+
+
+# 3. 상품 상세 화면의 "매장 정보" 탭 등에서, 지도 핀 목적의 필터링 없이 점포 하나의
+# 실제 정보(주요품목/전화/영업시간/골목/소개)만 조회할 때 쓴다. 못 찾으면 store: null —
+# 아직 지도에 위치를 등록하지 않은 상인일 수 있으므로, 프론트가 "정보 없음"으로 처리한다.
+@router.get("/store")
+def get_store_by_name(name: str, db: Session = Depends(get_db)):
+    store = db.query(Store).filter(Store.market_id == DEFAULT_MARKET_ID, Store.name == name).first()
+    if not store:
+        return {"status": "success", "store": None}
+    return {
+        "status": "success",
+        "store": {
+            "name": store.name,
+            "subtitle": store.subtitle,
+            "category": store.category,
+            "alley": store.alley,
+            "phone": store.phone,
+            "hours": store.hours,
+            "storyText": store.story_text,
+        },
     }

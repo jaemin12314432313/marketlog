@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { UserRole } from "./LoginModal";
 import { ProductItem } from "../types";
-import { ApiError, updateProfile } from "../lib/api";
+import { ApiError, getStoreProfile, updateProfile, updateStoreProfile } from "../lib/api";
 
 interface MyWalletProps {
   onNavigateToMap?: () => void;
@@ -31,17 +31,17 @@ export const MyWallet: React.FC<MyWalletProps> = ({
 }) => {
   const initialShopName = userDisplayName || (userRole === "merchant" ? "양동수산 사장님" : "스마트 장보기 회원");
 
-  // Merchant Store Details Editable State
+  // Merchant Store Details Editable State — 점포 위치 등록(지도 핀) 이후에만 저장 가능한
+  // 실제 백엔드 데이터. hasStoreProfile이 false면 아직 위치 등록 전이라는 뜻.
   const [isEditingShopInfo, setIsEditingShopInfo] = useState(false);
+  const [hasStoreProfile, setHasStoreProfile] = useState<boolean | null>(null); // null = 로딩 중
   const [shopInfo, setShopInfo] = useState({
     name: initialShopName,
     marketName: "광주 양동전통시장",
-    category: "수산물 / 당일 산지 직송",
-    location: "수산물 12호 (광주 서구 양동전통시장)",
-    phone: "062-365-1234",
-    hours: "08:00 - 20:00 (연중무휴)",
-    status: "영업 중",
-    description: "매일 아침 산지에서 신선한 수산물을 직접 엄선해 정직한 가격으로 판매합니다.",
+    category: "",
+    phone: "",
+    hours: "",
+    description: "",
   });
 
   // Merchant Header Name Editing State
@@ -205,6 +205,31 @@ export const MyWallet: React.FC<MyWalletProps> = ({
     }
   }, [userDisplayName]);
 
+  // 점포 상세정보는 "점포 위치 등록"을 먼저 해야 저장할 Store 레코드가 생긴다 —
+  // 위치 등록 전이면 hasStoreProfile=false로 두고 안내 문구를 보여준다.
+  useEffect(() => {
+    if (userRole !== "merchant") return;
+    getStoreProfile()
+      .then((res) => {
+        if (res.profile) {
+          setHasStoreProfile(true);
+          setShopInfo((prev) => ({
+            ...prev,
+            category: res.profile!.subtitle,
+            phone: res.profile!.phone,
+            hours: res.profile!.hours,
+            description: res.profile!.storyText,
+          }));
+        } else {
+          setHasStoreProfile(false);
+        }
+      })
+      .catch((err) => {
+        console.error("점포 상세정보를 불러오지 못했습니다.", err);
+        setHasStoreProfile(false);
+      });
+  }, [userRole]);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
@@ -212,23 +237,42 @@ export const MyWallet: React.FC<MyWalletProps> = ({
     }, 2800);
   };
 
+  const [isSavingShopInfo, setIsSavingShopInfo] = useState(false);
+
   const handleStartEdit = () => {
+    if (!hasStoreProfile) {
+      alert("점포 상세정보를 저장하려면 먼저 '점포 위치 등록'으로 지도에 점포를 등록해주세요.");
+      return;
+    }
     setEditForm({ ...shopInfo });
     setIsEditingShopInfo(true);
   };
 
-  const handleSaveEdit = (e: React.FormEvent) => {
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editForm.name.trim()) {
-      alert("상호명을 입력해주세요.");
-      return;
+    setIsSavingShopInfo(true);
+    try {
+      const res = await updateStoreProfile({
+        subtitle: editForm.category,
+        phone: editForm.phone,
+        hours: editForm.hours,
+        storyText: editForm.description,
+      });
+      setShopInfo((prev) => ({
+        ...prev,
+        category: res.profile.subtitle,
+        phone: res.profile.phone,
+        hours: res.profile.hours,
+        description: res.profile.storyText,
+      }));
+      setIsEditingShopInfo(false);
+      showToast("점포 기본 상세 정보가 성공적으로 수정되었습니다.");
+    } catch (err) {
+      console.error(err);
+      alert("점포 상세정보 저장에 실패했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setIsSavingShopInfo(false);
     }
-    setShopInfo({ ...editForm });
-    if (onUpdateShopName && editForm.name !== shopInfo.name) {
-      onUpdateShopName(editForm.name);
-    }
-    setIsEditingShopInfo(false);
-    showToast("점포 기본 상세 정보가 성공적으로 수정되었습니다.");
   };
 
   const handleCancelEdit = () => {
@@ -650,6 +694,16 @@ export const MyWallet: React.FC<MyWalletProps> = ({
             )}
           </div>
 
+          {hasStoreProfile === false && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
+              <span className="material-symbols-outlined text-amber-600 text-lg shrink-0">info</span>
+              <p className="text-[11px] text-amber-800 font-medium leading-relaxed">
+                점포 상세정보를 저장하려면 먼저 위쪽의 "점포 위치 등록"으로 지도에 점포를 등록해주세요.
+                위치가 등록돼야 이 정보도 저장할 수 있어요.
+              </p>
+            </div>
+          )}
+
           {!isEditingShopInfo ? (
             /* View Mode */
             <div className="space-y-3">
@@ -664,19 +718,15 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                 </div>
                 <div className="flex justify-between py-1.5">
                   <span className="text-[#64748B] font-medium">주요 품목</span>
-                  <span className="font-extrabold text-[#0F172A]">{shopInfo.category}</span>
-                </div>
-                <div className="flex justify-between py-1.5">
-                  <span className="text-[#64748B] font-medium">점포 위치 / 호수</span>
-                  <span className="font-bold text-[#334155] text-right max-w-[240px]">{shopInfo.location}</span>
+                  <span className="font-extrabold text-[#0F172A]">{shopInfo.category || "미등록"}</span>
                 </div>
                 <div className="flex justify-between py-1.5">
                   <span className="text-[#64748B] font-medium">전화번호</span>
-                  <span className="font-bold text-[#334155]">{shopInfo.phone}</span>
+                  <span className="font-bold text-[#334155]">{shopInfo.phone || "미등록"}</span>
                 </div>
                 <div className="flex justify-between py-1.5">
                   <span className="text-[#64748B] font-medium">영업시간</span>
-                  <span className="font-bold text-[#334155]">{shopInfo.hours}</span>
+                  <span className="font-bold text-[#334155]">{shopInfo.hours || "미등록"}</span>
                 </div>
               </div>
 
@@ -691,31 +741,16 @@ export const MyWallet: React.FC<MyWalletProps> = ({
           ) : (
             /* Edit Form Mode */
             <form onSubmit={handleSaveEdit} className="space-y-3.5 text-xs">
-              {/* 상호명 */}
+              {/* 상호명은 상단 이름 옆 연필 아이콘에서 변경한다 — 여기선 참고용 표시만 */}
               <div className="space-y-1">
-                <label className="font-bold text-[#334155] block">
-                  상호명 <span className="text-rose-500">*</span>
-                </label>
+                <label className="font-bold text-[#334155] block">상호명</label>
                 <input
                   type="text"
                   value={editForm.name}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
-                  required
-                  placeholder="예: 양동수산"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
+                  disabled
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-xs font-semibold text-slate-500 cursor-not-allowed"
                 />
-              </div>
-
-              {/* 소속 전통시장 */}
-              <div className="space-y-1">
-                <label className="font-bold text-[#334155] block">소속 전통시장</label>
-                <input
-                  type="text"
-                  value={editForm.marketName}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, marketName: e.target.value }))}
-                  placeholder="예: 광주 양동전통시장"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
-                />
+                <p className="text-[10px] text-slate-400">상호명은 상단 이름 옆 연필 아이콘에서 바꿀 수 있어요.</p>
               </div>
 
               {/* 주요 품목 */}
@@ -738,18 +773,6 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                   value={editForm.hours}
                   onChange={(e) => setEditForm((prev) => ({ ...prev, hours: e.target.value }))}
                   placeholder="예: 08:00 - 20:00 (연중무휴)"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
-                />
-              </div>
-
-              {/* 점포 위치 / 호수 */}
-              <div className="space-y-1">
-                <label className="font-bold text-[#334155] block">점포 위치 / 호수</label>
-                <input
-                  type="text"
-                  value={editForm.location}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, location: e.target.value }))}
-                  placeholder="예: 수산물 12호 (광주 서구 양동전통시장)"
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
                 />
               </div>
@@ -789,10 +812,11 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1"
+                  disabled={isSavingShopInfo}
+                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-bold shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1"
                 >
                   <span className="material-symbols-outlined text-sm">check</span>
-                  <span>저장 완료</span>
+                  <span>{isSavingShopInfo ? "저장 중..." : "저장 완료"}</span>
                 </button>
               </div>
             </form>

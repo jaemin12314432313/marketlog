@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ProductItem, MarketInfo } from "../types";
+import { fetchStoreByName, StoreInfo } from "../lib/api";
 
 interface ProductDetailModalProps {
   product: ProductItem | null;
@@ -255,6 +256,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     product?.isScannedProduct ? "scan" : "full"
   );
   const [activeTab, setActiveTab] = useState<"description" | "shop" | "recipe">(initialTab);
+  const [storeInfo, setStoreInfo] = useState<StoreInfo | null>(null);
+  const [isStoreInfoLoaded, setIsStoreInfoLoaded] = useState(false);
 
   React.useEffect(() => {
     if (product?.isScannedProduct) {
@@ -264,6 +267,22 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     }
     setActiveTab(initialTab);
   }, [product, initialTab]);
+
+  // 매장 정보 탭에 실제 점포 데이터(주요품목/전화/영업시간/소개)를 채운다. 아직 지도에
+  // 위치를 등록하지 않은 상인의 상품이면 store가 null로 오고, 그 경우 "정보 없음"으로
+  // 정직하게 보여준다 — 예전처럼 모든 점포에 똑같은 가짜 정보를 보여주지 않는다.
+  React.useEffect(() => {
+    setIsStoreInfoLoaded(false);
+    setStoreInfo(null);
+    if (!product?.shopName) {
+      setIsStoreInfoLoaded(true);
+      return;
+    }
+    fetchStoreByName(product.shopName)
+      .then((res) => setStoreInfo(res.store))
+      .catch((err) => console.error("점포 정보를 불러오지 못했습니다.", err))
+      .finally(() => setIsStoreInfoLoaded(true));
+  }, [product?.shopName]);
 
   const handleToggle = () => {
     onToggleBookmark(product);
@@ -712,50 +731,67 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       </p>
                     </div>
                   </div>
-                  <span className="text-xs font-extrabold text-[#10B981] bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                    인증 상점
-                  </span>
-                </div>
-
-                <div className="space-y-2 text-xs divide-y divide-[#F1F5F9]">
-                  <div className="flex justify-between py-1.5">
-                    <span className="text-[#64748B] font-medium">상호명</span>
-                    <span className="font-extrabold text-[#0F172A]">{product.shopName}</span>
-                  </div>
-                  <div className="flex justify-between py-1.5">
-                    <span className="text-[#64748B] font-medium">소속 전통시장</span>
-                    <span className="font-extrabold text-emerald-600">{marketInfo.name}</span>
-                  </div>
-                  <div className="flex justify-between py-1.5">
-                    <span className="text-[#64748B] font-medium">주요 품목</span>
-                    <span className="font-extrabold text-[#0F172A]">{product.category}</span>
-                  </div>
-                  <div className="flex justify-between py-1.5">
-                    <span className="text-[#64748B] font-medium">점포 위치 / 호수</span>
-                    <span className="font-bold text-[#334155] text-right max-w-[240px]">
-                      {marketInfo.name} A동 수산/식자재 라인
+                  {storeInfo && (
+                    <span className="text-xs font-extrabold text-[#10B981] bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                      인증 상점
                     </span>
-                  </div>
-                  <div className="flex justify-between py-1.5">
-                    <span className="text-[#64748B] font-medium">전화번호</span>
-                    <a href={`tel:${product.phone || "062-360-7000"}`} className="font-bold text-[#0052FF] hover:underline flex items-center gap-1">
-                      <span className="material-symbols-outlined text-xs">call</span>
-                      {product.phone || "062-360-7000"}
-                    </a>
-                  </div>
-                  <div className="flex justify-between py-1.5">
-                    <span className="text-[#64748B] font-medium">영업시간</span>
-                    <span className="font-bold text-[#334155]">08:00 - 20:00 (연중무휴)</span>
-                  </div>
+                  )}
                 </div>
 
-                {/* Shop Description Box */}
-                <div className="bg-[#F8FAFC] rounded-xl p-3 border border-[#E2E8F0] space-y-1">
-                  <span className="text-[11px] font-bold text-[#64748B] block">점포 한줄 안내 / 소개</span>
-                  <p className="text-xs text-[#334155] leading-relaxed font-medium">
-                    매일 아침 산지에서 신선한 식자재를 직접 엄선해 정직한 가격으로 판매합니다.
-                  </p>
-                </div>
+                {!isStoreInfoLoaded ? (
+                  <div className="py-6 flex justify-center">
+                    <div className="w-6 h-6 border-4 border-[#0052FF] border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2 text-xs divide-y divide-[#F1F5F9]">
+                      <div className="flex justify-between py-1.5">
+                        <span className="text-[#64748B] font-medium">상호명</span>
+                        <span className="font-extrabold text-[#0F172A]">{product.shopName}</span>
+                      </div>
+                      <div className="flex justify-between py-1.5">
+                        <span className="text-[#64748B] font-medium">소속 전통시장</span>
+                        <span className="font-extrabold text-emerald-600">{marketInfo.name}</span>
+                      </div>
+                      <div className="flex justify-between py-1.5">
+                        <span className="text-[#64748B] font-medium">주요 품목</span>
+                        <span className="font-extrabold text-[#0F172A]">{storeInfo?.subtitle || product.category}</span>
+                      </div>
+                      {storeInfo?.alley && (
+                        <div className="flex justify-between py-1.5">
+                          <span className="text-[#64748B] font-medium">골목</span>
+                          <span className="font-bold text-[#334155] text-right max-w-[240px]">{storeInfo.alley}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between py-1.5">
+                        <span className="text-[#64748B] font-medium">전화번호</span>
+                        {storeInfo?.phone || product.phone ? (
+                          <a
+                            href={`tel:${storeInfo?.phone || product.phone}`}
+                            className="font-bold text-[#0052FF] hover:underline flex items-center gap-1"
+                          >
+                            <span className="material-symbols-outlined text-xs">call</span>
+                            {storeInfo?.phone || product.phone}
+                          </a>
+                        ) : (
+                          <span className="font-bold text-[#94A3B8]">정보 없음</span>
+                        )}
+                      </div>
+                      <div className="flex justify-between py-1.5">
+                        <span className="text-[#64748B] font-medium">영업시간</span>
+                        <span className="font-bold text-[#334155]">{storeInfo?.hours || "정보 없음"}</span>
+                      </div>
+                    </div>
+
+                    {/* Shop Description Box */}
+                    <div className="bg-[#F8FAFC] rounded-xl p-3 border border-[#E2E8F0] space-y-1">
+                      <span className="text-[11px] font-bold text-[#64748B] block">점포 한줄 안내 / 소개</span>
+                      <p className="text-xs text-[#334155] leading-relaxed font-medium">
+                        {storeInfo?.storyText || "아직 등록된 점포 소개가 없습니다."}
+                      </p>
+                    </div>
+                  </>
+                )}
 
                 <button
                   onClick={() => {

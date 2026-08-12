@@ -197,6 +197,74 @@ def set_store_location(
     return {"success": True, "store": {"id": store.id, "lat": store.lat, "lng": store.lng}}
 
 
+# 상인 점포 상세정보(주요 품목/전화번호/영업시간/소개글) — 예전엔 MyWallet 화면에서
+# 로컬 상태로만 바뀌고 저장 API 자체가 없어서, 저장 성공 토스트가 떠도 새로고침하면
+# 다 날아가는 가짜 기능이었다. Store 레코드가 있어야 저장할 수 있으므로(점포 위치
+# 등록이 선행되어야 함) 없으면 안내 메시지와 함께 404를 돌려준다.
+class StoreProfileRequest(BaseModel):
+    subtitle: str | None = None  # 주요 품목
+    phone: str | None = None
+    hours: str | None = None
+    storyText: str | None = None  # 점포 소개글
+
+
+def _store_profile_dict(store: Store) -> dict:
+    return {
+        "subtitle": store.subtitle,
+        "phone": store.phone,
+        "hours": store.hours,
+        "storyText": store.story_text,
+    }
+
+
+@router.get("/api/v1/merchant/store-profile")
+def get_store_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    shop_name = require_merchant(current_user)
+    store = (
+        db.query(Store)
+        .filter(Store.market_id == "yangdong", Store.name == shop_name)
+        .first()
+    )
+    if not store:
+        return {"success": True, "profile": None}
+    return {"success": True, "profile": _store_profile_dict(store)}
+
+
+@router.put("/api/v1/merchant/store-profile")
+def update_store_profile(
+    payload: StoreProfileRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    shop_name = require_merchant(current_user)
+    store = (
+        db.query(Store)
+        .filter(Store.market_id == "yangdong", Store.name == shop_name)
+        .first()
+    )
+    if not store:
+        raise HTTPException(
+            status_code=404,
+            detail="먼저 점포 위치를 등록해주세요. (점포 위치 등록 후 상세정보를 저장할 수 있습니다.)",
+        )
+
+    if payload.subtitle is not None:
+        store.subtitle = payload.subtitle
+    if payload.phone is not None:
+        store.phone = payload.phone
+    if payload.hours is not None:
+        store.hours = payload.hours
+    if payload.storyText is not None:
+        store.story_text = payload.storyText
+
+    db.commit()
+    db.refresh(store)
+    return {"success": True, "profile": _store_profile_dict(store)}
+
+
 # 카카오 등록
 class KakaoRegisterRequest(BaseModel):
     chatText: str = ""

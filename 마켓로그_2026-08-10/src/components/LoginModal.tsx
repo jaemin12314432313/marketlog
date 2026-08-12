@@ -1,5 +1,15 @@
 import React, { useState } from "react";
-import { ApiError, findUsername, login, register, resetPassword, setAuthToken } from "../lib/api";
+import {
+  ApiError,
+  clearAuthToken,
+  findUsername,
+  login,
+  register,
+  resetPassword,
+  setAuthToken,
+  setStoreLocation,
+} from "../lib/api";
+import { StoreLocationPicker } from "./StoreLocationPicker";
 
 function describeApiError(err: unknown, authFailMessage: string): string {
   if (err instanceof ApiError) {
@@ -52,6 +62,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [signupShopName, setSignupShopName] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(true);
   const [signupSuccessMsg, setSignupSuccessMsg] = useState("");
+  const [isSignupLocationPickerOpen, setIsSignupLocationPickerOpen] = useState(false);
 
   // Find ID Form States
   const [findIdName, setFindIdName] = useState("");
@@ -135,9 +146,23 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       return;
     }
 
+    // 상인은 위치를 안 찍어두면 상품을 등록해도 지도에 안 뜨는 걸 나중에야 알게 되는
+    // 경우가 많아서, 가입 절차 안에 위치 등록 단계를 넣는다(건너뛰기는 가능).
+    if (selectedRole === "merchant") {
+      setIsSignupLocationPickerOpen(true);
+      return;
+    }
+
+    await completeRegistration();
+  };
+
+  // 회원가입 실제 처리 — 상인이 가입 도중 점포 위치를 찍었으면 함께 저장한다.
+  // 위치 저장 API는 로그인이 필요해서, 방금 발급된 토큰을 이 한 번의 저장에만 잠깐
+  // 쓰고 바로 지운다 (가입 후 자동 로그인은 안 시키는 기존 동작을 그대로 유지).
+  const completeRegistration = async (pin?: { lat: number; lng: number }) => {
     setIsSubmitting(true);
     try {
-      await register({
+      const res = await register({
         username: signupId.trim(),
         password: signupPw,
         role: selectedRole,
@@ -145,6 +170,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         phone: signupPhone.trim(),
         shopName: selectedRole === "merchant" ? signupShopName.trim() : undefined,
       });
+
+      if (pin) {
+        setAuthToken(res.token);
+        try {
+          await setStoreLocation(pin);
+        } catch (err) {
+          console.error("가입 중 점포 위치 등록 실패", err);
+        } finally {
+          clearAuthToken();
+        }
+      }
+
       setLoginId(signupId.trim());
       setSignupSuccessMsg(`${signupName}님의 회원가입이 정상 완료되었습니다! 가입한 아이디로 로그인해보세요.`);
     } catch (err) {
@@ -733,10 +770,28 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     </div>
   );
 
+  const locationPicker = (
+    <StoreLocationPicker
+      isOpen={isSignupLocationPickerOpen}
+      onClose={() => {
+        // 위치를 안 찍고 닫아도(건너뛰기) 가입 자체는 그대로 진행한다.
+        setIsSignupLocationPickerOpen(false);
+        completeRegistration();
+      }}
+      marketName="광주 양동시장"
+      mode="pick"
+      onPinPicked={(pin) => {
+        setIsSignupLocationPickerOpen(false);
+        completeRegistration(pin);
+      }}
+    />
+  );
+
   if (isFullScreen) {
     return (
       <div className="min-h-screen w-full bg-gradient-to-b from-[#EFF6FF] via-[#F8FAFC] to-[#F1F5F9] flex flex-col justify-center items-center overflow-x-hidden animate-in fade-in duration-300">
         {renderLoginBody(false)}
+        {locationPicker}
       </div>
     );
   }
@@ -746,6 +801,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       <div className="bg-white w-full max-w-sm sm:max-w-md rounded-3xl shadow-2xl border border-blue-100/80 relative overflow-hidden my-auto max-h-[90vh] overflow-y-auto">
         {renderLoginBody(true)}
       </div>
+      {locationPicker}
     </div>
   );
 };

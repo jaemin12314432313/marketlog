@@ -99,6 +99,8 @@ class Store(Base):
     notice_time = Column(String, nullable=False, default="")
     alley = Column(String, nullable=False, default="")
     story_text = Column(String, nullable=False, default="")
+    phone = Column(String, nullable=False, default="")
+    hours = Column(String, nullable=False, default="")
 
     market = relationship("Market", back_populates="stores")
 

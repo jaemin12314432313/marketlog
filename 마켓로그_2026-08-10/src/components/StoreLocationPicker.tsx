@@ -9,6 +9,12 @@ interface StoreLocationPickerProps {
   onClose: () => void;
   marketName: string;
   onSaved?: () => void;
+  // "save"(기본) — 로그인된 상인이 자기 위치를 바로 서버에 저장한다 (MerchantView에서 사용).
+  // "pick" — 아직 계정이 없는 회원가입 도중이라 서버에 저장할 인증 토큰이 없으므로, 좌표만
+  // 골라서 onPinPicked로 부모에게 넘긴다. 실제 저장은 부모가 가입 완료 시점에 처리한다.
+  mode?: "save" | "pick";
+  initialPin?: { lat: number; lng: number } | null;
+  onPinPicked?: (pin: { lat: number; lng: number }) => void;
 }
 
 // 상인이 자기 점포 위치에 직접 핀을 찍어 등록하는 모달. 지도의 실제 점포 데이터(공공데이터
@@ -19,15 +25,24 @@ export const StoreLocationPicker: React.FC<StoreLocationPickerProps> = ({
   onClose,
   marketName,
   onSaved,
+  mode = "save",
+  initialPin = null,
+  onPinPicked,
 }) => {
   const [naverLoaded, setNaverLoaded] = useState(false);
-  const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
+  const [pin, setPin] = useState<{ lat: number; lng: number } | null>(initialPin);
   const [isSaving, setIsSaving] = useState(false);
-  const [isLoadingInitial, setIsLoadingInitial] = useState(true);
+  const [isLoadingInitial, setIsLoadingInitial] = useState(mode === "save");
 
   const mapElement = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setPin(initialPin);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -62,9 +77,10 @@ export const StoreLocationPicker: React.FC<StoreLocationPickerProps> = ({
     };
   }, [isOpen]);
 
-  // 이미 등록된 위치가 있으면 불러와서 그 자리에 핀을 미리 찍어둔다.
+  // "save" 모드에서만 — 이미 등록된 위치가 있으면 불러와서 그 자리에 핀을 미리 찍어둔다.
+  // "pick" 모드는 아직 계정이 없으니 조회할 서버 데이터 자체가 없다.
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || mode !== "save") return;
     setIsLoadingInitial(true);
     getStoreLocation()
       .then((res) => {
@@ -74,7 +90,7 @@ export const StoreLocationPicker: React.FC<StoreLocationPickerProps> = ({
       })
       .catch((err) => console.error("점포 위치를 불러오지 못했습니다.", err))
       .finally(() => setIsLoadingInitial(false));
-  }, [isOpen]);
+  }, [isOpen, mode]);
 
   useEffect(() => {
     if (!isOpen || !naverLoaded || !mapElement.current || isLoadingInitial) return;
@@ -136,9 +152,14 @@ export const StoreLocationPicker: React.FC<StoreLocationPickerProps> = ({
     onClose();
   };
 
-  const handleSave = async () => {
+  const handleConfirm = async () => {
     if (!pin) {
       alert("지도를 눌러 점포 위치를 먼저 찍어주세요.");
+      return;
+    }
+    if (mode === "pick") {
+      onPinPicked?.(pin);
+      handleClose();
       return;
     }
     setIsSaving(true);
@@ -189,12 +210,12 @@ export const StoreLocationPicker: React.FC<StoreLocationPickerProps> = ({
               : "아직 위치를 선택하지 않았어요."}
           </p>
           <button
-            onClick={handleSave}
+            onClick={handleConfirm}
             disabled={isSaving || !pin}
             className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-extrabold text-sm shadow-md transition-all flex items-center justify-center gap-1.5"
           >
             <span className="material-symbols-outlined text-base">check_circle</span>
-            <span>{isSaving ? "저장 중..." : "이 위치로 등록하기"}</span>
+            <span>{isSaving ? "저장 중..." : mode === "pick" ? "이 위치로 선택하기" : "이 위치로 등록하기"}</span>
           </button>
         </div>
       </div>

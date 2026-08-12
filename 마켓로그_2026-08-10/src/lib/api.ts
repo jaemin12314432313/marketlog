@@ -107,6 +107,20 @@ export function fetchMapConfig(): Promise<MapConfig> {
   return apiFetch<MapConfig>("/api/v1/map/config");
 }
 
+export interface StoreInfo {
+  name: string;
+  subtitle: string;
+  category: string;
+  alley: string;
+  phone: string;
+  hours: string;
+  storyText: string;
+}
+
+export function fetchStoreByName(name: string): Promise<{ status: string; store: StoreInfo | null }> {
+  return apiFetch(`/api/v1/map/store?name=${encodeURIComponent(name)}`);
+}
+
 export interface AnalyzeProductResponse {
   success: boolean;
   data: InspectionResult;
@@ -289,6 +303,29 @@ export function getStoreLocation(): Promise<{ success: boolean; store: StoreLoca
 
 export function setStoreLocation(payload: { lat: number; lng: number }): Promise<{ success: boolean; store: StoreLocation }> {
   return apiFetch("/api/v1/merchant/store-location", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export interface StoreProfile {
+  subtitle: string;
+  phone: string;
+  hours: string;
+  storyText: string;
+}
+
+export function getStoreProfile(): Promise<{ success: boolean; profile: StoreProfile | null }> {
+  return apiFetch("/api/v1/merchant/store-profile");
+}
+
+export function updateStoreProfile(payload: {
+  subtitle?: string;
+  phone?: string;
+  hours?: string;
+  storyText?: string;
+}): Promise<{ success: boolean; profile: StoreProfile }> {
+  return apiFetch("/api/v1/merchant/store-profile", {
     method: "PUT",
     body: JSON.stringify(payload),
   });
