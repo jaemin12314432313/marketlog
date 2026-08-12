@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: marketlog-backend
+    runtime: python
+    rootDir: marketlog-backend07.25
+    plan: free
+    buildCommand: pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      # 아래 값들은 render.yaml에 실제 값을 적지 않는다 (public repo에 비밀키가 그대로 올라감).
+      # Render 대시보드 > Environment 탭에서 직접 입력해야 한다.
+      - key: JWT_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: KAMIS_CERT_ID
+        sync: false
+      - key: KAMIS_CERT_KEY
+        sync: false
+      - key: NAVER_CLIENT_ID
+        sync: false

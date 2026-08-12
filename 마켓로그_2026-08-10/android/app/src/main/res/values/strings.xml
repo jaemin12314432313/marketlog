@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MarketLog</string>
+    <string name="title_activity_main">MarketLog</string>
+    <string name="package_name">com.marketlog.app</string>
+    <string name="custom_url_scheme">com.marketlog.app</string>
+</resources>

@@ -18,8 +18,8 @@ coverage/
 # Backend runtime/data (not source)
 marketlog-backend07.25/marketlog.db
 marketlog-backend07.25/uploads/
-marketlog-backend07.25/checkpoints/
 marketlog-backend07.25/ai_engine/weights/
+# checkpoints/*.pt는 배포(Render 등) 시 필요해서 커밋함 — 파일당 100MB 미만이라 git으로 충분
 
 # Misc
 .DS_Store
