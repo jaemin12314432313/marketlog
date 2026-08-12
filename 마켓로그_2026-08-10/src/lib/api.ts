@@ -16,17 +16,52 @@ export function clearAuthToken(): void {
   localStorage.removeItem(AUTH_TOKEN_KEY);
 }
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+// 로그인 실패("아이디/비번 틀림")와 네트워크·서버 장애를 화면에서 구분해서 보여줄 수 있도록,
+// 상태값을 담아 던진다. status가 없으면 fetch 자체가 실패한 것(네트워크 단절 등),
+// isTimeout이면 아래 타임아웃에 걸린 것.
+export class ApiError extends Error {
+  status?: number;
+  isTimeout: boolean;
+  constructor(message: string, status?: number, isTimeout = false) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.isTimeout = isTimeout;
+  }
+}
+
+const DEFAULT_TIMEOUT_MS = 20_000;
+
+async function apiFetch<T>(
+  path: string,
+  init?: RequestInit,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
+): Promise<T> {
   const token = getAuthToken();
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    ...init,
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      signal: controller.signal,
+      ...init,
+    });
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      throw new ApiError(`API ${path} timed out after ${timeoutMs}ms`, undefined, true);
+    }
+    throw new ApiError(`API ${path} network error: ${err?.message || err}`);
+  } finally {
+    clearTimeout(timer);
+  }
+
   if (!res.ok) {
-    throw new Error(`API ${path} failed: ${res.status}`);
+    throw new ApiError(`API ${path} failed: ${res.status}`, res.status);
   }
   return res.json() as Promise<T>;
 }
@@ -82,10 +117,13 @@ export function analyzeProduct(payload: {
   sampleId?: string;
   imageBase64?: string;
 }): Promise<AnalyzeProductResponse> {
-  return apiFetch<AnalyzeProductResponse>("/api/analyze-product", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  // 실제 사진 분석은 모델 최초 로딩(콜드스타트) + CPU 추론 + Gemini 호출이 겹치면
+  // 20초 안팎까지 정상적으로 걸릴 수 있어(직접 측정함), 기본 타임아웃보다 넉넉히 잡는다.
+  return apiFetch<AnalyzeProductResponse>(
+    "/api/analyze-product",
+    { method: "POST", body: JSON.stringify(payload) },
+    45_000
+  );
 }
 
 export interface DocentStoryResponse {
@@ -112,6 +150,7 @@ export interface AuthUser {
   role: "customer" | "merchant";
   displayName: string;
   shopName?: string | null;
+  phone?: string | null;
 }
 
 export interface AuthResponse {
@@ -152,9 +191,25 @@ export function findUsername(payload: { displayName: string; phone: string }): P
   });
 }
 
-export function resetPassword(payload: { username: string }): Promise<{ success: boolean; tempPassword: string }> {
+export function resetPassword(payload: {
+  username: string;
+  displayName: string;
+  phone: string;
+}): Promise<{ success: boolean; tempPassword: string }> {
   return apiFetch("/api/v1/auth/reset-password", {
     method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateProfile(payload: {
+  displayName?: string;
+  phone?: string;
+  currentPassword?: string;
+  newPassword?: string;
+}): Promise<{ success: boolean; user: AuthUser }> {
+  return apiFetch("/api/v1/auth/me", {
+    method: "PUT",
     body: JSON.stringify(payload),
   });
 }
@@ -218,6 +273,25 @@ export function updateMerchantProduct(
 
 export function deleteMerchantProduct(id: string): Promise<{ success: boolean }> {
   return apiFetch(`/api/v1/merchant/products/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+// ---------- 상인 점포 위치(지도 핀) ----------
+
+export interface StoreLocation {
+  id: string;
+  lat: number;
+  lng: number;
+}
+
+export function getStoreLocation(): Promise<{ success: boolean; store: StoreLocation | null }> {
+  return apiFetch("/api/v1/merchant/store-location");
+}
+
+export function setStoreLocation(payload: { lat: number; lng: number }): Promise<{ success: boolean; store: StoreLocation }> {
+  return apiFetch("/api/v1/merchant/store-location", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
 }
 
 export const API_BASE_URL = API_BASE;

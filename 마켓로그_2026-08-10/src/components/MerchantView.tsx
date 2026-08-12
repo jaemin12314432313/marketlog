@@ -1,14 +1,22 @@
 import React, { useState, useRef } from "react";
 import { ProductItem } from "../types";
 import { MerchantAiScanModal } from "./MerchantAiScanModal";
+import { StoreLocationPicker } from "./StoreLocationPicker";
+
+function formatRegisteredDate(isoString: string): string {
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+}
 
 interface MerchantViewProps {
   products: ProductItem[];
   userDisplayName: string;
+  marketName: string;
   onOpenAiScan: () => void;
-  onAddProduct: (product: ProductItem) => void;
-  onUpdateProduct?: (product: ProductItem) => void;
-  onDeleteProduct: (id: string) => void;
+  onAddProduct: (product: ProductItem) => Promise<boolean>;
+  onUpdateProduct?: (product: ProductItem) => Promise<boolean>;
+  onDeleteProduct: (id: string) => Promise<boolean>;
   onOpenLogin: () => void;
   onSelectProduct: (product: ProductItem) => void;
 }
@@ -16,6 +24,7 @@ interface MerchantViewProps {
 export const MerchantView: React.FC<MerchantViewProps> = ({
   products,
   userDisplayName,
+  marketName,
   onOpenAiScan,
   onAddProduct,
   onUpdateProduct,
@@ -24,6 +33,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
   onSelectProduct,
 }) => {
   const shopName = userDisplayName || "양동수산";
+  const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
 
   // Form states for manual registration
   const [isFormOpen, setIsFormOpen] = useState(true);
@@ -108,7 +118,9 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     setImageUrl("");
   };
 
-  const handleSubmitManual = (e: React.FormEvent) => {
+  const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
+
+  const handleSubmitManual = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !price) {
       alert("상품명과 판매 가격을 입력해 주세요.");
@@ -146,11 +158,13 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         isMerchantUploaded: true,
       };
 
-      if (onUpdateProduct) {
-        onUpdateProduct(updatedProduct);
-      } else {
-        onAddProduct(updatedProduct);
-      }
+      setIsSubmittingProduct(true);
+      const ok = onUpdateProduct
+        ? await onUpdateProduct(updatedProduct)
+        : await onAddProduct(updatedProduct);
+      setIsSubmittingProduct(false);
+      if (!ok) return; // 실패 알림은 App.tsx가 이미 보여줬으니 여기선 폼을 그대로 둔다.
+
       showToast(`'${title}' 상품 정보가 수정되었습니다!`);
     } else {
       const newProduct: ProductItem = {
@@ -173,7 +187,11 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         isMerchantUploaded: true,
       };
 
-      onAddProduct(newProduct);
+      setIsSubmittingProduct(true);
+      const ok = await onAddProduct(newProduct);
+      setIsSubmittingProduct(false);
+      if (!ok) return;
+
       showToast(`'${title}' 상품이 등록되었습니다!`);
     }
 
@@ -181,10 +199,10 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     setIsFormOpen(false);
   };
 
-  // Filter products belonging to this merchant or uploaded
-  const merchantProducts = products.filter(
-    (p) => p.shopName === shopName || p.isMerchantUploaded
-  );
+  // Filter products belonging to this merchant only (isMerchantUploaded is true for
+  // every merchant's products, not just mine — using OR here used to leak every other
+  // merchant's inventory into my own management panel).
+  const merchantProducts = products.filter((p) => p.shopName === shopName);
 
   return (
     <div className="w-full max-w-[600px] mx-auto pt-20 pb-28 px-4 space-y-6">
@@ -195,6 +213,25 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
           <span>{toastMessage}</span>
         </div>
       )}
+
+      {/* 점포 위치 등록 — 지도의 실제 점포와 이름이 정확히 일치할 때만 상품이 지도에
+          뜨던 문제 때문에, 상인이 직접 자기 위치에 핀을 찍어 등록할 수 있게 한다. */}
+      <button
+        type="button"
+        onClick={() => setIsLocationPickerOpen(true)}
+        className="w-full p-4 rounded-2xl border border-emerald-200 bg-emerald-50/60 hover:bg-emerald-50 flex items-center justify-between gap-3 transition-colors"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-lg">location_on</span>
+          </div>
+          <div className="min-w-0 text-left">
+            <h5 className="text-xs font-extrabold text-slate-900">점포 위치 등록</h5>
+            <p className="text-[11px] text-slate-500 mt-0.5">지도에서 내 점포 위치를 찍어야 상품이 지도에 표시돼요</p>
+          </div>
+        </div>
+        <span className="material-symbols-outlined text-emerald-600 shrink-0">chevron_right</span>
+      </button>
 
       {/* Main Action Section: Store Item Registration */}
       <div className="space-y-3">
@@ -459,7 +496,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
 
                     <div className="relative w-full h-44 sm:h-52 rounded-xl overflow-hidden border border-slate-200 shadow-inner group-hover:scale-[1.01] transition-transform">
                       <img
-                        src="https://images.unsplash.com/photo-1464965911861-746a04b4bca6?auto=format&fit=crop&w=800&q=80"
+                        src="https://plus.unsplash.com/premium_photo-1724249990837-f6dfcb7f3eaa?auto=format&fit=crop&w=800&q=80"
                         alt="올바른 촬영 예시 사진"
                         className="w-full h-full object-cover"
                       />
@@ -537,10 +574,17 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
           {/* Submit Button */}
           <button
             type="submit"
-            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-extrabold text-xs shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 cursor-pointer"
+            disabled={isSubmittingProduct}
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-extrabold text-xs shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
           >
             <span className="material-symbols-outlined text-base">check</span>
-            <span>{editingProductId ? "상품 정보 수정 완료" : "상품 등록 완료"}</span>
+            <span>
+              {isSubmittingProduct
+                ? "처리 중..."
+                : editingProductId
+                ? "상품 정보 수정 완료"
+                : "상품 등록 완료"}
+            </span>
           </button>
         </form>
       )}
@@ -602,10 +646,15 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                     <h4 className="text-sm font-bold text-slate-900 truncate hover:text-emerald-600 transition-colors">
                       {p.title}
                     </h4>
-                    <div>
+                    <div className="flex items-center gap-1.5">
                       <span className="text-base font-black text-slate-900">
                         {p.price.toLocaleString()}원
                       </span>
+                      {p.createdAt && (
+                        <span className="text-[10px] font-bold text-slate-400">
+                          {formatRegisteredDate(p.createdAt)} 등록
+                        </span>
+                      )}
                     </div>
                     <div className="text-[10px] font-medium text-slate-400 flex items-center gap-1">
                       <span className="material-symbols-outlined text-xs text-emerald-600">edit_note</span>
@@ -670,12 +719,17 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  onDeleteProduct(deletingProduct.id);
-                  if (editingProductId === deletingProduct.id) {
+                onClick={async () => {
+                  const target = deletingProduct;
+                  const ok = await onDeleteProduct(target.id);
+                  if (!ok) {
+                    setDeletingProduct(null);
+                    return; // 실패 알림은 App.tsx가 이미 보여줬다.
+                  }
+                  if (editingProductId === target.id) {
                     handleCancelEdit();
                   }
-                  showToast(`'${deletingProduct.title}' 상품이 삭제되었습니다.`);
+                  showToast(`'${target.title}' 상품이 삭제되었습니다.`);
                   setDeletingProduct(null);
                 }}
                 className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md transition-colors cursor-pointer"
@@ -709,6 +763,14 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
             formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
           }, 100);
         }}
+      />
+
+      {/* Store Location Picker Modal */}
+      <StoreLocationPicker
+        isOpen={isLocationPickerOpen}
+        onClose={() => setIsLocationPickerOpen(false)}
+        marketName={marketName}
+        onSaved={() => showToast("점포 위치가 지도에 등록되었습니다!")}
       />
     </div>
   );

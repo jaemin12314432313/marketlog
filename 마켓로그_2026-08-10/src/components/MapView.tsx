@@ -29,6 +29,43 @@ function formatSeconds(totalSeconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+// 양동시장 전체 범위를 지도 위에 하나의 영역으로 보여주기 위해, 463개 실제 점포
+// 좌표(위도/경도)의 컨벡스 헐(볼록 껍질)을 계산해 시장 외곽선으로 쓴다. 공식 행정
+// 경계 데이터가 없어서 "실제 점포들이 위치한 범위"로 근사한 것 — 완벽한 시장 부지
+// 경계는 아니지만, 점포 좌표 자체가 실측 공공데이터라 대략적인 범위는 정확하다.
+function computeConvexHull(points: { lat: number; lng: number }[]): { lat: number; lng: number }[] {
+  if (points.length < 3) return points;
+
+  const sorted = [...points].sort((a, b) => (a.lng - b.lng) || (a.lat - b.lat));
+
+  const cross = (
+    o: { lat: number; lng: number },
+    a: { lat: number; lng: number },
+    b: { lat: number; lng: number }
+  ) => (a.lng - o.lng) * (b.lat - o.lat) - (a.lat - o.lat) * (b.lng - o.lng);
+
+  const lower: { lat: number; lng: number }[] = [];
+  for (const p of sorted) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) {
+      lower.pop();
+    }
+    lower.push(p);
+  }
+
+  const upper: { lat: number; lng: number }[] = [];
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const p = sorted[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) {
+      upper.pop();
+    }
+    upper.push(p);
+  }
+
+  lower.pop();
+  upper.pop();
+  return [...lower, ...upper];
+}
+
 function buildMarkerContent(store: MapStorePin): string {
   const productBadge = store.products.length
     ? `<span class="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-bold flex items-center justify-center border border-white">${store.products.length}</span>`
@@ -89,6 +126,8 @@ export const MapView: React.FC<MapViewProps> = ({
   const mapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const myLocationMarkerRef = useRef<any>(null);
+  const marketBoundaryRef = useRef<any>(null);
+  const marketLabelRef = useRef<any>(null);
 
   useEffect(() => {
     isDocentExpandedRef.current = isDocentExpanded;
@@ -227,16 +266,73 @@ export const MapView: React.FC<MapViewProps> = ({
     const center = new naver.maps.LatLng(mapCenter.lat, mapCenter.lng);
     mapRef.current = new naver.maps.Map(mapElement.current, {
       center,
-      zoom: 17,
+      // 예전엔 17로 시작해서 점포 마커가 뜨는 최소 줌(MIN_ZOOM_FOR_MARKERS=19)보다
+      // 낮아, 지도를 처음 열면 핀이 하나도 안 보이고 사용자가 직접 몇 번 확대해야
+      // 했다. 처음부터 핀이 보이는 줌으로 시작한다.
+      zoom: MIN_ZOOM_FOR_MARKERS,
       zoomControl: false,
       scaleControl: false,
       logoControl: false,
       mapDataControl: false,
     });
+    setCurrentZoom(MIN_ZOOM_FOR_MARKERS);
     naver.maps.Event.addListener(mapRef.current, "zoom_changed", (zoom: number) => {
       setCurrentZoom(zoom);
     });
   }, [naverLoaded, mapCenter]);
+
+  // 양동시장 전체를 하나의 영역으로 보여주는 외곽선/음영 오버레이 — 실제 점포 좌표의
+  // 컨벡스 헐을 계산해서 그린다. 줌 레벨과 무관하게 항상 표시(마커와 달리 시장
+  // 전체 범위를 인지하는 용도라 확대해야만 보일 필요가 없다).
+  useEffect(() => {
+    if (!naverLoaded || !mapRef.current || stores.length < 3) return;
+
+    const naver = (window as any).naver;
+    const hull = computeConvexHull(stores.map((s) => ({ lat: s.lat, lng: s.lng })));
+    const path = hull.map((p) => new naver.maps.LatLng(p.lat, p.lng));
+
+    if (marketBoundaryRef.current) {
+      marketBoundaryRef.current.setMap(null);
+    }
+    marketBoundaryRef.current = new naver.maps.Polygon({
+      map: mapRef.current,
+      paths: [path],
+      fillColor: "#0052FF",
+      fillOpacity: 0.08,
+      strokeColor: "#0052FF",
+      strokeOpacity: 0.5,
+      strokeWeight: 2,
+      strokeStyle: "shortdash",
+    });
+
+    const centroid = hull.reduce(
+      (acc, p) => ({ lat: acc.lat + p.lat / hull.length, lng: acc.lng + p.lng / hull.length }),
+      { lat: 0, lng: 0 }
+    );
+    if (marketLabelRef.current) {
+      marketLabelRef.current.setMap(null);
+    }
+    marketLabelRef.current = new naver.maps.Marker({
+      map: mapRef.current,
+      position: new naver.maps.LatLng(centroid.lat, centroid.lng),
+      icon: {
+        content: `<div class="px-2.5 py-1 rounded-full bg-[#0052FF]/90 text-white text-[11px] font-extrabold shadow-md pointer-events-none whitespace-nowrap">양동시장</div>`,
+        anchor: new naver.maps.Point(30, 12),
+      },
+      zIndex: 1,
+    });
+
+    return () => {
+      if (marketBoundaryRef.current) {
+        marketBoundaryRef.current.setMap(null);
+        marketBoundaryRef.current = null;
+      }
+      if (marketLabelRef.current) {
+        marketLabelRef.current.setMap(null);
+        marketLabelRef.current = null;
+      }
+    };
+  }, [naverLoaded, stores]);
 
   // Render store pins as real markers positioned by lat/lng, once zoomed in close
   // enough to tell neighboring stalls apart; replaced whenever the list or zoom changes.

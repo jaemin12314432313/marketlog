@@ -46,14 +46,18 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const [inspectionResult, setInspectionResult] = useState<InspectionResult | null>(null);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
+  // 예전 샘플 키(딸기/갈치/삼겹살 → radish/apple/potato)를 이름만 바꿨을 뿐, 실제 이미지는
+  // 그대로 남아있어서 "apple"을 눌러도 딸기 사진이 뜨는 등 이름과 사진이 전부 안 맞았다.
+  // 시드 상품 피드에서 이미 실제로 검증된(무/사과/감자가 맞게 나오는) 이미지로 교체.
   const sampleImages = {
     apple:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuDPrTKft45sE79PKyzcNxkpR7jiC94SaLZBeIpOho8PS6MfxcM24FBq5mPUD-KQhGgWNaVSPodpYSrMEPgddi0FNoTIy5QByRJ1O29bN2GoPyZ_bHdyNd5oLvlWDvbU1IxCuntiDyiletIj2q2SHcDwhgzncBso0wtlMj6iVE_kmfeXMGwbx6c0QNetTRXhf0m91HziI7YK5e-OWXOgc84THY9rQc3IN9xQ2glKexbCJmw0SCF4BrhWOw",
+      "https://plus.unsplash.com/premium_photo-1724249990837-f6dfcb7f3eaa?auto=format&fit=crop&w=800&q=80",
     radish:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuBPBsS9pCM36y_2W6Vey0_5EC88SbxJT0t7GhjPXTqlYnaqTLo0NcPV6LFPJH4p8pI2sVispE0SOUUZyXGM7sHnAfTR02l7Ecz_PaENAV0UotAJL_GFQ2-MlPFcyoWoDVhUhvNa5dMeWWVko5qNl4VottlwisP_V2H8J6BvPu4fkLyQ-lAczaPkDamw8VL1R4HpBabcEkOJK7MtMocMNcOhlDpmlg45ZYg8F7B_zr9m5nvPktBbJxjvUA",
+      "https://plus.unsplash.com/premium_photo-1726736510146-4703a18e3c6e?auto=format&fit=crop&w=800&q=80",
     potato:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuDfqKKJROFYLfdHz4E-dhGPYRcjGFgyiVvPNDRmUVShw2Z2MABEaTDMc3Yh-oO77txFIhM4Fko4dPgwWTc4rYljeZnxkIfQcnrLP9JEOVhqXwiVmd5UxKDOBLXFugDB2zSgwLp4FR-guYiZtxriswvRdiFTkbxW2WcC9swB-xuvAG4kr3R3OIomDMdUDdfW0t8d2__fEnZGUFSVN-2Y6i8MIpXxpixAPZcIYGT2pHfzOSqTFdiVjw5Bfg",
+      "https://plus.unsplash.com/premium_photo-1724256031338-b5bfba816cfd?auto=format&fit=crop&w=800&q=80",
   };
 
   // Start / Stop Camera
@@ -161,18 +165,22 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
 
     setIsAnalyzing(true);
     setShowResult(false);
+    setAnalyzeError(null);
 
     try {
       const json = await analyzeProduct({ sampleId: key, imageBase64: activeBase64 });
-      if (json.success && json.data) {
+      if (json.success && json.data && json.data.productName) {
         setInspectionResult(json.data);
         setSellingPriceInput(json.data.sellingPrice ? String(json.data.sellingPrice) : "");
+        setShowResult(true);
+      } else {
+        setAnalyzeError("AI 분석 결과를 받지 못했습니다. 다시 촬영해주세요.");
       }
     } catch (err) {
       console.error(err);
+      setAnalyzeError("AI 분석에 실패했습니다. 네트워크 상태를 확인 후 다시 시도해주세요.");
     } finally {
       setIsAnalyzing(false);
-      setShowResult(true);
     }
   };
 
@@ -193,6 +201,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
     setShowResult(false);
     setCapturedImage(null);
     setSellingPriceInput("");
+    setAnalyzeError(null);
     if (videoRef.current && streamRef.current) {
       videoRef.current.play().catch(() => {});
     }
@@ -346,7 +355,19 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
 
       {/* Center Camera Target Box with Rounded Curved Corners */}
       <div className="relative z-20 flex-1 flex flex-col items-center justify-center px-6">
-        {!showResult && !isAnalyzing && (
+        {analyzeError && !isAnalyzing && (
+          <div className="bg-black/80 backdrop-blur-md rounded-2xl p-6 text-center space-y-3 border border-rose-400/40 shadow-2xl max-w-xs">
+            <span className="material-symbols-outlined text-3xl text-rose-400">error</span>
+            <p className="text-xs font-bold text-white">{analyzeError}</p>
+            <button
+              onClick={() => setAnalyzeError(null)}
+              className="mt-1 px-4 py-2 bg-white/15 hover:bg-white/25 text-white text-xs font-bold rounded-xl border border-white/20 transition-colors"
+            >
+              다시 촬영하기
+            </button>
+          </div>
+        )}
+        {!showResult && !isAnalyzing && !analyzeError && (
           <div className="relative w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center pointer-events-none">
             {/* Curved Corner Bracket Frames (Google Lens Style) */}
             <div className="absolute top-0 left-0 w-12 h-12 border-t-[3.5px] border-l-[3.5px] border-white/90 rounded-tl-3xl shadow-[0_0_8px_rgba(255,255,255,0.4)]"></div>

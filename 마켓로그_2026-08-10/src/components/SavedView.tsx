@@ -8,6 +8,8 @@ interface SavedViewProps {
   onNavigateToMap: () => void;
   onRemoveScannedProduct?: (id: string) => void;
   onRemoveBookmarkedProduct?: (id: string) => void;
+  isLoggedIn?: boolean;
+  onOpenLogin?: () => void;
 }
 
 export const SavedView: React.FC<SavedViewProps> = ({
@@ -16,8 +18,35 @@ export const SavedView: React.FC<SavedViewProps> = ({
   onSelectProduct,
   onRemoveScannedProduct,
   onRemoveBookmarkedProduct,
+  isLoggedIn = false,
+  onOpenLogin,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<"scanned" | "bookmarked">("scanned");
+
+  if (!isLoggedIn) {
+    return (
+      <div className="w-full max-w-[600px] mx-auto pt-20 pb-28 px-4">
+        <div className="bg-surface-white rounded-2xl border border-[#E2E8F0] p-8 text-center space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-blue-50 text-trust-blue flex items-center justify-center mx-auto">
+            <span className="material-symbols-outlined text-3xl">bookmark</span>
+          </div>
+          <div>
+            <h2 className="text-base font-extrabold text-on-surface">로그인이 필요합니다</h2>
+            <p className="text-xs text-outline mt-1.5 leading-relaxed">
+              로그인하면 찜한 상품과 AI 스캔 저장목록을 확인할 수 있어요.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenLogin}
+            className="w-full py-3 bg-trust-blue hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors"
+          >
+            로그인 / 회원가입
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-[600px] mx-auto pt-20 pb-28 px-4 space-y-5">

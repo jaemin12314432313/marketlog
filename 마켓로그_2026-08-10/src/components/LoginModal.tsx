@@ -1,5 +1,15 @@
 import React, { useState } from "react";
-import { findUsername, login, register, resetPassword, setAuthToken } from "../lib/api";
+import { ApiError, findUsername, login, register, resetPassword, setAuthToken } from "../lib/api";
+
+function describeApiError(err: unknown, authFailMessage: string): string {
+  if (err instanceof ApiError) {
+    if (err.isTimeout) return "서버 응답이 너무 오래 걸립니다. 네트워크 상태를 확인 후 다시 시도해주세요.";
+    if (err.status === undefined) return "서버에 연결할 수 없습니다. 네트워크 연결을 확인해주세요.";
+    if (err.status === 401) return authFailMessage;
+    if (err.status && err.status >= 500) return "서버에 일시적인 문제가 발생했습니다. 잠시 후 다시 시도해주세요.";
+  }
+  return authFailMessage;
+}
 
 export type UserRole = "customer" | "merchant";
 type ViewMode = "login" | "signup" | "findId" | "findPw";
@@ -7,7 +17,13 @@ type ViewMode = "login" | "signup" | "findId" | "findPw";
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLoginSuccess: (role: UserRole, userDisplayName: string, shopName?: string) => void;
+  onLoginSuccess: (
+    role: UserRole,
+    userDisplayName: string,
+    shopName?: string,
+    username?: string,
+    phone?: string
+  ) => void;
   currentRole?: UserRole;
   isFullScreen?: boolean;
 }
@@ -44,6 +60,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
   // Find Password Form States
   const [findPwId, setFindPwId] = useState("");
+  const [findPwName, setFindPwName] = useState("");
+  const [findPwPhone, setFindPwPhone] = useState("");
   const [foundPwResult, setFoundPwResult] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -66,10 +84,16 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     try {
       const res = await login({ username: loginId.trim(), password: loginPw });
       setAuthToken(res.token);
-      onLoginSuccess(res.user.role, res.user.displayName, res.user.shopName ?? undefined);
+      onLoginSuccess(
+        res.user.role,
+        res.user.displayName,
+        res.user.shopName ?? undefined,
+        res.user.username,
+        res.user.phone ?? undefined
+      );
       onClose();
     } catch (err) {
-      setLoginError("아이디 또는 비밀번호가 올바르지 않습니다.");
+      setLoginError(describeApiError(err, "아이디 또는 비밀번호가 올바르지 않습니다."));
     } finally {
       setIsSubmitting(false);
     }
@@ -123,9 +147,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       });
       setLoginId(signupId.trim());
       setSignupSuccessMsg(`${signupName}님의 회원가입이 정상 완료되었습니다! 가입한 아이디로 로그인해보세요.`);
-    } catch (err: any) {
-      const message = String(err?.message || "");
-      alert(message.includes("409") ? "이미 사용 중인 아이디입니다." : "회원가입에 실패했습니다.");
+    } catch (err) {
+      const message = err instanceof ApiError && err.status === 409
+        ? "이미 사용 중인 아이디입니다."
+        : describeApiError(err, "회원가입에 실패했습니다.");
+      alert(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -143,9 +169,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     try {
       const res = await findUsername({ displayName: findIdName.trim(), phone: findIdPhone.trim() });
       setFoundIdResult(res.username);
-    } catch (err: any) {
-      const message = String(err?.message || "");
-      alert(message.includes("404") ? "일치하는 계정을 찾을 수 없습니다." : "아이디 찾기에 실패했습니다.");
+    } catch (err) {
+      const message = err instanceof ApiError && err.status === 404
+        ? "일치하는 계정을 찾을 수 없습니다."
+        : describeApiError(err, "아이디 찾기에 실패했습니다.");
+      alert(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -155,17 +183,23 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   // 아이디만 일치하면 바로 새 임시 비밀번호를 발급해 화면에 보여준다.
   const handleFindPwSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!findPwId.trim()) {
-      alert("아이디를 입력해주세요.");
+    if (!findPwId.trim() || !findPwName.trim() || !findPwPhone.trim()) {
+      alert("아이디, 이름, 휴대폰 번호를 모두 입력해주세요.");
       return;
     }
     setIsSubmitting(true);
     try {
-      const res = await resetPassword({ username: findPwId.trim() });
+      const res = await resetPassword({
+        username: findPwId.trim(),
+        displayName: findPwName.trim(),
+        phone: findPwPhone.trim(),
+      });
       setFoundPwResult(res.tempPassword);
-    } catch (err: any) {
-      const message = String(err?.message || "");
-      alert(message.includes("404") ? "해당 아이디로 가입된 계정을 찾을 수 없습니다." : "비밀번호 재설정에 실패했습니다.");
+    } catch (err) {
+      const message = err instanceof ApiError && err.status === 404
+        ? "입력하신 정보와 일치하는 계정을 찾을 수 없습니다."
+        : describeApiError(err, "비밀번호 재설정에 실패했습니다.");
+      alert(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -178,6 +212,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     setSignupSuccessMsg("");
     setFoundIdResult(null);
     setFoundPwResult(null);
+    setFindPwName("");
+    setFindPwPhone("");
   };
 
   // Render Core Content per ViewMode
@@ -543,6 +579,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   onClick={() => {
                     setViewMode("findPw");
                     setFindPwId(foundIdResult);
+                    setFindPwName(findIdName.trim());
+                    setFindPwPhone(findIdPhone.trim());
                   }}
                   className="w-full py-2 text-xs font-bold text-slate-600 hover:text-[#0052FF]"
                 >
@@ -630,7 +668,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           ) : (
             <form onSubmit={handleFindPwSubmit} className="space-y-3">
               <p className="text-xs text-slate-500 font-medium">
-                가입한 아이디를 입력하시면 새 임시 비밀번호를 즉시 발급해 드립니다.
+                본인확인을 위해 아이디와 가입 시 등록한 이름·휴대폰 번호를 모두 입력해주세요.
               </p>
 
               <div className="space-y-1">
@@ -640,6 +678,28 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   value={findPwId}
                   onChange={(e) => setFindPwId(e.target.value)}
                   placeholder="가입한 아이디 입력"
+                  className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:border-[#0052FF]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-extrabold text-slate-700">이름</label>
+                <input
+                  type="text"
+                  value={findPwName}
+                  onChange={(e) => setFindPwName(e.target.value)}
+                  placeholder="가입 시 등록한 이름"
+                  className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:border-[#0052FF]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-extrabold text-slate-700">휴대폰 번호</label>
+                <input
+                  type="tel"
+                  value={findPwPhone}
+                  onChange={(e) => setFindPwPhone(e.target.value)}
+                  placeholder="'-' 없이 숫자만 입력"
                   className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:border-[#0052FF]"
                 />
               </div>

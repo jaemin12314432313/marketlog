@@ -1,24 +1,33 @@
 import React, { useState, useEffect } from "react";
 import { UserRole } from "./LoginModal";
 import { ProductItem } from "../types";
+import { ApiError, updateProfile } from "../lib/api";
 
 interface MyWalletProps {
   onNavigateToMap?: () => void;
   userRole?: UserRole;
   userDisplayName?: string;
+  userUsername?: string;
+  userPhone?: string;
+  isLoggedIn?: boolean;
   onOpenLogin?: () => void;
   onLogout?: () => void;
   products?: ProductItem[];
   onUpdateShopName?: (newName: string) => void;
+  onProfileUpdated?: (displayName: string, phone: string) => void;
 }
 
 export const MyWallet: React.FC<MyWalletProps> = ({
   userRole = "customer",
   userDisplayName,
+  userUsername = "",
+  userPhone = "",
+  isLoggedIn = false,
   onOpenLogin,
   onLogout,
   products = [],
   onUpdateShopName,
+  onProfileUpdated,
 }) => {
   const initialShopName = userDisplayName || (userRole === "merchant" ? "양동수산 사장님" : "스마트 장보기 회원");
 
@@ -48,16 +57,24 @@ export const MyWallet: React.FC<MyWalletProps> = ({
   const [customerProfileImage, setCustomerProfileImage] = useState<string | null>(null);
   const customerFileInputRef = React.useRef<HTMLInputElement>(null);
 
-  // Personal Information Editing State
+  // Personal Information Editing State — 실제 로그인한 유저의 진짜 정보를 사용한다.
   const [personalInfo, setPersonalInfo] = useState({
-    userId: "market_user",
-    userName: "홍길동",
-    userPhone: "010-3650-1234",
-    currentPw: "******",
+    userName: userDisplayName || "",
+    userPhone: userPhone || "",
+    currentPw: "",
     newPw: "",
     confirmPw: "",
   });
   const [isEditingPersonalInfo, setIsEditingPersonalInfo] = useState(false);
+  const [isSavingPersonalInfo, setIsSavingPersonalInfo] = useState(false);
+
+  useEffect(() => {
+    setPersonalInfo((prev) => ({
+      ...prev,
+      userName: userDisplayName || prev.userName,
+      userPhone: userPhone || prev.userPhone,
+    }));
+  }, [userDisplayName, userPhone]);
 
   useEffect(() => {
     if (userDisplayName) {
@@ -66,7 +83,7 @@ export const MyWallet: React.FC<MyWalletProps> = ({
     }
   }, [userDisplayName]);
 
-  const handleSavePersonalInfo = (e: React.FormEvent) => {
+  const handleSavePersonalInfo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!personalInfo.userName.trim()) {
       alert("이름을 입력해주세요.");
@@ -77,14 +94,44 @@ export const MyWallet: React.FC<MyWalletProps> = ({
       return;
     }
     if (personalInfo.newPw) {
+      if (!personalInfo.currentPw) {
+        alert("비밀번호를 변경하려면 현재 비밀번호를 입력해주세요.");
+        return;
+      }
+      if (personalInfo.newPw.length < 8) {
+        alert("새 비밀번호는 8자 이상이어야 합니다.");
+        return;
+      }
       if (personalInfo.newPw !== personalInfo.confirmPw) {
         alert("새 비밀번호 확인이 일치하지 않습니다.");
         return;
       }
     }
 
-    setIsEditingPersonalInfo(false);
-    setPersonalInfo((prev) => ({ ...prev, newPw: "", confirmPw: "" }));
+    setIsSavingPersonalInfo(true);
+    try {
+      const res = await updateProfile({
+        displayName: personalInfo.userName.trim(),
+        phone: personalInfo.userPhone.trim(),
+        ...(personalInfo.newPw
+          ? { currentPassword: personalInfo.currentPw, newPassword: personalInfo.newPw }
+          : {}),
+      });
+      if (onProfileUpdated) {
+        onProfileUpdated(res.user.displayName, res.user.phone || "");
+      }
+      setIsEditingPersonalInfo(false);
+      setPersonalInfo((prev) => ({ ...prev, currentPw: "", newPw: "", confirmPw: "" }));
+      showToast("개인정보가 성공적으로 수정되었습니다.");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        alert("현재 비밀번호가 올바르지 않습니다.");
+      } else {
+        alert("개인정보 수정에 실패했습니다. 잠시 후 다시 시도해주세요.");
+      }
+    } finally {
+      setIsSavingPersonalInfo(false);
+    }
   };
 
   const handleCustomerImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -190,9 +237,34 @@ export const MyWallet: React.FC<MyWalletProps> = ({
   };
 
   const currentShopName = shopInfo.name || initialShopName;
-  const merchantProducts = products.filter(
-    (p) => p.shopName === currentShopName || p.isMerchantUploaded
-  );
+  const merchantProducts = products.filter((p) => p.shopName === currentShopName);
+
+  // 로그인하지 않은 상태에서는 로그인한 것처럼 보이는 가짜 프로필 카드(+ 눌러도 의미
+  // 없는 로그아웃 버튼)를 보여주는 대신, 이 탭을 명확한 로그인 진입점으로 쓴다.
+  if (!isLoggedIn) {
+    return (
+      <div className="w-full max-w-[600px] mx-auto pt-20 pb-28 px-4">
+        <div className="bg-white rounded-2xl border border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.05)] p-8 text-center space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-blue-50 text-trust-blue flex items-center justify-center mx-auto">
+            <span className="material-symbols-outlined text-3xl">account_circle</span>
+          </div>
+          <div>
+            <h2 className="text-base font-extrabold text-on-surface">로그인이 필요합니다</h2>
+            <p className="text-xs text-outline mt-1.5 leading-relaxed">
+              로그인하면 내 정보 관리, 찜한 상품, AI 스캔 저장목록을 이용할 수 있어요.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenLogin}
+            className="w-full py-3 bg-trust-blue hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors"
+          >
+            로그인 / 회원가입
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-[600px] mx-auto pt-20 pb-28 px-4 space-y-6">
@@ -412,7 +484,13 @@ export const MyWallet: React.FC<MyWalletProps> = ({
           {!isEditingPersonalInfo && (
             <button
               type="button"
-              onClick={() => setIsEditingPersonalInfo(true)}
+              onClick={() => {
+                if (!isLoggedIn) {
+                  onOpenLogin?.();
+                  return;
+                }
+                setIsEditingPersonalInfo(true);
+              }}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer shrink-0 ${
                 userRole === "merchant"
                   ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-700"
@@ -432,7 +510,7 @@ export const MyWallet: React.FC<MyWalletProps> = ({
               <label className="text-xs font-extrabold text-slate-700 block">아이디 (수정 불가)</label>
               <input
                 type="text"
-                value={personalInfo.userId}
+                value={userUsername}
                 disabled
                 className="w-full px-3 py-2 text-xs font-bold bg-slate-100 border border-slate-200 rounded-xl text-slate-500 cursor-not-allowed"
               />
@@ -469,6 +547,15 @@ export const MyWallet: React.FC<MyWalletProps> = ({
             {/* Password Field */}
             <div className="space-y-2 pt-2 border-t border-slate-100">
               <label className="text-xs font-extrabold text-slate-700 block">비밀번호 변경 (선택)</label>
+              <input
+                type="password"
+                value={personalInfo.currentPw}
+                onChange={(e) => setPersonalInfo({ ...personalInfo, currentPw: e.target.value })}
+                placeholder="현재 비밀번호 (변경 시 필수)"
+                className={`w-full px-3 py-2 text-xs font-bold bg-white border border-slate-300 rounded-xl focus:outline-none text-slate-900 ${
+                  userRole === "merchant" ? "focus:border-emerald-500" : "focus:border-[#0052FF]"
+                }`}
+              />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <input
                   type="password"
@@ -502,14 +589,15 @@ export const MyWallet: React.FC<MyWalletProps> = ({
               </button>
               <button
                 type="submit"
-                className={`px-4 py-2 rounded-xl text-white text-xs font-bold shadow-xs transition-colors cursor-pointer flex items-center gap-1 ${
+                disabled={isSavingPersonalInfo}
+                className={`px-4 py-2 rounded-xl text-white text-xs font-bold shadow-xs transition-colors cursor-pointer flex items-center gap-1 disabled:opacity-60 ${
                   userRole === "merchant"
                     ? "bg-emerald-600 hover:bg-emerald-700"
                     : "bg-[#0052FF] hover:bg-blue-700"
                 }`}
               >
                 <span className="material-symbols-outlined text-sm">check</span>
-                <span>저장하기</span>
+                <span>{isSavingPersonalInfo ? "저장 중..." : "저장하기"}</span>
               </button>
             </div>
           </form>
@@ -518,7 +606,7 @@ export const MyWallet: React.FC<MyWalletProps> = ({
             <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-100">
               <div>
                 <span className="text-slate-400 font-bold block text-[10px]">아이디</span>
-                <span className="font-extrabold text-slate-800">{personalInfo.userId}</span>
+                <span className="font-extrabold text-slate-800">{userUsername}</span>
               </div>
               <div>
                 <span className="text-slate-400 font-bold block text-[10px]">이름</span>

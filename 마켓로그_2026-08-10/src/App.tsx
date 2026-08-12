@@ -12,6 +12,7 @@ import {
 } from "./data/initialData";
 import {
   fetchFeed,
+  fetchMe,
   fetchBookmarks,
   fetchScannedProducts,
   addBookmark,
@@ -22,6 +23,7 @@ import {
   updateMerchantProduct,
   deleteMerchantProduct,
   getAuthToken,
+  clearAuthToken,
 } from "./lib/api";
 import { Header } from "./components/Header";
 import { HomeFeed } from "./components/HomeFeed";
@@ -39,7 +41,14 @@ export default function App() {
   const [userRole, setUserRole] = useState<UserRole>("customer");
   const [userDisplayName, setUserDisplayName] = useState<string>("");
   const [userShopName, setUserShopName] = useState<string>("");
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(true);
+  const [userUsername, setUserUsername] = useState<string>("");
+  const [userPhone, setUserPhone] = useState<string>("");
+  // 로그인 없이도 피드는 구경할 수 있어야 해서 기본값은 false(게스트) — 액션할 때만
+  // onOpenLogin 콜백으로 로그인을 유도한다. 앱을 새로 열 때마다 무조건 로그인 화면부터
+  // 막아서는 건 설치형 앱에서 특히 위화감이 크다.
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
+  // 저장된 토큰으로 세션을 복원하는 동안 로그인 화면이 잠깐 번쩍였다 사라지는 걸 막기 위한 스플래시.
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [selectedRegion, setSelectedRegion] = useState<string>("광주광역시");
   const [selectedMarket, setSelectedMarket] = useState<MarketInfo>(MARKETS_DATA[0]);
 
@@ -59,23 +68,48 @@ export default function App() {
   const [bookmarkedProducts, setBookmarkedProducts] = useState<ProductItem[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(null);
 
+  const [isFeedLoading, setIsFeedLoading] = useState(true);
+
   // 상품 피드는 로그인 여부와 무관하게 백엔드에서 불러온다.
   useEffect(() => {
     fetchFeed()
       .then(setProducts)
-      .catch((err) => console.error("상품 피드를 불러오지 못했습니다.", err));
+      .catch((err) => console.error("상품 피드를 불러오지 못했습니다.", err))
+      .finally(() => setIsFeedLoading(false));
+  }, []);
+
+  // 저장된 토큰이 있으면 앱을 새로 열 때마다 다시 로그인하지 않고 세션을 복원한다.
+  // 토큰이 없거나 만료됐으면 조용히 게스트 상태로 둔다(로그인 화면을 강제로 띄우지 않음).
+  useEffect(() => {
+    const token = getAuthToken();
+    if (!token) {
+      setIsAuthChecking(false);
+      return;
+    }
+    fetchMe()
+      .then((res) => {
+        setUserRole(res.user.role);
+        setUserDisplayName(res.user.displayName);
+        setUserShopName(res.user.shopName || "");
+        setUserUsername(res.user.username);
+        setUserPhone(res.user.phone || "");
+      })
+      .catch(() => {
+        clearAuthToken();
+      })
+      .finally(() => setIsAuthChecking(false));
   }, []);
 
   // 로그인 상태가 되면(토큰 발급 후) 내 찜/AI스캔 저장목록을 백엔드에서 불러온다.
   useEffect(() => {
-    if (isLoginModalOpen || !getAuthToken()) return;
+    if (isAuthChecking || isLoginModalOpen || !getAuthToken()) return;
     fetchBookmarks()
       .then(setBookmarkedProducts)
       .catch((err) => console.error("찜 목록을 불러오지 못했습니다.", err));
     fetchScannedProducts()
       .then(setScannedProducts)
       .catch((err) => console.error("AI 스캔 저장목록을 불러오지 못했습니다.", err));
-  }, [isLoginModalOpen]);
+  }, [isAuthChecking, isLoginModalOpen]);
 
   const [isAiScanOpen, setIsAiScanOpen] = useState(false);
   const [cartItems, setCartItems] = useState<ProductItem[]>([]);
@@ -106,19 +140,32 @@ export default function App() {
     };
   }, [isNotificationOpen, selectedProduct, isAiScanOpen, activeTab]);
 
-  const handleLoginSuccess = (role: UserRole, displayName: string, shopName?: string) => {
+  const handleLoginSuccess = (
+    role: UserRole,
+    displayName: string,
+    shopName?: string,
+    username?: string,
+    phone?: string
+  ) => {
     setUserRole(role);
     setUserDisplayName(displayName);
     setUserShopName(shopName || "");
+    setUserUsername(username || "");
+    setUserPhone(phone || "");
     setIsLoginModalOpen(false);
     setActiveTab("home");
   };
 
   const handleLogout = () => {
+    clearAuthToken();
     setUserDisplayName("");
     setUserShopName("");
     setUserRole("customer");
-    setIsLoginModalOpen(true);
+    setUserUsername("");
+    setUserPhone("");
+    setBookmarkedProducts([]);
+    setScannedProducts([]);
+    setActiveTab("home");
   };
 
   const handleAddToCart = (product: ProductItem) => {
@@ -145,6 +192,10 @@ export default function App() {
   };
 
   const handleToggleBookmarkProduct = async (product: ProductItem) => {
+    if (!getAuthToken()) {
+      setIsLoginModalOpen(true);
+      return;
+    }
     const exists = bookmarkedProducts.some((p) => p.id === product.id);
     try {
       if (exists) {
@@ -168,35 +219,44 @@ export default function App() {
     }
   };
 
-  const handleProductRegistered = async (newProduct: ProductItem) => {
+  // 성공/실패를 boolean으로 돌려줘서, 호출부(MerchantView)가 실제 결과를 기다렸다가
+  // 성공했을 때만 "등록/수정/삭제되었습니다" 토스트를 보여줄 수 있게 한다. 실패 알림은
+  // 여기서 이미 alert로 보여주므로, 호출부는 실패 시 별도 안내 없이 그냥 조용히 넘어간다.
+  const handleProductRegistered = async (newProduct: ProductItem): Promise<boolean> => {
     try {
       const { id, shopName, isMerchantUploaded, region, marketId, ...rest } = newProduct;
       const res = await createMerchantProduct(rest);
       setProducts((prev) => [res.product, ...prev]);
+      return true;
     } catch (err) {
       console.error("상품 등록 실패", err);
       alert("상품 등록에 실패했습니다. 판매자 계정으로 로그인되어 있는지 확인해주세요.");
+      return false;
     }
   };
 
-  const handleProductUpdated = async (updatedProduct: ProductItem) => {
+  const handleProductUpdated = async (updatedProduct: ProductItem): Promise<boolean> => {
     try {
       const { id, shopName, isMerchantUploaded, region, marketId, ...rest } = updatedProduct;
       const res = await updateMerchantProduct(id, rest);
       setProducts((prev) => prev.map((p) => (p.id === id ? res.product : p)));
+      return true;
     } catch (err) {
       console.error("상품 수정 실패", err);
       alert("상품 수정에 실패했습니다.");
+      return false;
     }
   };
 
-  const handleDeleteProduct = async (id: string) => {
+  const handleDeleteProduct = async (id: string): Promise<boolean> => {
     try {
       await deleteMerchantProduct(id);
       setProducts((prev) => prev.filter((p) => p.id !== id));
+      return true;
     } catch (err) {
       console.error("상품 삭제 실패", err);
       alert("상품 삭제에 실패했습니다.");
+      return false;
     }
   };
 
@@ -206,6 +266,15 @@ export default function App() {
       setSelectedProduct(foundProduct);
     }
   };
+
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen bg-background-slate flex flex-col items-center justify-center gap-3">
+        <div className="w-10 h-10 border-4 border-trust-blue border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-sm text-outline">마켓로그를 불러오는 중...</p>
+      </div>
+    );
+  }
 
   if (isLoginModalOpen) {
     return (
@@ -242,6 +311,7 @@ export default function App() {
             <MerchantView
               products={products}
               userDisplayName={userShopName || userDisplayName}
+              marketName={selectedMarket.name}
               onOpenAiScan={() => setIsAiScanOpen(true)}
               onAddProduct={handleProductRegistered}
               onUpdateProduct={handleProductUpdated}
@@ -261,6 +331,7 @@ export default function App() {
               onOpenLogin={() => setIsLoginModalOpen(true)}
               bookmarkedProductIds={bookmarkedProducts.map((p) => p.id)}
               onToggleBookmark={handleToggleBookmarkProduct}
+              isLoading={isFeedLoading}
             />
           ))}
 
@@ -280,6 +351,8 @@ export default function App() {
             onNavigateToMap={() => setActiveTab("map")}
             onRemoveScannedProduct={handleRemoveScannedProduct}
             onRemoveBookmarkedProduct={handleRemoveBookmarkedProduct}
+            isLoggedIn={Boolean(userUsername)}
+            onOpenLogin={() => setIsLoginModalOpen(true)}
           />
         )}
 
@@ -289,9 +362,16 @@ export default function App() {
             onNavigateToMap={() => setActiveTab("map")}
             userRole={userRole}
             userDisplayName={userDisplayName}
+            userUsername={userUsername}
+            userPhone={userPhone}
+            isLoggedIn={Boolean(userUsername)}
             onOpenLogin={() => setIsLoginModalOpen(true)}
             onLogout={handleLogout}
             onUpdateShopName={(newName) => setUserDisplayName(newName)}
+            onProfileUpdated={(displayName, phone) => {
+              setUserDisplayName(displayName);
+              setUserPhone(phone);
+            }}
           />
         )}
       </main>

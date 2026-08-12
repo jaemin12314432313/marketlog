@@ -13,6 +13,7 @@ interface HomeFeedProps {
   onOpenLogin?: () => void;
   bookmarkedProductIds?: string[];
   onToggleBookmark?: (product: ProductItem) => void;
+  isLoading?: boolean;
 }
 
 export const HomeFeed: React.FC<HomeFeedProps> = ({
@@ -26,6 +27,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
   onOpenLogin,
   bookmarkedProductIds = [],
   onToggleBookmark,
+  isLoading = false,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>("AI 추천상품");
   const [searchQuery, setSearchQuery] = useState("");
@@ -235,7 +237,12 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
           </div>
         </div>
 
-        {sortedProducts.length === 0 ? (
+        {isLoading ? (
+          <div className="bg-white rounded-2xl border border-[#E2E8F0] p-10 text-center text-xs text-outline font-medium flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-4 border-trust-blue border-t-transparent rounded-full animate-spin"></div>
+            <span>실시간 인증 상품을 불러오는 중입니다...</span>
+          </div>
+        ) : sortedProducts.length === 0 ? (
           <div className="bg-white rounded-2xl border border-[#E2E8F0] p-8 text-center text-xs text-outline font-medium flex flex-col items-center gap-2">
             <span className="material-symbols-outlined text-3xl text-slate-400">frown</span>
             <span>

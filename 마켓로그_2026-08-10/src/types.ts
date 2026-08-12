@@ -25,6 +25,7 @@ export interface ProductItem {
   phone?: string;
   region?: string;
   marketId?: string;
+  createdAt?: string;
 }
 
 export interface MarketInfo {

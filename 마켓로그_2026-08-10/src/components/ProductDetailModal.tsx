@@ -17,248 +17,227 @@ interface RecipeRecommendation {
   difficulty: string;
   description: string;
   youtubeUrl: string;
-  youtubeChannel: string;
-  youtubeViews: string;
   youtubeThumbnailUrl?: string;
   ingredientsList: {
     name: string;
     amount: string;
     isMain?: boolean;
   }[];
-  linkedIngredients: {
-    icon: string;
-    title: string;
-    shopName: string;
-    distance: string;
-    discountTag?: string;
-  }[];
-  routeSummary: string;
-  totalDistanceTime: string;
 }
 
+// 실제 품목 인식 모델이 학습한 10개 클래스(무·배추·양파·마늘·양배추·감·사과·배·감귤·감자) +
+// 수산물/정육 카테고리를 전부 다루도록 구성 — 예전엔 이 중 절반 이상이 매칭되는 분기가 없어서
+// "AI가 추천하는 OOO 활용 백종원 별미 레시피" 같은 어색한 범용 문구로만 빠졌었다(감자가
+// 고구마 분기에 같이 묶여 "감자맛탕"으로 추천되는 것도 부자연스러운 매칭이었음).
+// 영상 썸네일은 검증되지 않은 스톡사진 대신 상품 자체 사진을 그대로 써서 이미지 불일치
+// 위험이 없게 했고, 유튜브는 실제로 그 영상으로 가는 게 아니라 검색 결과로 연결되므로
+// "조회수/채널명"처럼 특정 영상인 척하는 정보는 보여주지 않는다.
 function getRecipeRecommendation(product: ProductItem): RecipeRecommendation {
   const title = product.title;
   const category = product.category;
-  const shopName = product.shopName;
+
+  const base = (
+    dishTitle: string,
+    cookingTime: string,
+    difficulty: string,
+    description: string,
+    searchQuery: string,
+    ingredientsList: { name: string; amount: string; isMain?: boolean }[]
+  ): RecipeRecommendation => ({
+    dishTitle,
+    cookingTime,
+    difficulty,
+    description,
+    youtubeUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`,
+    youtubeThumbnailUrl: product.imageUrl,
+    ingredientsList,
+  });
 
   if (title.includes("갈치") || title.includes("생선") || title.includes("조기") || category === "수산물") {
-    return {
-      dishTitle: "칼칼한 제주 은갈치조림 백종원 황금레시피",
-      cookingTime: "25분",
-      difficulty: "보통",
-      description: "통통한 은갈치에 달큰한 가을 무와 칼칼한 특제 양념장을 넣어 자작하게 조려내는 전통시장 대표 별미 요리입니다.",
-      youtubeUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent("갈치조림 백종원 레시피")}`,
-      youtubeChannel: "백종원 PAIK JONG WON",
-      youtubeViews: "조회수 182만회",
-      youtubeThumbnailUrl: "https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=600&q=80",
-      ingredientsList: [
-        { name: `${product.title} (본 상품)`, amount: "1마리", isMain: true },
-        { name: "달큰한 가을 무", amount: "1/3개 (200g)", isMain: true },
+    return base(
+      "칼칼한 갈치조림",
+      "25분",
+      "보통",
+      "통통한 갈치에 무와 칼칼한 양념장을 넣어 자작하게 조려내는 전통시장 대표 별미 요리입니다.",
+      "갈치조림 레시피",
+      [
+        { name: `${title} (본 상품)`, amount: "1마리", isMain: true },
+        { name: "무", amount: "1/3개 (200g)", isMain: true },
         { name: "대파 & 청양고추", amount: "각 1개", isMain: false },
-        { name: "특제 갈치조림 양념장", amount: "3큰술 (고춧가루, 간장, 마늘)", isMain: false },
-      ],
-      linkedIngredients: [
-        {
-          icon: "skillet",
-          title: "달큰한 가을 무",
-          shopName: "호남야채",
-          distance: "40m",
-          discountTag: "15% 할인쿠폰",
-        },
-        {
-          icon: "soup_kitchen",
-          title: "특제 갈치조림 양념장",
-          shopName: "남도방앗간",
-          distance: "20m",
-          discountTag: "1,000원 할인",
-        },
-      ],
-      routeSummary: `${shopName}(갈치) ➔ 호남야채(가을무) ➔ 남도방앗간(조림양념)`,
-      totalDistanceTime: "총 도보 2분 코스",
-    };
+        { name: "고춧가루, 간장, 마늘", amount: "양념장 재료", isMain: false },
+      ]
+    );
+  }
+
+  if (title.includes("무")) {
+    return base(
+      "시원한 소고기 뭇국",
+      "20분",
+      "쉬움",
+      "단단하고 매끈한 무를 나박하게 썰어 소고기와 함께 맑게 끓여내는 자극없이 시원한 국물 요리입니다.",
+      "소고기 뭇국 레시피",
+      [
+        { name: `${title} (본 상품)`, amount: "1/4개", isMain: true },
+        { name: "국거리 소고기", amount: "150g", isMain: true },
+        { name: "대파 & 다진마늘", amount: "약간", isMain: false },
+        { name: "국간장 & 참기름", amount: "2큰술", isMain: false },
+      ]
+    );
+  }
+
+  // "양배추"는 "배추"를 부분 문자열로 포함하므로, 더 구체적인 양배추 분기를 먼저 검사한다.
+  if (title.includes("양배추")) {
+    return base(
+      "아삭한 양배추 쌈밥",
+      "15분",
+      "쉬움",
+      "부드럽게 찐 양배추 잎에 밥과 쌈장을 올려 싸먹는 담백하고 건강한 한끼 요리입니다.",
+      "양배추 쌈밥 레시피",
+      [
+        { name: `${title} (본 상품)`, amount: "1/4통", isMain: true },
+        { name: "쌈장", amount: "2큰술", isMain: true },
+        { name: "밥", amount: "2공기", isMain: false },
+      ]
+    );
+  }
+
+  if (title.includes("배추")) {
+    return base(
+      "아삭한 배추 겉절이",
+      "15분",
+      "쉬움",
+      "속이 꽉 찬 배추를 한입 크기로 썰어 매콤달콤한 양념에 바로 무쳐 먹는 자리에서 만드는 겉절이입니다.",
+      "배추 겉절이 레시피",
+      [
+        { name: `${title} (본 상품)`, amount: "1/2포기", isMain: true },
+        { name: "고춧가루", amount: "3큰술", isMain: true },
+        { name: "액젓 & 다진마늘", amount: "각 1큰술", isMain: false },
+        { name: "쪽파 & 통깨", amount: "약간", isMain: false },
+      ]
+    );
+  }
+
+  if (title.includes("양파")) {
+    return base(
+      "새콤달콤 양파장아찌",
+      "10분 (숙성 1일)",
+      "쉬움",
+      "아삭한 양파를 간장물에 절여 만드는 밑반찬으로, 고기 요리와 특히 잘 어울립니다.",
+      "양파장아찌 레시피",
+      [
+        { name: `${title} (본 상품)`, amount: "3개", isMain: true },
+        { name: "간장 & 식초 & 설탕", amount: "1:1:1 비율", isMain: false },
+      ]
+    );
+  }
+
+  if (title.includes("마늘")) {
+    return base(
+      "알싸한 통마늘 장아찌",
+      "15분 (숙성 2주)",
+      "보통",
+      "알이 굵은 통마늘을 식초 간장물에 절여 알싸한 맛을 오래 즐길 수 있는 대표 밑반찬입니다.",
+      "마늘장아찌 레시피",
+      [
+        { name: `${title} (본 상품)`, amount: "20알", isMain: true },
+        { name: "식초 & 간장 & 설탕", amount: "1:1:1 비율", isMain: false },
+      ]
+    );
+  }
+
+  if (title.includes("감귤") || title.includes("귤")) {
+    return base(
+      "상큼한 감귤청",
+      "20분",
+      "쉬움",
+      "제철 감귤을 얇게 썰어 설탕에 재워두면 차로도, 탄산수에 타서도 즐길 수 있는 상큼한 청이 됩니다.",
+      "감귤청 만들기 레시피",
+      [
+        { name: `${title} (본 상품)`, amount: "1kg", isMain: true },
+        { name: "설탕", amount: "동량(1kg)", isMain: true },
+      ]
+    );
+  }
+
+  if (title.includes("감") && !title.includes("감자") && !title.includes("감귤")) {
+    return base(
+      "쫀득한 감말랭이",
+      "30분 (건조 1주)",
+      "보통",
+      "단단한 감을 얇게 썰어 말리면 쫀득하고 달콤한 국민 간식 감말랭이가 됩니다.",
+      "감말랭이 만들기 레시피",
+      [{ name: `${title} (본 상품)`, amount: "5개", isMain: true }]
+    );
   }
 
   if (title.includes("사과") || title.includes("배") || title.includes("샤인") || category === "과일") {
-    return {
-      dishTitle: "아삭한 부사 사과 샐러드 & 수제 에이드",
-      cookingTime: "10분",
-      difficulty: "쉬움",
-      description: "당도 높은 생과일을 슬라이스하여 고소한 견과류와 천연 꿀을 곁들인 상큼 건강 디저트입니다.",
-      youtubeUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent("사과 샐러드 레시피")}`,
-      youtubeChannel: "1분요리 뚝딱이형",
-      youtubeViews: "조회수 94만회",
-      youtubeThumbnailUrl: "https://images.unsplash.com/photo-1568569350060-e8563f522810?auto=format&fit=crop&w=600&q=80",
-      ingredientsList: [
-        { name: `${product.title} (본 상품)`, amount: "2개", isMain: true },
-        { name: "고소한 모둠 견과류", amount: "1주먹 (50g)", isMain: false },
-        { name: "지리산 천연 아카시아 꿀", amount: "2큰술", isMain: false },
-        { name: "플레인 요거트 / 드레싱", amount: "3큰술", isMain: false },
-      ],
-      linkedIngredients: [
-        {
-          icon: "nutrition",
-          title: "고소한 모둠 견과류",
-          shopName: "중앙건어물",
-          distance: "",
-          discountTag: "10% 할인",
-        },
-        {
-          icon: "local_cafe",
-          title: "지리산 천연 아카시아 꿀",
-          shopName: "남도벌꿀",
-          distance: "",
-          discountTag: "2,000원 할인",
-        },
-      ],
-      routeSummary: `${shopName}(과일) ➔ 중앙건어물(견과류) ➔ 남도벌꿀(천연꿀)`,
-      totalDistanceTime: "총 도보 2분 코스",
-    };
+    return base(
+      "아삭한 생과일 샐러드",
+      "10분",
+      "쉬움",
+      "당도 높은 생과일을 슬라이스하여 견과류와 요거트를 곁들인 상큼 건강 디저트입니다.",
+      `${title} 샐러드 레시피`,
+      [
+        { name: `${title} (본 상품)`, amount: "2개", isMain: true },
+        { name: "견과류", amount: "1주먹 (50g)", isMain: false },
+        { name: "플레인 요거트 / 꿀", amount: "3큰술", isMain: false },
+      ]
+    );
   }
 
-  if (title.includes("고구마") || title.includes("감자")) {
-    return {
-      dishTitle: "달콤 바삭 겉바속촉 꿀고구마 맛탕 & 라떼",
-      cookingTime: "15분",
-      difficulty: "쉬움",
-      description: "신선한 꿀고구마를 바삭하게 튀겨 쌀조청으로 코팅한 최고 인기 간식 레시피입니다.",
-      youtubeUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent("고구마맛탕 만들기 레시피")}`,
-      youtubeChannel: "하루한끼 DayOneMeal",
-      youtubeViews: "조회수 230만회",
-      youtubeThumbnailUrl: "https://images.unsplash.com/photo-1596040033229-a9821ebd058d?auto=format&fit=crop&w=600&q=80",
-      ingredientsList: [
-        { name: `${product.title} (본 상품)`, amount: "3개", isMain: true },
-        { name: "전통 수제 쌀조청", amount: "4큰술", isMain: true },
+  if (title.includes("감자")) {
+    return base(
+      "고소한 감자채전",
+      "20분",
+      "쉬움",
+      "감자를 채썰어 부쳐내는 고소하고 바삭한 전으로, 간단한 간식이나 반찬으로 좋습니다.",
+      "감자채전 레시피",
+      [
+        { name: `${title} (본 상품)`, amount: "3개", isMain: true },
+        { name: "부침가루", amount: "2큰술", isMain: false },
+        { name: "식용유", amount: "적당량", isMain: false },
+      ]
+    );
+  }
+
+  if (title.includes("고구마")) {
+    return base(
+      "달콤 바삭 꿀고구마 맛탕",
+      "15분",
+      "쉬움",
+      "신선한 고구마를 바삭하게 튀겨 조청으로 코팅한 인기 간식 레시피입니다.",
+      "고구마맛탕 만들기 레시피",
+      [
+        { name: `${title} (본 상품)`, amount: "3개", isMain: true },
+        { name: "조청 or 물엿", amount: "4큰술", isMain: true },
         { name: "식용유 & 검은깨", amount: "적당량", isMain: false },
-        { name: "신선한 목장 우유", amount: "200ml", isMain: false },
-      ],
-      linkedIngredients: [
-        {
-          icon: "liquor",
-          title: "전통 수제 쌀조청",
-          shopName: "떡골목방앗간",
-          distance: "",
-          discountTag: "500원 할인",
-        },
-        {
-          icon: "water_drop",
-          title: "신선한 목장 유기농 우유",
-          shopName: "남도유업",
-          distance: "",
-          discountTag: "10% 할인",
-        },
-      ],
-      routeSummary: `${shopName}(고구마) ➔ 떡골목방앗간(쌀조청) ➔ 남도유업(우유)`,
-      totalDistanceTime: "총 도보 2분 코스",
-    };
-  }
-
-  if (title.includes("쌀") || title.includes("잡곡") || title.includes("메뚜기")) {
-    return {
-      dishTitle: "구수한 향이 가득한 모둠 표고버섯 솥밥",
-      cookingTime: "30분",
-      difficulty: "보통",
-      description: "윤기 나는 햅쌀에 향긋한 표고버섯과 수제 양념간장을 비벼 먹는 영양 만점 솥밥입니다.",
-      youtubeUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent("표고버섯 솥밥 레시피")}`,
-      youtubeChannel: "이연복의 복주머니",
-      youtubeViews: "조회수 115만회",
-      youtubeThumbnailUrl: "https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=600&q=80",
-      ingredientsList: [
-        { name: `${product.title} (본 상품)`, amount: "2컵", isMain: true },
-        { name: "산지직송 생 표고버섯", amount: "4개", isMain: true },
-        { name: "전통 수제 비빔양념장", amount: "2큰술", isMain: false },
-        { name: "다시마 육수", amount: "2컵", isMain: false },
-      ],
-      linkedIngredients: [
-        {
-          icon: "potted_plant",
-          title: "산지직송 생 표고버섯",
-          shopName: "산지야채",
-          distance: "",
-          discountTag: "20% 할인",
-        },
-        {
-          icon: "cooking",
-          title: "전통 수제 비빔양념장",
-          shopName: "전통방앗간",
-          distance: "",
-          discountTag: "500원 할인",
-        },
-      ],
-      routeSummary: `${shopName}(햅쌀) ➔ 산지야채(표고버섯) ➔ 전통방앗간(양념장)`,
-      totalDistanceTime: "총 도보 1분 30초 코스",
-    };
+      ]
+    );
   }
 
   if (category === "정육" || title.includes("한우") || title.includes("돼지") || title.includes("삼겹살")) {
-    return {
-      dishTitle: "육즙 가득 단짠 소불고기 황금 양념 공식",
-      cookingTime: "20분",
-      difficulty: "쉬움",
-      description: "고소하고 질 좋은 정육에 달콤 짭조름한 양념을 재워 싱싱한 쌈채소와 함께 즐기는 대표 요리입니다.",
-      youtubeUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent("소불고기 양념 백종원 레시피")}`,
-      youtubeChannel: "백종원 PAIK JONG WON",
-      youtubeViews: "조회수 310만회",
-      youtubeThumbnailUrl: "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=600&q=80",
-      ingredientsList: [
-        { name: `${product.title} (본 상품)`, amount: "600g", isMain: true },
-        { name: "갓 따온 싱싱 쌈채소 모둠", amount: "1팩", isMain: true },
-        { name: "국산 마늘 & 양파", amount: "각 1개", isMain: false },
-        { name: "특제 소불고기 양념장", amount: "5큰술", isMain: false },
-      ],
-      linkedIngredients: [
-        {
-          icon: "eco",
-          title: "갓 따온 싱싱 쌈채소 모둠",
-          shopName: "자연야채",
-          distance: "",
-          discountTag: "10% 할인",
-        },
-        {
-          icon: "soup_kitchen",
-          title: "국산 마늘 & 다진 양념",
-          shopName: "남도마늘상회",
-          distance: "",
-          discountTag: "500원 할인",
-        },
-      ],
-      routeSummary: `${shopName}(정육) ➔ 자연야채(쌈채소) ➔ 남도마늘상회(양념)`,
-      totalDistanceTime: "총 도보 1분 50초 코스",
-    };
+    return base(
+      "육즙 가득 단짠 소불고기",
+      "20분",
+      "쉬움",
+      "고소하고 질 좋은 정육에 달콤 짭조름한 양념을 재워 쌈채소와 함께 즐기는 대표 요리입니다.",
+      "소불고기 양념 레시피",
+      [
+        { name: `${title} (본 상품)`, amount: "600g", isMain: true },
+        { name: "쌈채소 모둠", amount: "1팩", isMain: true },
+        { name: "마늘 & 양파", amount: "각 1개", isMain: false },
+      ]
+    );
   }
 
-  return {
-    dishTitle: `${product.title} 활용 백종원 별미 레시피`,
-    cookingTime: "15분",
-    difficulty: "쉬움",
-    description: `AI가 추천하는 ${product.title}와 전통시장 신선 식재료를 결합한 최고의 홈메이드 레시피입니다.`,
-    youtubeUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(product.title + " 레시피")}`,
-    youtubeChannel: "백종원의 요리비책",
-    youtubeViews: "조회수 150만회",
-    youtubeThumbnailUrl: "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=600&q=80",
-    ingredientsList: [
-      { name: `${product.title} (본 상품)`, amount: "1팩", isMain: true },
-      { name: "산지직송 신선 야채 모둠", amount: "1팩", isMain: false },
-      { name: "전통방앗간 특제 만능양념", amount: "2큰술", isMain: false },
-    ],
-    linkedIngredients: [
-      {
-        icon: "eco",
-        title: "산지직송 신선 야채 모둠",
-        shopName: "호남야채",
-        distance: "",
-        discountTag: "10% 할인",
-      },
-      {
-        icon: "restaurant",
-        title: "전통방앗간 특제 양념",
-        shopName: "남도양념",
-        distance: "",
-        discountTag: "500원 할인",
-      },
-    ],
-    routeSummary: `${shopName} ➔ 호남야채 ➔ 남도양념`,
-    totalDistanceTime: "총 도보 2분 코스",
-  };
+  return base(
+    `${title} 활용 레시피`,
+    "15분",
+    "쉬움",
+    `${title}를 활용한 전통시장 신선 식재료 홈메이드 레시피입니다.`,
+    `${title} 레시피`,
+    [{ name: `${title} (본 상품)`, amount: "1팩", isMain: true }]
+  );
 }
 
 export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
@@ -804,8 +783,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       <span className="material-symbols-outlined text-xl">play_circle</span>
                     </div>
                     <div>
-                      <h3 className="text-sm font-extrabold text-[#0F172A]">추천 레시피 영상</h3>
-                      <p className="text-[11px] text-[#64748B]">영상을 통해 레시피 조리법을 쉽게 확인하세요</p>
+                      <h3 className="text-sm font-extrabold text-[#0F172A]">추천 레시피</h3>
+                      <p className="text-[11px] text-[#64748B]">유튜브 검색으로 조리법을 쉽게 찾아보세요</p>
                     </div>
                   </div>
                 </div>
@@ -824,8 +803,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent flex flex-col justify-between p-4">
                     <div className="flex justify-end">
                       <span className="bg-red-600 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-md shadow-sm flex items-center gap-1">
-                        <span className="material-symbols-outlined text-xs">play_arrow</span>
-                        영상 레시피
+                        <span className="material-symbols-outlined text-xs">restaurant_menu</span>
+                        레시피 아이디어
                       </span>
                     </div>
 
@@ -833,10 +812,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       <h4 className="text-sm sm:text-base font-black text-white leading-tight drop-shadow-md">
                         {recipe.dishTitle}
                       </h4>
-                      <p className="text-[11px] text-slate-200 font-medium flex items-center gap-2">
-                        <span className="text-red-400 font-bold">{recipe.youtubeChannel}</span>
-                        <span>•</span>
-                        <span>{recipe.youtubeViews}</span>
+                      <p className="text-[11px] text-slate-200 font-medium flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-xs">search</span>
+                        <span>유튜브에서 이 레시피 검색해보기</span>
                       </p>
                     </div>
                   </div>
@@ -849,8 +827,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   rel="noopener noreferrer"
                   className="w-full bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-xl font-extrabold text-xs shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <span className="material-symbols-outlined text-lg">play_circle</span>
-                  <span>유튜브에서 영상 보며 요리하기</span>
+                  <span className="material-symbols-outlined text-lg">search</span>
+                  <span>유튜브에서 레시피 검색하기</span>
                   <span className="material-symbols-outlined text-sm">open_in_new</span>
                 </a>
               </div>
