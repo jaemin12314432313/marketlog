@@ -130,6 +130,73 @@ def delete_product(
     return {"success": True}
 
 
+# 상인 점포 위치 등록/조회 — 지도의 실제 점포 데이터(공공데이터 463개)와 상인 shop_name이
+# 정확히 일치할 때만 상품이 지도에 뜨던 문제를 해결한다. 상인이 지도에서 직접 자기 점포
+# 위치에 핀을 찍으면, 그 이름으로 새 Store를 만들거나(없으면) 기존 걸 갱신한다.
+class StoreLocationRequest(BaseModel):
+    lat: float
+    lng: float
+
+
+@router.get("/api/v1/merchant/store-location")
+def get_store_location(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    shop_name = require_merchant(current_user)
+    store = (
+        db.query(Store)
+        .filter(Store.market_id == "yangdong", Store.name == shop_name)
+        .first()
+    )
+    if not store:
+        return {"success": True, "store": None}
+    return {"success": True, "store": {"id": store.id, "lat": store.lat, "lng": store.lng}}
+
+
+@router.put("/api/v1/merchant/store-location")
+def set_store_location(
+    payload: StoreLocationRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    shop_name = require_merchant(current_user)
+    store = (
+        db.query(Store)
+        .filter(Store.market_id == "yangdong", Store.name == shop_name)
+        .first()
+    )
+    if store:
+        store.lat = payload.lat
+        store.lng = payload.lng
+    else:
+        store = Store(
+            market_id="yangdong",
+            name=shop_name,
+            subtitle="상인 등록 점포",
+            lat=payload.lat,
+            lng=payload.lng,
+            category="merchant",
+            icon="storefront",
+            badge_color="#0052FF",
+            grade="A",
+            notice="",
+            notice_time="",
+            alley="양동시장",
+            story_text=f"{shop_name}은(는) 상인이 직접 지도에 등록한 점포입니다.",
+        )
+        db.add(store)
+    db.commit()
+    db.refresh(store)
+
+    # 위치 등록 전에 만들어진 이 상인의 기존 상품들은 store_id가 비어있어 지도에
+    # 안 떴을 수 있다 — 위치를 등록/수정하는 시점에 전부 이 점포로 다시 연결해준다.
+    db.query(Product).filter(Product.shop_name == shop_name).update({"store_id": store.id})
+    db.commit()
+
+    return {"success": True, "store": {"id": store.id, "lat": store.lat, "lng": store.lng}}
+
+
 # 카카오 등록
 class KakaoRegisterRequest(BaseModel):
     chatText: str = ""

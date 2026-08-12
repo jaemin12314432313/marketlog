@@ -59,6 +59,7 @@ def serialize_user(user: User) -> dict:
         "role": user.role,
         "displayName": user.display_name,
         "shopName": user.shop_name,
+        "phone": user.phone,
     }
 
 
@@ -78,11 +79,20 @@ class LoginRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     username: str
+    displayName: str
+    phone: str
 
 
 class FindUsernameRequest(BaseModel):
     displayName: str
     phone: str
+
+
+class UpdateProfileRequest(BaseModel):
+    displayName: Optional[str] = None
+    phone: Optional[str] = None
+    currentPassword: Optional[str] = None
+    newPassword: Optional[str] = None
 
 
 @router.post("/register")
@@ -144,17 +154,51 @@ def find_username(request: FindUsernameRequest, db: Session = Depends(get_db)):
     return {"success": True, "username": user.username}
 
 
-# 데모용 비밀번호 재설정: SMS/이메일 본인확인 수단이 없는 프로젝트라, 아이디만 맞으면
-# 누구나 그 계정의 비밀번호를 즉시 새로 발급받을 수 있다 (실서비스라면 반드시 별도
-# 인증 수단을 거쳐야 함). 발급된 임시 비밀번호는 응답으로 그대로 돌려준다.
+# 데모용 비밀번호 재설정: SMS/이메일 인증 대신, 가입 시 등록한 이름+휴대폰번호를
+# 아이디와 함께 모두 맞춰야만 재설정이 가능하다 (아이디만으로는 불가 — 아이디는 "아이디
+# 찾기"로 비교적 쉽게 알아낼 수 있어서, 그것만으로 비밀번호까지 뺏을 수 있으면 사실상
+# 본인확인이 없는 것과 같다). 여전히 실서비스 수준의 SMS/이메일 인증은 아니므로 데모 전용.
 @router.post("/reset-password")
 def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == request.username).first()
+    user = (
+        db.query(User)
+        .filter(
+            User.username == request.username,
+            User.display_name == request.displayName,
+            User.phone == request.phone,
+        )
+        .first()
+    )
     if not user:
-        raise HTTPException(status_code=404, detail="해당 아이디로 가입된 계정을 찾을 수 없습니다.")
+        raise HTTPException(status_code=404, detail="입력하신 정보와 일치하는 계정을 찾을 수 없습니다.")
 
     temp_password = secrets.token_urlsafe(9)
     user.password_hash = hash_password(temp_password)
     db.commit()
 
     return {"success": True, "tempPassword": temp_password}
+
+
+@router.put("/me")
+def update_profile(
+    request: UpdateProfileRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if request.newPassword is not None:
+        if not request.currentPassword or not verify_password(
+            request.currentPassword, current_user.password_hash
+        ):
+            raise HTTPException(status_code=401, detail="현재 비밀번호가 올바르지 않습니다.")
+        if len(request.newPassword) < 8:
+            raise HTTPException(status_code=400, detail="새 비밀번호는 8자 이상이어야 합니다.")
+        current_user.password_hash = hash_password(request.newPassword)
+
+    if request.displayName is not None and request.displayName.strip():
+        current_user.display_name = request.displayName.strip()
+    if request.phone is not None and request.phone.strip():
+        current_user.phone = request.phone.strip()
+
+    db.commit()
+    db.refresh(current_user)
+    return {"success": True, "user": serialize_user(current_user)}

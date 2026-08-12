@@ -150,4 +150,5 @@ def product_to_dict(product: Product) -> dict:
         "region": product.region,
         "marketId": product.market_id,
         "storeId": product.store_id,
+        "createdAt": product.created_at.isoformat() if product.created_at else None,
     }
