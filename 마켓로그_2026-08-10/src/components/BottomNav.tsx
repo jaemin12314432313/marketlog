@@ -31,8 +31,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           <div
             className={`flex flex-col items-center justify-center transition-all duration-200 ${
               activeTab === "home" && !isAiScanOpen
-                ? "text-trust-blue font-bold"
-                : "text-[#94A3B8] hover:text-on-surface font-medium"
+                ? isMerchant
+                  ? "text-emerald-600 font-extrabold"
+                  : "text-trust-blue font-extrabold"
+                : "text-slate-900 hover:text-black font-semibold"
             }`}
           >
             <span
@@ -54,8 +56,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             <div
               className={`flex flex-col items-center justify-center transition-all duration-200 ${
                 activeTab === "map" && !isAiScanOpen
-                  ? "text-trust-blue font-bold"
-                  : "text-[#94A3B8] hover:text-on-surface font-medium"
+                  ? "text-trust-blue font-extrabold"
+                  : "text-slate-900 hover:text-black font-semibold"
               }`}
             >
               <span
@@ -98,8 +100,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             <div
               className={`flex flex-col items-center justify-center transition-all duration-200 ${
                 activeTab === "saved" && !isAiScanOpen
-                  ? "text-trust-blue font-bold"
-                  : "text-[#94A3B8] hover:text-on-surface font-medium"
+                  ? "text-trust-blue font-extrabold"
+                  : "text-slate-900 hover:text-black font-semibold"
               }`}
             >
               <span
@@ -121,8 +123,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           <div
             className={`flex flex-col items-center justify-center transition-all duration-200 ${
               activeTab === "my" && !isAiScanOpen
-                ? "text-trust-blue font-bold"
-                : "text-[#94A3B8] hover:text-on-surface font-medium"
+                ? isMerchant
+                  ? "text-emerald-600 font-extrabold"
+                  : "text-trust-blue font-extrabold"
+                : "text-slate-900 hover:text-black font-semibold"
             }`}
           >
             <span
@@ -143,8 +147,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             onClick={() => onSelectTab("home")}
             className={`flex items-center gap-3 p-3 rounded-xl text-sm font-bold transition-all ${
               activeTab === "home"
-                ? "bg-[#DBEAFE] text-trust-blue"
-                : "text-outline hover:bg-surface-container-low hover:text-on-surface"
+                ? isMerchant
+                  ? "bg-emerald-100 text-emerald-800"
+                  : "bg-[#DBEAFE] text-trust-blue"
+                : "text-slate-900 hover:bg-surface-container-low hover:text-on-surface"
             }`}
           >
             <span className="material-symbols-outlined">home</span>
@@ -157,7 +163,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               className={`flex items-center gap-3 p-3 rounded-xl text-sm font-bold transition-all ${
                 activeTab === "map"
                   ? "bg-[#DBEAFE] text-trust-blue"
-                  : "text-outline hover:bg-surface-container-low hover:text-on-surface"
+                  : "text-slate-900 hover:bg-surface-container-low hover:text-on-surface"
               }`}
             >
               <span className="material-symbols-outlined">map</span>
@@ -171,7 +177,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               className={`flex items-center gap-3 p-3 rounded-xl text-sm font-bold transition-all ${
                 activeTab === "saved"
                   ? "bg-[#DBEAFE] text-trust-blue"
-                  : "text-outline hover:bg-surface-container-low hover:text-on-surface"
+                  : "text-slate-900 hover:bg-surface-container-low hover:text-on-surface"
               }`}
             >
               <span className="material-symbols-outlined">bookmark</span>
@@ -183,8 +189,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             onClick={() => onSelectTab("my")}
             className={`flex items-center gap-3 p-3 rounded-xl text-sm font-bold transition-all ${
               activeTab === "my"
-                ? "bg-[#DBEAFE] text-trust-blue"
-                : "text-outline hover:bg-surface-container-low hover:text-on-surface"
+                ? isMerchant
+                  ? "bg-emerald-100 text-emerald-800"
+                  : "bg-[#DBEAFE] text-trust-blue"
+                : "text-slate-900 hover:bg-surface-container-low hover:text-on-surface"
             }`}
           >
             <span className="material-symbols-outlined">person</span>

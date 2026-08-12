@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { login, register, setAuthToken } from "../lib/api";
+import { findUsername, login, register, resetPassword, setAuthToken } from "../lib/api";
 
 export type UserRole = "customer" | "merchant";
 type ViewMode = "login" | "signup" | "findId" | "findPw";
@@ -24,7 +24,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   // Login Form States
   const [loginId, setLoginId] = useState("");
   const [loginPw, setLoginPw] = useState("");
-  const [merchantShopName, setMerchantShopName] = useState("양동수산");
   const [loginError, setLoginError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -45,7 +44,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
   // Find Password Form States
   const [findPwId, setFindPwId] = useState("");
-  const [findPwPhone, setFindPwPhone] = useState("");
   const [foundPwResult, setFoundPwResult] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -56,7 +54,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     setLoginError("");
 
     if (!loginId.trim()) {
-      setLoginError("이메일을 입력해주세요.");
+      setLoginError("아이디를 입력해주세요.");
       return;
     }
     if (!loginPw.trim()) {
@@ -66,25 +64,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      const res = await login({ email: loginId.trim(), password: loginPw });
+      const res = await login({ username: loginId.trim(), password: loginPw });
       setAuthToken(res.token);
       onLoginSuccess(res.user.role, res.user.displayName, res.user.shopName ?? undefined);
       onClose();
     } catch (err) {
-      setLoginError("이메일 또는 비밀번호가 올바르지 않습니다.");
+      setLoginError("아이디 또는 비밀번호가 올바르지 않습니다.");
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  // Handle Easy Social Login
-  const handleEasyLogin = (providerName: string) => {
-    setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
-      onLoginSuccess("customer", `${providerName} 회원`);
-      onClose();
-    }, 300);
   };
 
   // Handle Signup Submit
@@ -94,8 +82,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       alert("이름을 입력해주세요.");
       return;
     }
-    if (!signupId.trim()) {
-      alert("이메일을 입력해주세요.");
+    if (signupId.trim().length < 4) {
+      alert("아이디는 4자 이상이어야 합니다.");
       return;
     }
     if (!signupPw) {
@@ -126,49 +114,61 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     setIsSubmitting(true);
     try {
       await register({
-        email: signupId.trim(),
+        username: signupId.trim(),
         password: signupPw,
         role: selectedRole,
         displayName: signupName.trim(),
+        phone: signupPhone.trim(),
         shopName: selectedRole === "merchant" ? signupShopName.trim() : undefined,
       });
       setLoginId(signupId.trim());
-      setSignupSuccessMsg(`${signupName}님의 회원가입이 정상 완료되었습니다! 가입한 이메일로 로그인해보세요.`);
+      setSignupSuccessMsg(`${signupName}님의 회원가입이 정상 완료되었습니다! 가입한 아이디로 로그인해보세요.`);
     } catch (err: any) {
       const message = String(err?.message || "");
-      alert(message.includes("409") ? "이미 가입된 이메일입니다." : "회원가입에 실패했습니다.");
+      alert(message.includes("409") ? "이미 사용 중인 아이디입니다." : "회원가입에 실패했습니다.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Handle Find ID Submit
-  const handleFindIdSubmit = (e: React.FormEvent) => {
+  // Handle Find ID Submit — 가입 시 입력한 이름+휴대폰번호가 둘 다 일치해야 조회된다
+  // (문자 인증 등 실제 본인확인은 없는 데모용 기능).
+  const handleFindIdSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!findIdName.trim() || !findIdPhone.trim()) {
       alert("이름과 휴대폰 번호를 모두 입력해주세요.");
       return;
     }
     setIsSubmitting(true);
-    setTimeout(() => {
+    try {
+      const res = await findUsername({ displayName: findIdName.trim(), phone: findIdPhone.trim() });
+      setFoundIdResult(res.username);
+    } catch (err: any) {
+      const message = String(err?.message || "");
+      alert(message.includes("404") ? "일치하는 계정을 찾을 수 없습니다." : "아이디 찾기에 실패했습니다.");
+    } finally {
       setIsSubmitting(false);
-      const generatedId = findIdName.trim() === "홍길동" ? "gildong123" : `${findIdName.trim().toLowerCase()}_market`;
-      setFoundIdResult(generatedId);
-    }, 400);
+    }
   };
 
-  // Handle Find Password Submit
-  const handleFindPwSubmit = (e: React.FormEvent) => {
+  // Handle Find Password Submit — 본인확인 수단(SMS/이메일 인증)이 없는 데모용 기능이라,
+  // 아이디만 일치하면 바로 새 임시 비밀번호를 발급해 화면에 보여준다.
+  const handleFindPwSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!findPwId.trim() || !findPwPhone.trim()) {
-      alert("아이디와 휴대폰 번호를 모두 입력해주세요.");
+    if (!findPwId.trim()) {
+      alert("아이디를 입력해주세요.");
       return;
     }
     setIsSubmitting(true);
-    setTimeout(() => {
+    try {
+      const res = await resetPassword({ username: findPwId.trim() });
+      setFoundPwResult(res.tempPassword);
+    } catch (err: any) {
+      const message = String(err?.message || "");
+      alert(message.includes("404") ? "해당 아이디로 가입된 계정을 찾을 수 없습니다." : "비밀번호 재설정에 실패했습니다.");
+    } finally {
       setIsSubmitting(false);
-      setFoundPwResult(`임시 비밀번호가 발송되었습니다: market${Math.floor(1000 + Math.random() * 9000)}!`);
-    }, 400);
+    }
   };
 
   // Reset Subviews
@@ -259,17 +259,19 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             {/* ID Input */}
             <div className="space-y-1">
               <label className="text-xs font-extrabold text-slate-700 flex items-center justify-between">
-                <span>이메일</span>
+                <span>아이디</span>
               </label>
               <div className="relative">
-                <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg">
-                  person
-                </span>
+                <div className="absolute left-3.5 inset-y-0 flex items-center pointer-events-none text-slate-400">
+                  <span className="material-symbols-outlined text-lg leading-none">
+                    person
+                  </span>
+                </div>
                 <input
-                  type="email"
+                  type="text"
                   value={loginId}
                   onChange={(e) => setLoginId(e.target.value)}
-                  placeholder="example@email.com"
+                  placeholder="아이디를 입력하세요"
                   className="w-full pl-10 pr-4 py-3 bg-white rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[#0052FF] focus:ring-1 focus:ring-[#0052FF] font-medium transition-all"
                 />
               </div>
@@ -279,12 +281,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             <div className="space-y-1">
               <label className="text-xs font-extrabold text-slate-700 flex items-center justify-between">
                 <span>비밀번호</span>
-                <span className="text-[10px] text-slate-400 font-normal">6자리 이상</span>
               </label>
               <div className="relative">
-                <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg">
-                  lock
-                </span>
+                <div className="absolute left-3.5 inset-y-0 flex items-center pointer-events-none text-slate-400">
+                  <span className="material-symbols-outlined text-lg leading-none">
+                    lock
+                  </span>
+                </div>
                 <input
                   type="password"
                   value={loginPw}
@@ -354,8 +357,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               비밀번호 찾기
             </button>
           </div>
-
-
         </div>
       )}
 
@@ -418,14 +419,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 />
               </div>
 
-              {/* Email */}
+              {/* ID */}
               <div className="space-y-1">
-                <label className="text-xs font-extrabold text-slate-700">이메일</label>
+                <label className="text-xs font-extrabold text-slate-700">아이디</label>
                 <input
-                  type="email"
+                  type="text"
                   value={signupId}
                   onChange={(e) => setSignupId(e.target.value)}
-                  placeholder="example@email.com"
+                  placeholder="영문/숫자 조합 아이디 (4자 이상)"
                   className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:border-[#0052FF]"
                 />
               </div>
@@ -438,7 +439,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                     type="password"
                     value={signupPw}
                     onChange={(e) => setSignupPw(e.target.value)}
-                    placeholder="비밀번호"
+                    placeholder="8자 이상"
                     className="w-full px-3 py-2.5 bg-white rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-[#0052FF]"
                   />
                 </div>
@@ -608,13 +609,19 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 <span className="material-symbols-outlined text-2xl font-bold">lock_reset</span>
               </div>
               <div>
-                <h3 className="font-extrabold text-slate-900 text-sm">임시 비밀번호가 발송되었습니다</h3>
+                <h3 className="font-extrabold text-slate-900 text-sm">새 임시 비밀번호가 발급되었습니다</h3>
                 <p className="text-xs text-[#0052FF] font-black mt-2 bg-white py-2 px-3 rounded-lg border border-blue-100 inline-block">
                   {foundPwResult}
                 </p>
+                <p className="text-[11px] text-slate-500 font-medium mt-2">
+                  로그인 후 마이페이지에서 비밀번호를 변경해주세요.
+                </p>
               </div>
               <button
-                onClick={resetToLogin}
+                onClick={() => {
+                  setLoginId(findPwId.trim());
+                  resetToLogin();
+                }}
                 className="w-full py-3 bg-[#0052FF] text-white rounded-xl text-xs font-bold shadow-md hover:bg-[#0046E0] transition-colors"
               >
                 새 비밀번호로 로그인하기
@@ -623,7 +630,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           ) : (
             <form onSubmit={handleFindPwSubmit} className="space-y-3">
               <p className="text-xs text-slate-500 font-medium">
-                가입하신 아이디와 휴대폰 번호를 입력하시면 임시 비밀번호를 발송해 드립니다.
+                가입한 아이디를 입력하시면 새 임시 비밀번호를 즉시 발급해 드립니다.
               </p>
 
               <div className="space-y-1">
@@ -637,23 +644,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-extrabold text-slate-700">휴대폰 번호</label>
-                <input
-                  type="tel"
-                  value={findPwPhone}
-                  onChange={(e) => setFindPwPhone(e.target.value)}
-                  placeholder="'-' 없이 숫자만 입력"
-                  className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:border-[#0052FF]"
-                />
-              </div>
-
               <button
                 type="submit"
                 disabled={isSubmitting}
                 className="w-full bg-[#0052FF] hover:bg-[#0046E0] text-white py-3 rounded-xl font-extrabold text-xs sm:text-sm shadow-md transition-all cursor-pointer mt-2"
               >
-                {isSubmitting ? "전송 중..." : "임시 비밀번호 발급"}
+                {isSubmitting ? "발급 중..." : "임시 비밀번호 발급"}
               </button>
 
               <button

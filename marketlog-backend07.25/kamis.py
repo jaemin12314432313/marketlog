@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import threading
 from datetime import date, datetime, timedelta
 
 import httpx
@@ -41,6 +42,7 @@ GRADE_TO_RANK = {"특": "상품", "상": "상품", "보통": "중품"}
 
 _cache: dict = {"date": None, "prices": {}, "retry_after": None}
 _RETRY_COOLDOWN = timedelta(minutes=5)
+_refresh_lock = threading.Lock()
 
 
 def _fetch_category(category: str, regday: str) -> "tuple[list, bool]":
@@ -135,15 +137,32 @@ async def auto_refresh_loop() -> None:
         await asyncio.sleep((tomorrow - datetime.now()).total_seconds())
 
 
+def _trigger_background_refresh() -> None:
+    """캐시 갱신은 최대 5일치 x 3개 카테고리까지 KAMIS를 순차 호출할 수 있어 느릴 때는
+    수십 초까지 걸린다. get_public_price()가 이걸 그 자리에서 기다리면(특히
+    analyze_product 같은 async 핸들러 안에서 await 없이 호출되므로) 그 동안 이벤트 루프
+    전체가 멈춰 다른 모든 요청까지 같이 느려진다. 그래서 별도 스레드에서 갱신하고, 이번
+    요청은 갱신 중인 기존 캐시(비어 있으면 None → 호출부가 정적 가격으로 폴백)를 그대로 쓴다.
+    이미 갱신 중이면 새 스레드를 또 띄우지 않는다."""
+    if _refresh_lock.locked():
+        return
+
+    def _run() -> None:
+        with _refresh_lock:
+            _refresh_cache()
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
 def get_public_price(item_name: str, grade_kor: str) -> "int | None":
     """오늘(없으면 최근 영업일) KAMIS 소매가격에서 등급에 맞는 가격을 원/kg 단위로 반환.
-    데이터가 없으면(휴장일, 비계절 품목, 인증키 미설정, API 실패 등) None —
+    데이터가 없으면(휴장일, 비계절 품목, 인증키 미설정, API 실패, 갱신 진행 중 등) None —
     호출부는 이 경우 기존 정적 PUBLIC_PRICE_MAP으로 폴백해야 한다.
     """
     is_stale = _cache["date"] != date.today()
     cooldown_elapsed = _cache["retry_after"] is None or datetime.now() >= _cache["retry_after"]
     if is_stale and cooldown_elapsed:
-        _refresh_cache()
+        _trigger_background_refresh()
 
     by_rank = _cache["prices"].get(item_name)
     if not by_rank:

@@ -3,15 +3,10 @@ import {
   TabType,
   MarketInfo,
   ProductItem,
-  QuestItem,
-  CouponItem,
 } from "./types";
 import {
   MARKETS_DATA,
   REGIONS_DATA,
-  INITIAL_PRODUCTS,
-  INITIAL_QUESTS,
-  INITIAL_COUPONS,
 } from "./data/initialData";
 import {
   fetchFeed,
@@ -57,33 +52,12 @@ export default function App() {
       setSelectedMarket(MARKETS_DATA[0]);
     }
   };
-  const [products, setProducts] = useState<ProductItem[]>(INITIAL_PRODUCTS);
-  const [scannedProducts, setScannedProducts] = useState<ProductItem[]>([
-    {
-      id: "scan-sample-1",
-      title: "AI 스캔 설향 딸기 1kg",
-      shopName: "싱싱청과",
-      distance: "양동전통시장",
-      timeAgo: "1시간 전 스캔",
-      price: 13500,
-      publicPrice: 16800,
-      priceTag: "공공 시세 대비 19.6% 저렴",
-      grade: "A+ 최상",
-      category: "과일",
-      imageUrl: "https://images.unsplash.com/photo-1464965911861-746a04b4bca6?auto=format&fit=crop&w=600&q=80",
-      freshnessScore: 98,
-      defectScore: 2,
-      uniformityScore: 96,
-      description: "AI 신선도 스캔 결과 당도 및 당도 균일도가 뛰어난 최상품 딸기입니다.",
-    },
-  ]);
-  const [bookmarkedProducts, setBookmarkedProducts] = useState<ProductItem[]>([
-    INITIAL_PRODUCTS[0],
-    INITIAL_PRODUCTS[1],
-  ]);
+  const [products, setProducts] = useState<ProductItem[]>([]);
+  const [scannedProducts, setScannedProducts] = useState<ProductItem[]>([]);
+  const [bookmarkedProducts, setBookmarkedProducts] = useState<ProductItem[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(null);
 
-  // 상품 피드는 로그인 여부와 무관하게 백엔드에서 불러온다. 실패 시 목업 데이터로 폴백.
+  // 상품 피드는 로그인 여부와 무관하게 백엔드에서 불러온다.
   useEffect(() => {
     fetchFeed()
       .then(setProducts)
@@ -100,12 +74,11 @@ export default function App() {
       .then(setScannedProducts)
       .catch((err) => console.error("AI 스캔 저장목록을 불러오지 못했습니다.", err));
   }, [isLoginModalOpen]);
+
   const [isAiScanOpen, setIsAiScanOpen] = useState(false);
   const [cartItems, setCartItems] = useState<ProductItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-  const [quests] = useState<QuestItem[]>(INITIAL_QUESTS);
-  const [coupons, setCoupons] = useState<CouponItem[]>(INITIAL_COUPONS);
 
   const handleLoginSuccess = (role: UserRole, displayName: string, shopName?: string) => {
     setUserRole(role);
@@ -113,6 +86,13 @@ export default function App() {
     setUserShopName(shopName || "");
     setIsLoginModalOpen(false);
     setActiveTab("home");
+  };
+
+  const handleLogout = () => {
+    setUserDisplayName("");
+    setUserShopName("");
+    setUserRole("customer");
+    setIsLoginModalOpen(true);
   };
 
   const handleAddToCart = (product: ProductItem) => {
@@ -192,12 +172,6 @@ export default function App() {
       console.error("상품 삭제 실패", err);
       alert("상품 삭제에 실패했습니다.");
     }
-  };
-
-  const handleUseCoupon = (couponId: string) => {
-    setCoupons((prev) =>
-      prev.map((c) => (c.id === couponId ? { ...c, isUsed: true } : c))
-    );
   };
 
   const handleSelectShopOnMap = (shopName: string) => {
@@ -285,13 +259,13 @@ export default function App() {
 
         {activeTab === "my" && (
           <MyWallet
-            quests={quests}
-            coupons={coupons}
-            onUseCoupon={handleUseCoupon}
+            products={products}
             onNavigateToMap={() => setActiveTab("map")}
             userRole={userRole}
             userDisplayName={userDisplayName}
             onOpenLogin={() => setIsLoginModalOpen(true)}
+            onLogout={handleLogout}
+            onUpdateShopName={(newName) => setUserDisplayName(newName)}
           />
         )}
       </main>
@@ -327,6 +301,7 @@ export default function App() {
         <ProductDetailModal
           product={selectedProduct}
           marketInfo={selectedMarket}
+          initialTab="description"
           onClose={() => setSelectedProduct(null)}
           isBookmarked={bookmarkedProducts.some((p) => p.id === selectedProduct.id)}
           onToggleBookmark={handleToggleBookmarkProduct}
@@ -351,22 +326,8 @@ export default function App() {
               </button>
             </div>
 
-            <div className="space-y-3">
-              <div className="p-3 bg-trust-blue/10 rounded-2xl border border-trust-blue/20">
-                <div className="text-xs font-bold text-trust-blue mb-1">AI 뱃지 등록 알림</div>
-                <div className="text-xs text-on-surface">
-                  양동수산의 <span className="font-bold">제주 은갈치</span>가 AI 최상등급(A+) 검증되었습니다.
-                </div>
-                <div className="text-[10px] text-outline mt-1">10분 전</div>
-              </div>
-
-              <div className="p-3 bg-safe-emerald/10 rounded-2xl border border-safe-emerald/20">
-                <div className="text-xs font-bold text-safe-emerald mb-1">쿠폰 발급 완료</div>
-                <div className="text-xs text-on-surface">
-                  호남상회 <span className="font-bold">가을무 20% OFF</span> 쿠폰이 지갑에 발급되었습니다.
-                </div>
-                <div className="text-[10px] text-outline mt-1">30분 전</div>
-              </div>
+            <div className="py-8 text-center text-outline text-sm">
+              아직 새로운 알림이 없습니다.
             </div>
           </div>
         </div>

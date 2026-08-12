@@ -53,9 +53,10 @@ export const MapView: React.FC<MapViewProps> = ({
 }) => {
   const [isPlayingDocent, setIsPlayingDocent] = useState(false);
   const [docentElapsedSec, setDocentElapsedSec] = useState(0);
-  const [docentTotalSec, setDocentTotalSec] = useState(() => estimateSpeechSeconds(selectedMarket.docentScript));
+  const [docentTotalSec, setDocentTotalSec] = useState(1);
   const docentProgress = docentTotalSec > 0 ? Math.min(100, (docentElapsedSec / docentTotalSec) * 100) : 0;
-  const [currentScript, setCurrentScript] = useState(selectedMarket.docentScript);
+  const [currentScript, setCurrentScript] = useState("");
+  const [isDocentLoading, setIsDocentLoading] = useState(false);
   const [isDocentExpanded, setIsDocentExpanded] = useState(false); // 기본적으로 하단 배너 위에 살짝 나와있게 시작
   const [touchStartY, setTouchStartY] = useState<number | null>(null);
   const [dragOffsetY, setDragOffsetY] = useState<number>(0);
@@ -155,9 +156,12 @@ export const MapView: React.FC<MapViewProps> = ({
     };
   }, [isDragging]);
 
+  // 시장을 바꾸면 이전 시장의 점포에 대한 도슨트 패널은 더 이상 유효하지 않으므로 닫는다.
   useEffect(() => {
-    setCurrentScript(selectedMarket.docentScript);
-    setDocentTotalSec(estimateSpeechSeconds(selectedMarket.docentScript));
+    window.speechSynthesis?.cancel();
+    setActivePin(null);
+    setCurrentScript("");
+    setIsPlayingDocent(false);
     setDocentElapsedSec(0);
   }, [selectedMarket]);
 
@@ -261,6 +265,7 @@ export const MapView: React.FC<MapViewProps> = ({
       naver.maps.Event.addListener(marker, "click", () => {
         setActivePin(store.name);
         onSelectShop(store.name);
+        setCurrentScript("");
         handleFetchAiDocent(store);
       });
 
@@ -387,6 +392,7 @@ export const MapView: React.FC<MapViewProps> = ({
   };
 
   const handleFetchAiDocent = async (store: MapStorePin) => {
+    setIsDocentLoading(true);
     try {
       const data = await fetchDocentStory({
         marketName: selectedMarket.name,
@@ -396,9 +402,14 @@ export const MapView: React.FC<MapViewProps> = ({
       if (data.success && data.script) {
         setCurrentScript(data.script);
         speakDocent(data.script);
+      } else {
+        setCurrentScript(`"${store.name}의 AI 도슨트를 아직 준비하지 못했습니다."`);
       }
     } catch (err) {
       console.error(err);
+      setCurrentScript(`"${store.name}의 AI 도슨트를 불러오지 못했습니다. 잠시 후 다시 시도해주세요."`);
+    } finally {
+      setIsDocentLoading(false);
     }
   };
 
@@ -618,7 +629,7 @@ export const MapView: React.FC<MapViewProps> = ({
               <div className="px-4 pb-4 pt-1 flex flex-col gap-2 border-t border-slate-100">
                 {/* Script Quote */}
                 <p className="text-xs sm:text-sm text-[#475569] font-medium leading-relaxed mt-0.5">
-                  {currentScript || `"오른쪽에 보이는 양동수산은 매일 새벽 산지에서 직송된 신선한 활어를 취급합니다. 오늘 A급..."`}
+                  {isDocentLoading ? "AI 도슨트를 준비하고 있어요..." : currentScript}
                 </p>
 
                 {/* Progress Bar Row */}

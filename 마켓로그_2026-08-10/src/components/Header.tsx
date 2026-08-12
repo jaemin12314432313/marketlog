@@ -27,17 +27,23 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="fixed top-0 left-0 w-full z-40 flex justify-between items-center px-3 sm:px-4 md:px-6 h-16 bg-surface-white border-b border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.05)] transition-all flex-nowrap gap-2">
       {/* Left: App Logo */}
       <div className="flex items-center gap-2 shrink-0">
-        <div className="w-8 h-8 sm:w-9 sm:h-9 bg-[#0052FF] rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-500/20 shrink-0">
+        <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-white shrink-0 transition-colors ${
+          userRole === "merchant"
+            ? "bg-emerald-600 shadow-md shadow-emerald-500/20"
+            : "bg-[#0052FF] shadow-md shadow-blue-500/20"
+        }`}>
           <span
             className="material-symbols-outlined text-lg sm:text-xl font-bold"
             style={{ fontVariationSettings: "'FILL' 1" }}
           >
-            account_balance_wallet
+            {userRole === "merchant" ? "storefront" : "account_balance_wallet"}
           </span>
         </div>
-        <span className="text-lg sm:text-xl font-black tracking-tight text-[#0F172A] select-none">
-          MarketLog
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-lg sm:text-xl font-black tracking-tight text-[#0F172A] select-none">
+            MarketLog
+          </span>
+        </div>
       </div>
 
       {/* Right controls: Region Selector & Notifications */}
@@ -47,20 +53,30 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Region Selector Button */}
           <button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="flex items-center gap-1 hover:bg-blue-50/60 transition-colors rounded-xl px-2 py-1.5 group shrink-0 whitespace-nowrap border border-transparent hover:border-blue-100"
+            className={`flex items-center gap-1 transition-colors rounded-xl px-2 py-1.5 group shrink-0 whitespace-nowrap border border-transparent ${
+              userRole === "merchant"
+                ? "hover:bg-emerald-50/70 hover:border-emerald-200"
+                : "hover:bg-blue-50/60 hover:border-blue-100"
+            }`}
             id="region-selector-btn"
             title="지역 선택"
           >
             <span
-              className="material-symbols-outlined text-[#0052FF] text-lg sm:text-xl shrink-0"
+              className={`material-symbols-outlined text-lg sm:text-xl shrink-0 ${
+                userRole === "merchant" ? "text-emerald-600" : "text-[#0052FF]"
+              }`}
               style={{ fontVariationSettings: "'FILL' 1" }}
             >
               location_on
             </span>
-            <span className="text-xs sm:text-sm font-extrabold tracking-tight text-[#0052FF] whitespace-nowrap">
+            <span className={`text-xs sm:text-sm font-extrabold tracking-tight whitespace-nowrap ${
+              userRole === "merchant" ? "text-emerald-700" : "text-[#0052FF]"
+            }`}>
               {selectedRegion === "전체" ? "전국 (전체)" : selectedRegion}
             </span>
-            <span className="material-symbols-outlined text-[#0052FF]/70 group-hover:text-[#0052FF] transition-colors text-base shrink-0">
+            <span className={`material-symbols-outlined transition-colors text-base shrink-0 ${
+              userRole === "merchant" ? "text-emerald-600/70 group-hover:text-emerald-700" : "text-[#0052FF]/70 group-hover:text-[#0052FF]"
+            }`}>
               expand_more
             </span>
           </button>
@@ -84,7 +100,9 @@ export const Header: React.FC<HeaderProps> = ({
                       }}
                       className={`w-full text-left px-3.5 py-2.5 text-xs sm:text-sm flex items-center justify-between hover:bg-surface-container-low transition-colors whitespace-nowrap ${
                         isSelected
-                          ? "font-extrabold text-trust-blue bg-blue-50/60"
+                          ? userRole === "merchant"
+                            ? "font-extrabold text-emerald-700 bg-emerald-50"
+                            : "font-extrabold text-trust-blue bg-blue-50/60"
                           : "text-on-surface font-medium"
                       }`}
                     >
@@ -95,7 +113,9 @@ export const Header: React.FC<HeaderProps> = ({
                         <span>{region === "전체" ? "전국 (전체)" : region}</span>
                       </div>
                       {isSelected && (
-                        <span className="material-symbols-outlined text-sm text-trust-blue">
+                        <span className={`material-symbols-outlined text-sm ${
+                          userRole === "merchant" ? "text-emerald-600" : "text-trust-blue"
+                        }`}>
                           check
                         </span>
                       )}

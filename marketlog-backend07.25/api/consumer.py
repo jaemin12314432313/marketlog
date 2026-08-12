@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
+import asyncio
 import torch
 import base64
 import io
@@ -113,6 +114,15 @@ SCAN_MOCK = {
 _gemini_client = None
 _gemini_client_checked = False
 
+# Gemini SDK는 기본적으로 타임아웃이 없어서, 네트워크가 느리거나 응답이 없으면 요청이
+# 몇 분이고 그냥 걸려 있는다 (실제로 이 환경에서 2분 가까이 걸린 적이 있었음). Gemini가
+# 만들어주는 리포트(신선도/결함/종합의견)가 이 기능의 핵심이라 짧게 끊어서 폴백 문구로
+# 넘어가는 것보다는 웬만하면 실제로 끝까지 기다리는 쪽을 택한다 — 대신 analyze_product/
+# docent_story에서 이미 asyncio.to_thread로 별도 스레드에 넘겨두었기 때문에, 오래 걸려도
+# 이 요청 하나만 느려질 뿐 서버 전체(이벤트 루프)가 멈추지는 않는다. 그래도 진짜 끊긴
+# 연결에 무한정 매달리지는 않도록 상한은 둔다.
+GEMINI_TIMEOUT_MS = 30_000
+
 def get_gemini_client():
     """Gemini 클라이언트를 지연 초기화한다. 키가 없거나 SDK 미설치 시 None."""
     global _gemini_client, _gemini_client_checked
@@ -124,7 +134,11 @@ def get_gemini_client():
         return None
     try:
         from google import genai
-        _gemini_client = genai.Client(api_key=api_key)
+        from google.genai import types
+        _gemini_client = genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(timeout=GEMINI_TIMEOUT_MS),
+        )
     except Exception as e:
         print(f"Gemini 클라이언트 초기화 실패: {e}")
         _gemini_client = None
@@ -221,7 +235,9 @@ async def analyze_product(request: ScanRequest):
         try:
             img_data = base64.b64decode(request.imageBase64.split(",")[-1])
             image = Image.open(io.BytesIO(img_data)).convert("RGB")
-            result = run_ai_inference(image)
+            # CPU 추론 + Gemini 호출 모두 동기/블로킹이라, 스레드로 넘기지 않으면 이 요청이
+            # 끝날 때까지 다른 모든 요청까지 이벤트 루프에서 같이 멈춘다.
+            result = await asyncio.to_thread(run_ai_inference, image)
 
             if result:
                 item_name = result["item"]
@@ -241,7 +257,7 @@ async def analyze_product(request: ScanRequest):
                 )
 
                 # 세부 점수/종합의견은 Gemini에게 맡기고, 실패 시에만 기존 방식(등급확률/확신도 재활용)으로 폴백
-                commentary = generate_ai_commentary(image, item_name, grade_kor)
+                commentary = await asyncio.to_thread(generate_ai_commentary, image, item_name, grade_kor)
                 if commentary:
                     freshness = commentary["freshnessScore"]
                     defect = commentary["defectScore"]
@@ -262,6 +278,11 @@ async def analyze_product(request: ScanRequest):
                         "qualityScore": uniformity,
                         "sellingPrice": 0,
                         "publicMarketPrice": public_price,
+                        # 카메라 실측 스캔은 실제 중량을 알 방법이 없어(비전모델은 품목/등급만
+                        # 판정) KAMIS/PUBLIC_PRICE_MAP의 원/kg 값을 그대로 쓴다. SCAN_MOCK
+                        # 경로처럼 pack_weight_kg를 곱해 "1단/2kg" 단위로 환산하지 못하므로,
+                        # 프론트가 "(1kg 기준)"이라고 정직하게 표시할 수 있도록 단위를 알려준다.
+                        "publicPriceUnit": "kg",
                         "priceDiffPercent": 0,
                         "priceTrafficLight": "SAFE",
                         "freshnessScore": freshness,
@@ -393,7 +414,9 @@ async def docent_story(request: DocentRequest, db: Session = Depends(get_db)):
     if market and request.storeId:
         store = db.query(Store).filter(Store.id == request.storeId, Store.market_id == market.id).first()
         if store:
-            script = _cached_or_generate(
+            # 캐시 미스면 안에서 Gemini를 동기 호출하므로, 스레드로 넘겨 이벤트 루프를 막지 않는다.
+            script = await asyncio.to_thread(
+                _cached_or_generate,
                 f"store:{store.id}",
                 lambda: generate_docent_script_for_store(request.marketName, store),
             )
@@ -407,7 +430,8 @@ async def docent_story(request: DocentRequest, db: Session = Depends(get_db)):
         if market
         else []
     )
-    script = _cached_or_generate(
+    script = await asyncio.to_thread(
+        _cached_or_generate,
         f"alley:{request.marketName}:{request.alleyName}",
         lambda: generate_docent_script(request.marketName, request.alleyName, stores),
     )

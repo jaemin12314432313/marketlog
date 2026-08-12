@@ -32,7 +32,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
   const [sortBy, setSortBy] = useState<"accuracy" | "price" | "grade">("accuracy");
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
 
-  const categories = ["AI 추천상품", "신선야채", "수산물", "정육", "과일"];
+  const categories = ["AI 추천상품", "야채", "수산물", "정육", "과일"];
 
   const filteredProducts = products.filter((p) => {
     // 1. Region Filter
@@ -52,6 +52,8 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
     const matchesCategory =
       selectedCategory === "전체" || selectedCategory === "AI 추천상품"
         ? true
+        : selectedCategory === "야채"
+        ? (p.category === "야채" || (p.category as string) === "신선야채")
         : p.category === selectedCategory;
 
     // 3. Search Query Filter
@@ -252,10 +254,6 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
           <div className="grid grid-cols-2 gap-3 sm:gap-4">
             {sortedProducts.map((product) => {
               const isBookmarked = bookmarkedProductIds.includes(product.id);
-              const discountPercent =
-                product.publicPrice && product.publicPrice > product.price
-                  ? Math.round(((product.publicPrice - product.price) / product.publicPrice) * 100)
-                  : null;
 
               return (
                 <article
@@ -296,51 +294,35 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
                       </h3>
                     </div>
 
-                    {/* Price Section */}
-                    <div>
-                      {/* Strikethrough Public Market Price if Available */}
-                      {product.publicPrice > product.price && (
-                        <div className="text-[11px] text-[#94A3B8] line-through font-medium leading-none mb-0.5">
-                          {product.publicPrice.toLocaleString()}원
-                        </div>
-                      )}
+                    {/* Price Section - Only Seller Price */}
+                    <div className="flex items-center justify-between gap-1 pt-0.5">
+                      <span className="text-base sm:text-lg font-black text-[#0F172A] tracking-tight">
+                        {product.price.toLocaleString()}원
+                      </span>
 
-                      <div className="flex items-center justify-between gap-1">
-                        <div className="flex items-baseline gap-1 flex-wrap">
-                          <span className="text-base sm:text-lg font-black text-[#0F172A] tracking-tight">
-                            {product.price.toLocaleString()}원
-                          </span>
-                          {discountPercent !== null && discountPercent > 0 && (
-                            <span className="text-xs font-black text-[#0052FF] sm:text-sm">
-                              {discountPercent}%
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Bookmark Circle Button */}
-                        {onToggleBookmark && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onToggleBookmark(product);
-                            }}
-                            className={`w-7 h-7 rounded-full border border-[#E2E8F0] flex items-center justify-center transition-colors flex-shrink-0 ${
-                              isBookmarked
-                                ? "bg-blue-50 border-[#BFDBFE] text-[#0052FF]"
-                                : "bg-white text-[#94A3B8] hover:bg-slate-100 hover:text-[#0052FF]"
-                            }`}
-                            title={isBookmarked ? "저장 취소" : "관심 상품 저장"}
+                      {/* Bookmark Circle Button */}
+                      {onToggleBookmark && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleBookmark(product);
+                          }}
+                          className={`w-7 h-7 rounded-full border border-[#E2E8F0] flex items-center justify-center transition-colors flex-shrink-0 ${
+                            isBookmarked
+                              ? "bg-blue-50 border-[#BFDBFE] text-[#0052FF]"
+                              : "bg-white text-[#94A3B8] hover:bg-slate-100 hover:text-[#0052FF]"
+                          }`}
+                          title={isBookmarked ? "저장 취소" : "관심 상품 저장"}
+                        >
+                          <span
+                            className="material-symbols-outlined text-sm"
+                            style={{ fontVariationSettings: isBookmarked ? "'FILL' 1" : "'FILL' 0" }}
                           >
-                            <span
-                              className="material-symbols-outlined text-sm"
-                              style={{ fontVariationSettings: isBookmarked ? "'FILL' 1" : "'FILL' 0" }}
-                            >
-                              bookmark
-                            </span>
-                          </button>
-                        )}
-                      </div>
+                            bookmark
+                          </span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </article>
@@ -352,10 +334,6 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
           <div className="flex flex-col gap-3.5">
             {sortedProducts.map((product) => {
               const isBookmarked = bookmarkedProductIds.includes(product.id);
-              const discountPercent =
-                product.publicPrice && product.publicPrice > product.price
-                  ? Math.round(((product.publicPrice - product.price) / product.publicPrice) * 100)
-                  : null;
 
               return (
                 <article
@@ -420,21 +398,11 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
                       </div>
                     </div>
 
-                    {/* Price & PriceTag Badge */}
+                    {/* Price Section - Only Seller Price */}
                     <div className="mt-2">
-                      {product.publicPrice > product.price && (
-                        <div className="text-xs text-[#94A3B8] line-through font-medium">
-                          {product.publicPrice.toLocaleString()}원
-                        </div>
-                      )}
-                      <div className="flex items-baseline gap-2">
-                        <div className="text-xl sm:text-2xl font-black text-[#0F172A] tracking-tight">
-                          {product.price.toLocaleString()}
-                          <span className="text-base font-bold text-[#0F172A] ml-0.5">원</span>
-                        </div>
-                        {discountPercent !== null && discountPercent > 0 && (
-                          <span className="text-sm font-black text-[#0052FF]">{discountPercent}%</span>
-                        )}
+                      <div className="text-xl sm:text-2xl font-black text-[#0F172A] tracking-tight">
+                        {product.price.toLocaleString()}
+                        <span className="text-base font-bold text-[#0F172A] ml-0.5">원</span>
                       </div>
                     </div>
                   </div>

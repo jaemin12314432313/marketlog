@@ -14,13 +14,15 @@ export interface ProductItem {
   publicPrice: number;
   priceTag: string; // e.g. "공공 시세 대비 10% 저렴"
   grade: QualityGrade;
-  category: "AI 추천상품" | "신선야채" | "수산물" | "정육" | "과일" | "건어물";
+  category: "AI 추천상품" | "야채" | "수산물" | "정육" | "과일" | "건어물";
   imageUrl: string;
   freshnessScore: number;
   defectScore: number;
   uniformityScore: number;
   description: string;
   isMerchantUploaded?: boolean;
+  isScannedProduct?: boolean;
+  phone?: string;
   region?: string;
   marketId?: string;
 }
@@ -32,35 +34,6 @@ export interface MarketInfo {
   congestion: "원활" | "보통" | "혼잡";
   parkingCapacity: string; // e.g. "24/80면 여유"
   toiletLocation: string; // e.g. "수산동 2층, 중앙광장"
-  docentStoryTitle: string;
-  docentScript: string;
-  audioDuration: string;
-}
-
-export interface QuestItem {
-  id: string;
-  title: string;
-  marketName: string;
-  progressPercent: number;
-  remainingMessage: string;
-  recipeIngredients: {
-    name: string;
-    shopName: string;
-    completed: boolean;
-    discountCoupon?: string;
-  }[];
-}
-
-export interface CouponItem {
-  id: string;
-  title: string;
-  shopName: string;
-  badgeText: string;
-  badgeType: "emerald" | "amber" | "blue";
-  discountText: string;
-  expiryDate: string;
-  barcode: string;
-  isUsed: boolean;
 }
 
 export interface InspectionResult {
@@ -70,6 +43,7 @@ export interface InspectionResult {
   qualityScore: number;
   sellingPrice: number;
   publicMarketPrice: number;
+  publicPriceUnit?: string; // "kg"면 publicMarketPrice가 실제 판매 단위가 아닌 1kg 환산가라는 뜻
   priceDiffPercent: number;
   priceTrafficLight: TrafficLight;
   freshnessScore: number;

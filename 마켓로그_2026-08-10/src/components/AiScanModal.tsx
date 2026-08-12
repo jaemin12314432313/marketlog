@@ -2,6 +2,14 @@ import React, { useState, useRef, useEffect } from "react";
 import { ProductItem, InspectionResult } from "../types";
 import { analyzeProduct } from "../lib/api";
 
+function buildPriceTag(price: number, publicPrice: number): string {
+  if (!price || !publicPrice) return "공공 시세 연동 검증";
+  const diffPercent = Math.round(((publicPrice - price) / publicPrice) * 100);
+  if (diffPercent > 0) return `공공 시세 대비 ${diffPercent}% 저렴`;
+  if (diffPercent < 0) return `공공 시세보다 ${Math.abs(diffPercent)}% 비쌈`;
+  return "공공 시세와 동일";
+}
+
 interface AiScanModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -26,6 +34,9 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [showResult, setShowResult] = useState(false);
+  // AI는 카메라만으로 실제 판매가를 알 수 없어 항상 0을 내려주므로, 매대에서 직접 본
+  // 가격을 사용자가 입력해야 "공공 시세 대비 N% 저렴" 비교가 의미를 가진다.
+  const [sellingPriceInput, setSellingPriceInput] = useState("");
   const [saveSuccessToast, setSaveSuccessToast] = useState(false);
   const [hasCameraStream, setHasCameraStream] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -34,36 +45,15 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
   const streamRef = useRef<MediaStream | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const [inspectionResult, setInspectionResult] = useState<InspectionResult | null>({
-    productName: "청송 부사 사과 (5개입)",
-    category: "과일",
-    grade: "A",
-    qualityScore: 93,
-    sellingPrice: 13500,
-    publicMarketPrice: 15000,
-    priceDiffPercent: 10,
-    priceTrafficLight: "SAFE",
-    freshnessScore: 94,
-    defectScore: 92,
-    uniformityScore: 91,
-    publicGuarantee: "농산물유통정보(KAMIS) 소매가격 실시간 연동",
-    aiAnalysisSummary: "당도가 높고 표면 흠집이 거의 없는 우수한 사과입니다.",
-    crossSellRecommendation: {
-      itemName: "수제 그래놀라",
-      shopName: "싱싱청과",
-      distance: "30m",
-      discountOffer: "10% OFF",
-      recipeName: "사과 샐러드 패키지",
-    },
-  });
+  const [inspectionResult, setInspectionResult] = useState<InspectionResult | null>(null);
 
   const sampleImages = {
     apple:
-      "https://plus.unsplash.com/premium_photo-1724249990837-f6dfcb7f3eaa?auto=format&fit=crop&w=800&q=80",
+      "https://lh3.googleusercontent.com/aida-public/AB6AXuDPrTKft45sE79PKyzcNxkpR7jiC94SaLZBeIpOho8PS6MfxcM24FBq5mPUD-KQhGgWNaVSPodpYSrMEPgddi0FNoTIy5QByRJ1O29bN2GoPyZ_bHdyNd5oLvlWDvbU1IxCuntiDyiletIj2q2SHcDwhgzncBso0wtlMj6iVE_kmfeXMGwbx6c0QNetTRXhf0m91HziI7YK5e-OWXOgc84THY9rQc3IN9xQ2glKexbCJmw0SCF4BrhWOw",
     radish:
-      "https://plus.unsplash.com/premium_photo-1726736510146-4703a18e3c6e?auto=format&fit=crop&w=800&q=80",
+      "https://lh3.googleusercontent.com/aida-public/AB6AXuBPBsS9pCM36y_2W6Vey0_5EC88SbxJT0t7GhjPXTqlYnaqTLo0NcPV6LFPJH4p8pI2sVispE0SOUUZyXGM7sHnAfTR02l7Ecz_PaENAV0UotAJL_GFQ2-MlPFcyoWoDVhUhvNa5dMeWWVko5qNl4VottlwisP_V2H8J6BvPu4fkLyQ-lAczaPkDamw8VL1R4HpBabcEkOJK7MtMocMNcOhlDpmlg45ZYg8F7B_zr9m5nvPktBbJxjvUA",
     potato:
-      "https://plus.unsplash.com/premium_photo-1724256031338-b5bfba816cfd?auto=format&fit=crop&w=800&q=80",
+      "https://lh3.googleusercontent.com/aida-public/AB6AXuDfqKKJROFYLfdHz4E-dhGPYRcjGFgyiVvPNDRmUVShw2Z2MABEaTDMc3Yh-oO77txFIhM4Fko4dPgwWTc4rYljeZnxkIfQcnrLP9JEOVhqXwiVmd5UxKDOBLXFugDB2zSgwLp4FR-guYiZtxriswvRdiFTkbxW2WcC9swB-xuvAG4kr3R3OIomDMdUDdfW0t8d2__fEnZGUFSVN-2Y6i8MIpXxpixAPZcIYGT2pHfzOSqTFdiVjw5Bfg",
   };
 
   // Start / Stop Camera
@@ -173,12 +163,10 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
     setShowResult(false);
 
     try {
-      const json = await analyzeProduct({
-        sampleId: key,
-        imageBase64: activeBase64,
-      });
+      const json = await analyzeProduct({ sampleId: key, imageBase64: activeBase64 });
       if (json.success && json.data) {
         setInspectionResult(json.data);
+        setSellingPriceInput(json.data.sellingPrice ? String(json.data.sellingPrice) : "");
       }
     } catch (err) {
       console.error(err);
@@ -204,6 +192,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
   const handleRetake = () => {
     setShowResult(false);
     setCapturedImage(null);
+    setSellingPriceInput("");
     if (videoRef.current && streamRef.current) {
       videoRef.current.play().catch(() => {});
     }
@@ -211,6 +200,11 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
 
   const handleMerchantRegister = () => {
     if (inspectionResult) {
+      if (!sellingPriceInput.trim()) {
+        alert("판매가를 입력해주세요.");
+        return;
+      }
+      const price = parseInt(sellingPriceInput, 10) || 0;
       const merchantShop = userDisplayName || "양동수산";
       const newProductItem: ProductItem = {
         id: `merchant-scan-${Date.now()}`,
@@ -218,10 +212,10 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
         shopName: merchantShop,
         distance: "양동전통시장 내 점포",
         timeAgo: "AI 스캔 즉시 등록",
-        price: inspectionResult.sellingPrice,
+        price,
         publicPrice: inspectionResult.publicMarketPrice,
-        priceTag: `공공 시세 대비 ${inspectionResult.priceDiffPercent}% 저렴`,
-        grade: inspectionResult.grade,
+        priceTag: buildPriceTag(price, inspectionResult.publicMarketPrice),
+        grade: (inspectionResult.grade ? inspectionResult.grade.replace(/Trafficlight|SAFE|CAUTION|ALERT/gi, "").trim() || "A+" : "A+") as any,
         category: inspectionResult.category as any,
         imageUrl: currentViewImage,
         freshnessScore: inspectionResult.freshnessScore,
@@ -248,22 +242,29 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
 
   const handleSaveResult = () => {
     if (inspectionResult) {
+      if (!sellingPriceInput.trim()) {
+        alert("판매가를 입력해주세요.");
+        return;
+      }
+      const price = parseInt(sellingPriceInput, 10) || 0;
       const newSavedItem: ProductItem = {
         id: `scan-${Date.now()}`,
         title: inspectionResult.productName,
-        shopName: inspectionResult.category === "신선야채" ? "호남상회" : inspectionResult.category === "과일" ? "싱싱청과" : inspectionResult.category === "수산물" ? "양동수산" : inspectionResult.category === "정육" ? "양동정육" : "싱싱청과",
+        shopName: inspectionResult.category === "수산물" ? "양동수산" : inspectionResult.category === "정육" ? "양동정육" : "싱싱청과",
         distance: "촬영 장소",
         timeAgo: "방금 스캔",
-        price: inspectionResult.sellingPrice,
+        price,
         publicPrice: inspectionResult.publicMarketPrice,
-        priceTag: `공공 시세 대비 ${inspectionResult.priceDiffPercent}% 저렴`,
-        grade: inspectionResult.grade,
+        priceTag: buildPriceTag(price, inspectionResult.publicMarketPrice),
+        grade: (inspectionResult.grade ? inspectionResult.grade.replace(/Trafficlight|SAFE|CAUTION|ALERT/gi, "").trim() || "A+" : "A+") as any,
         category: inspectionResult.category as any,
         imageUrl: currentViewImage,
         freshnessScore: inspectionResult.freshnessScore,
         defectScore: inspectionResult.defectScore,
         uniformityScore: inspectionResult.uniformityScore,
         description: inspectionResult.aiAnalysisSummary,
+        isScannedProduct: true,
+        phone: "062-360-7000",
       };
 
       onSaveToSavedList(newSavedItem);
@@ -331,15 +332,8 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
           </span>
         )}
 
-        {/* Top Right: History & Menu */}
+        {/* Top Right: Close Button */}
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => onNavigateToSavedTab()}
-            className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white active:scale-90 transition-transform border border-white/20 hover:bg-black/60"
-            title="스캔 이력"
-          >
-            <span className="material-symbols-outlined text-xl">history</span>
-          </button>
           <button
             onClick={onClose}
             className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white active:scale-90 transition-transform border border-white/20 hover:bg-black/60"
@@ -429,7 +423,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
           </div>
         ) : (
           /* Scanned Produce Result Card Sheet */
-          <div className="bg-white text-black rounded-2xl shadow-2xl border border-[#E2E8F0] p-4 flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="bg-white text-black rounded-2xl shadow-2xl border border-[#E2E8F0] p-4 flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 max-h-[82vh] overflow-y-auto">
             {/* Title & Grade Header */}
             <div className="flex justify-between items-start">
               <div>
@@ -440,70 +434,128 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
                   {inspectionResult?.productName}
                 </h2>
               </div>
-              <div className="bg-[#DCFCE7] text-[#166534] px-2.5 py-1 rounded-full font-extrabold text-xs flex items-center gap-1 border border-[#10B981]/20">
+              <div className="bg-[#DCFCE7] text-[#166534] px-2.5 py-1 rounded-full font-extrabold text-xs flex items-center gap-1 border border-[#10B981]/20 shadow-xs flex-shrink-0">
                 <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
-                  check_circle
+                  verified
                 </span>
-                <span>AI {inspectionResult?.grade}</span>
+                <span>
+                  품질 등급 {inspectionResult?.grade ? inspectionResult.grade.replace(/Trafficlight|SAFE|CAUTION|ALERT/gi, "").trim() || "A+" : "A+"}
+                </span>
               </div>
             </div>
 
-            {/* Price & Analysis Details */}
-            <div className="bg-[#F8FAFC] rounded-xl p-3 border border-[#E2E8F0] flex justify-between items-center">
-              <div>
-                <span className="text-xs font-semibold text-[#64748B]">추천 판매가</span>
-                <div className="text-lg font-black text-[#0F172A]">
-                  {inspectionResult?.sellingPrice.toLocaleString()}원
+            {/* Price Details: 공공 판매가 */}
+            <div className="bg-[#F8FAFC] rounded-xl p-3.5 border border-[#E2E8F0] flex items-center justify-between">
+              <span className="text-xs font-bold text-[#64748B] flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-sm text-[#0052FF]">account_balance</span>
+                공공 판매가{inspectionResult?.publicPriceUnit === "kg" ? " (1kg 기준)" : ""}
+              </span>
+              <div className="text-lg font-black text-[#0F172A]">
+                {inspectionResult?.publicMarketPrice ? `${inspectionResult.publicMarketPrice.toLocaleString()}원` : "-"}
+              </div>
+            </div>
+
+            {/* 이 매대 판매가 — AI는 카메라만으로 실제 판매가를 알 수 없어 직접 입력받는다 */}
+            <div className="bg-white rounded-xl p-3.5 border border-[#0052FF]/30 flex items-center justify-between gap-3">
+              <span className="text-xs font-bold text-[#64748B] flex items-center gap-1.5 shrink-0">
+                <span className="material-symbols-outlined text-sm text-[#0052FF]">sell</span>
+                이 매대 판매가
+              </span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={sellingPriceInput}
+                  onChange={(e) => setSellingPriceInput(e.target.value)}
+                  placeholder="가격 입력"
+                  className="w-24 text-right text-lg font-black text-[#0F172A] bg-transparent border-b border-slate-300 focus:outline-none focus:border-[#0052FF]"
+                />
+                <span className="text-sm font-bold text-[#64748B]">원</span>
+              </div>
+            </div>
+
+            {/* AI 정밀 분석 지표 */}
+            <div className="space-y-2.5">
+              <div className="text-xs font-extrabold text-[#0F172A] flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm text-[#0052FF]">analytics</span>
+                AI 정밀 분석 지표
+              </div>
+              <div className="grid grid-cols-3 gap-2 bg-[#F8FAFC] p-2.5 rounded-xl border border-[#E2E8F0] text-center">
+                <div className="bg-white p-2 rounded-lg border border-slate-100 shadow-2xs">
+                  <div className="text-[10px] font-bold text-slate-500">신선도</div>
+                  <div className="text-sm font-black text-emerald-600 mt-0.5">
+                    {inspectionResult?.freshnessScore ?? 98}점
+                  </div>
+                </div>
+                <div className="bg-white p-2 rounded-lg border border-slate-100 shadow-2xs">
+                  <div className="text-[10px] font-bold text-slate-500">결함도</div>
+                  <div className="text-sm font-black text-blue-600 mt-0.5">
+                    {inspectionResult?.defectScore ?? 5}점
+                  </div>
+                </div>
+                <div className="bg-white p-2 rounded-lg border border-slate-100 shadow-2xs">
+                  <div className="text-[10px] font-bold text-slate-500">균일도</div>
+                  <div className="text-sm font-black text-indigo-600 mt-0.5">
+                    {inspectionResult?.uniformityScore ?? 92}점
+                  </div>
                 </div>
               </div>
-              <div className="text-right">
-                <span className="text-xs font-semibold text-[#64748B]">공공 시세 대비</span>
-                <div className="text-xs font-bold text-[#0052FF] bg-[#EFF6FF] border border-[#BFDBFE] px-2 py-0.5 rounded mt-0.5 inline-block">
-                  {inspectionResult?.priceDiffPercent}% 저렴
+
+              {/* 세부 항목별 백분율 및 프로그래스 바 */}
+              <div className="space-y-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#E2E8F0] text-xs">
+                <div>
+                  <div className="flex justify-between items-center text-[11px] mb-1">
+                    <span className="font-bold text-[#334155]">신선도 (광택 / 수분도 / 신선도)</span>
+                    <span className="font-black text-[#10B981]">{inspectionResult?.freshnessScore ?? 98}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-200/80 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-[#10B981] rounded-full transition-all duration-500"
+                      style={{ width: `${inspectionResult?.freshnessScore ?? 98}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center text-[11px] mb-1">
+                    <span className="font-bold text-[#334155]">표면 무결성 (상처 / 무름 없음)</span>
+                    <span className="font-black text-[#0052FF]">
+                      {inspectionResult?.defectScore !== undefined ? Math.max(0, 100 - inspectionResult.defectScore) : 95}%
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-200/80 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-[#0052FF] rounded-full transition-all duration-500"
+                      style={{ width: `${inspectionResult?.defectScore !== undefined ? Math.max(0, 100 - inspectionResult.defectScore) : 95}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center text-[11px] mb-1">
+                    <span className="font-bold text-[#334155]">크기 / 중량 균일도</span>
+                    <span className="font-black text-indigo-600">{inspectionResult?.uniformityScore ?? 92}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-200/80 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-indigo-600 rounded-full transition-all duration-500"
+                      style={{ width: `${inspectionResult?.uniformityScore ?? 92}%` }}
+                    ></div>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <p className="text-xs text-[#475569] font-medium leading-relaxed">
-              {inspectionResult?.aiAnalysisSummary}
-            </p>
-
-            {/* AI Score Breakdown (freshness / defect / uniformity) */}
-            {inspectionResult && (
-              <div className="bg-[#F8FAFC] rounded-xl p-3 border border-[#E2E8F0] grid grid-cols-3 gap-2 text-center">
-                <div>
-                  <div className="text-[10px] font-bold text-[#64748B]">신선도</div>
-                  <div className="text-sm font-extrabold text-[#10B981]">{inspectionResult.freshnessScore}%</div>
-                </div>
-                <div>
-                  <div className="text-[10px] font-bold text-[#64748B]">표면 결함</div>
-                  <div className="text-sm font-extrabold text-[#10B981]">{inspectionResult.defectScore}%</div>
-                </div>
-                <div>
-                  <div className="text-[10px] font-bold text-[#64748B]">균일도</div>
-                  <div className="text-sm font-extrabold text-[#0052FF]">{inspectionResult.uniformityScore}%</div>
-                </div>
+            {/* AI 스캔 종합 의견 */}
+            <div className="bg-blue-50/70 rounded-xl p-3 border border-blue-100 space-y-1">
+              <div className="text-xs font-extrabold text-[#0052FF] flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">psychology</span>
+                AI 스캔 종합 의견
               </div>
-            )}
-
-            {/* Cross-sell Recommendation */}
-            {inspectionResult?.crossSellRecommendation && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="text-[10px] font-bold text-amber-700 flex items-center gap-1">
-                    <span className="material-symbols-outlined text-xs">add_shopping_cart</span>
-                    함께 사면 좋은 상품
-                  </div>
-                  <div className="text-xs font-bold text-[#0F172A] truncate mt-0.5">
-                    {inspectionResult.crossSellRecommendation.shopName} · {inspectionResult.crossSellRecommendation.itemName}
-                    <span className="text-[#64748B] font-medium"> ({inspectionResult.crossSellRecommendation.distance})</span>
-                  </div>
-                </div>
-                <span className="text-[10px] font-extrabold text-white bg-amber-600 px-2 py-1 rounded-full flex-shrink-0">
-                  {inspectionResult.crossSellRecommendation.discountOffer}
-                </span>
-              </div>
-            )}
+              <p className="text-xs text-[#334155] font-medium leading-relaxed">
+                {inspectionResult?.aiAnalysisSummary || "당도와 색택이 우수하며 표면 무름이 없는 최상급 신선 상품입니다."}
+              </p>
+            </div>
 
             {/* Action Buttons */}
             <div className="flex gap-2 pt-1">
@@ -515,23 +567,23 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
                 다시 촬영
               </button>
 
-              {userRole === "merchant" ? (
+              <button
+                onClick={handleSaveResult}
+                className="flex-1 py-3 bg-[#0052FF] hover:bg-[#0043D6] text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>
+                  bookmark
+                </span>
+                저장목록에 저장
+              </button>
+
+              {userRole === "merchant" && (
                 <button
                   onClick={handleMerchantRegister}
                   className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-xs font-extrabold rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
                 >
                   <span className="material-symbols-outlined text-base">storefront</span>
-                  내 점포 물건으로 즉시 등록
-                </button>
-              ) : (
-                <button
-                  onClick={handleSaveResult}
-                  className="flex-1 py-3 bg-[#0052FF] hover:bg-[#0043D6] text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
-                >
-                  <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>
-                    bookmark
-                  </span>
-                  저장목록에 저장
+                  점포 물건 등록
                 </button>
               )}
             </div>

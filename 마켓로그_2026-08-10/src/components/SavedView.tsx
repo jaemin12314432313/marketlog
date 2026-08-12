@@ -78,30 +78,23 @@ export const SavedView: React.FC<SavedViewProps> = ({
               </p>
             </div>
           ) : (
-            <div className="bg-surface-white rounded-2xl border border-[#E2E8F0] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)] divide-y divide-[#F1F5F9]">
+            <div className="divide-y divide-[#E2E8F0]">
               {scannedProducts.map((product) => (
                 <article
                   key={product.id}
-                  className="flex gap-4 py-3.5 group hover:bg-surface-container-low transition-colors rounded-xl px-1 relative"
+                  onClick={() => onSelectProduct({ ...product, isScannedProduct: true })}
+                  className="flex gap-4 py-3.5 group hover:bg-surface-container-low transition-colors rounded-xl px-1 relative cursor-pointer"
                 >
                   <img
                     src={product.imageUrl}
                     alt={product.title}
-                    onClick={() => onSelectProduct(product)}
-                    className="w-20 h-20 rounded-xl object-cover border border-[#E2E8F0] flex-shrink-0 cursor-pointer shadow-sm"
+                    className="w-20 h-20 rounded-xl object-cover border border-[#E2E8F0] flex-shrink-0 shadow-sm"
                   />
                   <div className="flex-1 flex flex-col justify-between min-w-0">
                     <div>
                       <div className="flex justify-between items-start gap-2">
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="bg-blue-100 text-trust-blue text-[10px] font-extrabold px-1.5 py-0.5 rounded flex items-center gap-0.5 flex-shrink-0">
-                            <span className="material-symbols-outlined text-xs">auto_awesome</span>
-                            AI 스캔
-                          </span>
-                          <h3
-                            onClick={() => onSelectProduct(product)}
-                            className="text-sm font-bold text-on-surface line-clamp-1 cursor-pointer hover:text-trust-blue"
-                          >
+                          <h3 className="text-sm font-bold text-on-surface line-clamp-1 group-hover:text-trust-blue">
                             {product.title}
                           </h3>
                         </div>
@@ -123,13 +116,11 @@ export const SavedView: React.FC<SavedViewProps> = ({
 
                       <p className="text-xs text-outline font-medium mt-1 flex items-center gap-1">
                         <span>{product.shopName}</span>
-                        <span>·</span>
-                        <span>{product.timeAgo || product.distance}</span>
                       </p>
                     </div>
 
                     <div className="flex justify-between items-end mt-2">
-                      <div className="text-sm font-extrabold text-trust-blue">
+                      <div className="text-sm font-extrabold text-slate-900">
                         {product.price.toLocaleString()}원
                       </div>
                       <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-[#DCFCE7] text-[#166534]">
@@ -156,7 +147,7 @@ export const SavedView: React.FC<SavedViewProps> = ({
               </p>
             </div>
           ) : (
-            <div className="bg-surface-white rounded-2xl border border-[#E2E8F0] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.05)] divide-y divide-[#F1F5F9]">
+            <div className="divide-y divide-[#E2E8F0]">
               {bookmarkedProducts.map((product) => (
                 <article
                   key={product.id}
@@ -196,12 +187,12 @@ export const SavedView: React.FC<SavedViewProps> = ({
                       </div>
 
                       <p className="text-xs text-outline font-medium mt-1">
-                        {product.shopName} · {product.distance}
+                        {product.shopName}
                       </p>
                     </div>
 
                     <div className="flex justify-between items-end mt-2">
-                      <span className="text-sm font-extrabold text-trust-blue">
+                      <span className="text-sm font-extrabold text-slate-900">
                         {product.price.toLocaleString()}원
                       </span>
                       <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-[#DCFCE7] text-[#166534]">

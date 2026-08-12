@@ -104,28 +104,11 @@ export function fetchDocentStory(payload: {
   });
 }
 
-export interface KakaoRegisterResponse {
-  success: boolean;
-  product: ProductItem;
-}
-
-// 판매자(merchant) 계정으로 로그인한 상태여야 호출 가능 (Authorization 토큰 필요).
-// 등록되는 상품의 shopName은 로그인 계정의 shop_name으로 서버에서 자동 지정됨.
-export function kakaoRegister(payload: {
-  chatText?: string;
-  imageBase64?: string;
-}): Promise<KakaoRegisterResponse> {
-  return apiFetch<KakaoRegisterResponse>("/api/kakao-register", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
 // ---------- 인증 ----------
 
 export interface AuthUser {
   id: string;
-  email: string;
+  username: string;
   role: "customer" | "merchant";
   displayName: string;
   shopName?: string | null;
@@ -138,10 +121,11 @@ export interface AuthResponse {
 }
 
 export function register(payload: {
-  email: string;
+  username: string;
   password: string;
   role: "customer" | "merchant";
   displayName: string;
+  phone: string;
   shopName?: string;
 }): Promise<AuthResponse> {
   return apiFetch<AuthResponse>("/api/v1/auth/register", {
@@ -150,7 +134,7 @@ export function register(payload: {
   });
 }
 
-export function login(payload: { email: string; password: string }): Promise<AuthResponse> {
+export function login(payload: { username: string; password: string }): Promise<AuthResponse> {
   return apiFetch<AuthResponse>("/api/v1/auth/login", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -159,6 +143,20 @@ export function login(payload: { email: string; password: string }): Promise<Aut
 
 export function fetchMe(): Promise<{ success: boolean; user: AuthUser }> {
   return apiFetch("/api/v1/auth/me");
+}
+
+export function findUsername(payload: { displayName: string; phone: string }): Promise<{ success: boolean; username: string }> {
+  return apiFetch("/api/v1/auth/find-username", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function resetPassword(payload: { username: string }): Promise<{ success: boolean; tempPassword: string }> {
+  return apiFetch("/api/v1/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 // ---------- 저장/찜 ----------
