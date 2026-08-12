@@ -1,0 +1,9 @@
+.git/
+.env
+.env.*
+!.env.example
+marketlog.db
+marketlog.db.bak-*
+__pycache__/
+*.pyc
+uploads/

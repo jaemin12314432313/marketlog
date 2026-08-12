@@ -7,7 +7,7 @@ import csv
 import os
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
-CSV_PATH = os.path.join(DATA_DIR, "광주광역시_전통시장_점포_현황_20211119.csv")
+CSV_PATH = os.path.join(DATA_DIR, "gwangju_market_stores_20211119.csv")
 MARKET_ID = "yangdong"
 
 # 분류(raw CSV category) -> (category key, icon, badge color, badge label)
