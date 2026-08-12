@@ -17,14 +17,24 @@ from kamis import get_public_price as get_kamis_price
 
 router = APIRouter(tags=["Consumer"])
 
-# ★ 모델 전역 로드 (서버 시작 시 1회)
+# 체크포인트 2개(약 156MB)를 서버 기동 시점에 바로 올리면, 메모리가 빠듯한 배포
+# 환경(예: Render 무료 512MB)에서는 첫 요청을 받기도 전에 부팅 중에 OOM으로 죽어버려서
+# 로그인/피드/지도 등 AI 스캔과 무관한 기능까지 전부 못 쓰게 된다. 그래서 실제로 AI
+# 스캔이 처음 호출될 때 딱 한 번만 지연 로드한다 — 그러면 최소한 메모리가 부족해도
+# AI 스캔 기능만 실패하고 나머지 앱은 계속 살아있다.
 device = torch.device("cpu")
+torch.set_num_threads(1)
 item_model = item_classes = item_img_size = None
 grading_model = grade_order = grading_img_size = None
+_models_load_attempted = False
 
-def load_models():
+def ensure_models_loaded():
     global item_model, item_classes, item_img_size
     global grading_model, grade_order, grading_img_size
+    global _models_load_attempted
+    if _models_load_attempted:
+        return
+    _models_load_attempted = True
     try:
         from marketlog_vision.infer_pipeline import load_item_model, load_grading_model
         item_model, item_classes, item_img_size = load_item_model(
@@ -36,8 +46,6 @@ def load_models():
         print("AI 모델 로드 완료")
     except Exception as e:
         print(f"모델 로드 실패 (Mock 모드): {e}")
-
-load_models()
 
 # 등급 매핑
 GRADE_MAP = {"특": "A+", "상": "A", "보통": "B"}
@@ -230,6 +238,9 @@ class ScanRequest(BaseModel):
 
 @router.post("/api/analyze-product")
 async def analyze_product(request: ScanRequest):
+    if request.imageBase64:
+        await asyncio.to_thread(ensure_models_loaded)
+
     # base64 이미지 있으면 실제 모델 추론
     if request.imageBase64 and item_model is not None:
         try:
