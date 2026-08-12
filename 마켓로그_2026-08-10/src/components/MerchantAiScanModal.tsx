@@ -256,7 +256,7 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
       />
 
       {/* Bottom Shutter & Controls Container */}
-      <div className="relative z-30 w-full px-4 pb-8 max-w-md mx-auto space-y-3">
+      <div className="relative z-30 w-full px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] max-w-md mx-auto space-y-3">
         <div className="flex items-center justify-center gap-8 px-6 pt-2">
           {/* Left Gallery Thumbnail Button */}
           <button

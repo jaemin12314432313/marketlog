@@ -279,7 +279,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-x-0 top-0 bottom-[72px] md:bottom-0 z-40 bg-black text-white flex flex-col justify-between overflow-hidden select-none">
+    <div className="fixed inset-x-0 top-0 bottom-[calc(72px+env(safe-area-inset-bottom))] md:bottom-0 z-40 bg-black text-white flex flex-col justify-between overflow-hidden select-none">
       {/* Background Live Camera Video or Captured Image Viewport */}
       <div className="absolute inset-0 z-0 bg-black flex items-center justify-center overflow-hidden">
         {/* Real Live Camera Stream */}

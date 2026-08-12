@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { Capacitor } from "@capacitor/core";
+import { App as CapacitorApp } from "@capacitor/app";
 import {
   TabType,
   MarketInfo,
@@ -79,6 +81,30 @@ export default function App() {
   const [cartItems, setCartItems] = useState<ProductItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+
+  // 이 앱은 모달/탭 전환을 브라우저 히스토리 없이 컴포넌트 상태로만 처리해서, 안드로이드
+  // 뒤로가기(하드웨어 버튼/제스처)가 기본 동작(WebView 히스토리 뒤로가기)을 타면 갈 곳이
+  // 없어 곧바로 앱이 꺼져버린다. 열려있는 모달/탭을 앱 상태 기준으로 직접 닫아주고,
+  // 더 이상 닫을 게 없는 홈 화면에서만 앱을 백그라운드로 보낸다(완전 종료 아님).
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const listener = CapacitorApp.addListener("backButton", () => {
+      if (isNotificationOpen) {
+        setIsNotificationOpen(false);
+      } else if (selectedProduct) {
+        setSelectedProduct(null);
+      } else if (isAiScanOpen) {
+        setIsAiScanOpen(false);
+      } else if (activeTab !== "home") {
+        setActiveTab("home");
+      } else {
+        CapacitorApp.minimizeApp();
+      }
+    });
+    return () => {
+      listener.then((l) => l.remove());
+    };
+  }, [isNotificationOpen, selectedProduct, isAiScanOpen, activeTab]);
 
   const handleLoginSuccess = (role: UserRole, displayName: string, shopName?: string) => {
     setUserRole(role);

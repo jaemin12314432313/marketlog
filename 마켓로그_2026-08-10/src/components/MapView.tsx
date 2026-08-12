@@ -535,7 +535,7 @@ export const MapView: React.FC<MapViewProps> = ({
       {/* Floating Current Location Button (Bottom Right) */}
       <div
         className={`absolute right-4 z-30 flex flex-col items-end gap-2 transition-all duration-300 ${
-          isDocentExpanded ? "bottom-[330px]" : "bottom-[155px]"
+          isDocentExpanded ? "bottom-[calc(330px+env(safe-area-inset-bottom))]" : "bottom-[calc(155px+env(safe-area-inset-bottom))]"
         }`}
       >
         <button
@@ -563,7 +563,7 @@ export const MapView: React.FC<MapViewProps> = ({
 
         return (
           <div
-            className={`absolute bottom-[76px] left-0 right-0 z-30 px-3 max-w-md mx-auto ${
+            className={`absolute bottom-[calc(76px+env(safe-area-inset-bottom))] left-0 right-0 z-30 px-3 max-w-md mx-auto ${
               isDragging ? "" : "transition-transform duration-300 ease-out"
             }`}
             style={{
