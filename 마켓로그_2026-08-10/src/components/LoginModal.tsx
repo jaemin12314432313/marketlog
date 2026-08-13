@@ -34,7 +34,6 @@ interface LoginModalProps {
     username?: string,
     phone?: string
   ) => void;
-  currentRole?: UserRole;
   isFullScreen?: boolean;
 }
 
@@ -94,6 +93,16 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     setIsSubmitting(true);
     try {
       const res = await login({ username: loginId.trim(), password: loginPw });
+      // 로그인 화면의 고객/판매자 탭은 장식이 아니라 실제 계정 유형과 맞춰본다 —
+      // 아이디/비번만 맞으면 탭 선택과 무관하게 로그인되던 걸 막는다.
+      if (res.user.role !== selectedRole) {
+        setLoginError(
+          selectedRole === "merchant"
+            ? "이 계정은 일반 고객 계정입니다. '일반 고객' 탭에서 로그인해주세요."
+            : "이 계정은 판매자(상인) 계정입니다. '판매자' 탭에서 로그인해주세요."
+        );
+        return;
+      }
       setAuthToken(res.token);
       onLoginSuccess(
         res.user.role,
@@ -573,7 +582,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 disabled={isSubmitting}
                 className="w-full bg-[#0052FF] hover:bg-[#0046E0] text-white py-3 rounded-xl font-extrabold text-xs sm:text-sm shadow-md transition-all cursor-pointer mt-2"
               >
-                {isSubmitting ? "가입 처리 중..." : "회원가입 완료"}
+                {isSubmitting
+                  ? "가입 처리 중..."
+                  : selectedRole === "merchant"
+                  ? "다음: 점포 위치 등록"
+                  : "회원가입 완료"}
               </button>
 
               <button
@@ -764,7 +777,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       {/* 5. Footer Copyright */}
       <div className="text-center pt-2 space-y-0.5 border-t border-slate-200/60">
         <p className="text-[11px] text-[#94A3B8] font-medium">
-          © 2024 MarketLog AI Logistics Corp.
+          © {new Date().getFullYear()} MarketLog AI Logistics Corp.
         </p>
       </div>
     </div>

@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { Capacitor } from "@capacitor/core";
+import { App as CapacitorApp } from "@capacitor/app";
 import { ProductItem } from "../types";
 import { analyzeProduct } from "../lib/api";
 
@@ -20,6 +22,7 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [hasCameraStream, setHasCameraStream] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [cameraRestartTick, setCameraRestartTick] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -76,6 +79,25 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
     return () => {
       isMounted = false;
       stopCamera();
+    };
+  }, [isOpen, cameraRestartTick]);
+
+  // 앱이 백그라운드로 가면 카메라 스트림을 끄고, 돌아오면 다시 켠다.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || !isOpen) return;
+    const listener = CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+      if (!isActive) {
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+        }
+        setHasCameraStream(false);
+      } else {
+        setCameraRestartTick((t) => t + 1);
+      }
+    });
+    return () => {
+      listener.then((l) => l.remove());
     };
   }, [isOpen]);
 
@@ -140,8 +162,7 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
         shopName: shopName,
         distance: "양동전통시장 내 점포",
         timeAgo: "방금 전 AI 스캔 등록",
-        phone: "062-360-7000",
-        grade: (data.grade ? data.grade.replace(/Trafficlight|SAFE|CAUTION|ALERT/gi, "").trim() || "A+" : "A+") as any,
+        grade: (data.grade || "A+") as any,
         imageUrl: capturedImg,
         isScannedProduct: true,
         isMerchantUploaded: true,

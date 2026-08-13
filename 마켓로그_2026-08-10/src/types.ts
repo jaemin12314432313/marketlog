@@ -22,7 +22,6 @@ export interface ProductItem {
   description: string;
   isMerchantUploaded?: boolean;
   isScannedProduct?: boolean;
-  phone?: string;
   region?: string;
   marketId?: string;
   createdAt?: string;

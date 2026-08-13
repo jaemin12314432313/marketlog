@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
+import { TextToSpeech } from "@capacitor-community/text-to-speech";
 import { MarketInfo } from "../types";
 import { fetchMapConfig, fetchMapStores, fetchDocentStory, MapStorePin } from "../lib/api";
 
 interface MapViewProps {
   selectedMarket: MarketInfo;
   onOpenAiScan: () => void;
-  onSelectShop: (shopName: string) => void;
+  // 상품 상세 등 다른 화면에서 "이 상점 지도에서 확인하기"로 넘어왔을 때, 그 상점으로
+  // 바로 이동/포커스하기 위한 이름. 처리 후 onFocusHandled로 부모 쪽 상태를 비운다.
+  focusShopName?: string | null;
+  onFocusHandled?: () => void;
 }
 
 const NAVER_SCRIPT_ID = "naver-maps-sdk";
@@ -86,7 +90,8 @@ function buildMarkerContent(store: MapStorePin): string {
 export const MapView: React.FC<MapViewProps> = ({
   selectedMarket,
   onOpenAiScan,
-  onSelectShop,
+  focusShopName,
+  onFocusHandled,
 }) => {
   const [isPlayingDocent, setIsPlayingDocent] = useState(false);
   const [docentElapsedSec, setDocentElapsedSec] = useState(0);
@@ -117,8 +122,8 @@ export const MapView: React.FC<MapViewProps> = ({
         .slice(0, 8)
     : [];
 
-  const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
   const speechStartRef = useRef<number | null>(null);
+  const speechTokenRef = useRef<number>(0);
   const dragOffsetYRef = useRef<number>(0);
   const touchStartYRef = useRef<number | null>(null);
   const isDocentExpandedRef = useRef<boolean>(isDocentExpanded);
@@ -197,7 +202,7 @@ export const MapView: React.FC<MapViewProps> = ({
 
   // 시장을 바꾸면 이전 시장의 점포에 대한 도슨트 패널은 더 이상 유효하지 않으므로 닫는다.
   useEffect(() => {
-    window.speechSynthesis?.cancel();
+    TextToSpeech.stop().catch(() => {});
     setActivePin(null);
     setCurrentScript("");
     setIsPlayingDocent(false);
@@ -360,8 +365,8 @@ export const MapView: React.FC<MapViewProps> = ({
 
       naver.maps.Event.addListener(marker, "click", () => {
         setActivePin(store.name);
-        onSelectShop(store.name);
         setCurrentScript("");
+        setIsDocentExpanded(true);
         handleFetchAiDocent(store);
       });
 
@@ -389,35 +394,37 @@ export const MapView: React.FC<MapViewProps> = ({
   }, [isPlayingDocent, docentTotalSec]);
 
   const speakDocent = (text: string) => {
-    if (!("speechSynthesis" in window)) {
-      setIsPlayingDocent(true);
-      return;
-    }
-    window.speechSynthesis.cancel();
     const textToSpeak = text.replace(/"/g, "");
     const totalSec = estimateSpeechSeconds(textToSpeak);
     setDocentTotalSec(totalSec);
     setDocentElapsedSec(0);
 
-    const utterance = new SpeechSynthesisUtterance(textToSpeak);
-    utterance.lang = "ko-KR";
-    utterance.rate = SPEECH_RATE;
-    utterance.onstart = () => {
-      speechStartRef.current = Date.now();
-    };
-    utterance.onend = () => {
-      speechStartRef.current = null;
-      setDocentElapsedSec(totalSec);
-      setIsPlayingDocent(false);
-    };
-    synthRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
+    const token = ++speechTokenRef.current;
+    speechStartRef.current = Date.now();
     setIsPlayingDocent(true);
+
+    // 안드로이드 WebView에는 window.speechSynthesis가 객체는 있지만 실제로 음성이
+    // 안 나온다(onstart조차 안 옴) — 네이티브 TTS로 브릿지하는 플러그인을 쓴다.
+    // speak()는 재생이 끝나야 resolve되므로, 그 시점을 onend 대용으로 쓴다.
+    TextToSpeech.speak({ text: textToSpeak, lang: "ko-KR", rate: SPEECH_RATE })
+      .then(() => {
+        if (speechTokenRef.current !== token) return; // 그 사이 새로 재생이 시작됐으면 무시
+        speechStartRef.current = null;
+        setDocentElapsedSec(totalSec);
+        setIsPlayingDocent(false);
+      })
+      .catch((err) => {
+        console.error("TTS 재생 실패", err);
+        if (speechTokenRef.current !== token) return;
+        speechStartRef.current = null;
+        setIsPlayingDocent(false);
+      });
   };
 
   const toggleDocentPlay = () => {
     if (isPlayingDocent) {
-      window.speechSynthesis.cancel();
+      speechTokenRef.current += 1; // 진행 중이던 재생의 완료 콜백을 무효화
+      TextToSpeech.stop().catch(() => {});
       speechStartRef.current = null;
       setIsPlayingDocent(false);
     } else {
@@ -522,22 +529,46 @@ export const MapView: React.FC<MapViewProps> = ({
     }
 
     setActivePin(store.name);
-    onSelectShop(store.name);
+    setCurrentScript("");
+    setIsDocentExpanded(true);
     handleFetchAiDocent(store);
   };
+
+  // 상품 상세 등 다른 화면의 "상점 위치 지도에서 확인하기"로 넘어왔을 때, 그 상점을
+  // 찾아 자동으로 지도 중심을 옮기고 마커를 선택한 것처럼 만든다. stores가 로드되고
+  // 지도 인스턴스가 만들어진 뒤에야 실행 가능하므로 둘 다 준비될 때까지 기다린다.
+  useEffect(() => {
+    if (!focusShopName || !mapRef.current || stores.length === 0) return;
+
+    const store = stores.find((s) => s.name === focusShopName);
+    if (store) {
+      const naver = (window as any).naver;
+      mapRef.current.setCenter(new naver.maps.LatLng(store.lat, store.lng));
+      if (mapRef.current.getZoom() < MIN_ZOOM_FOR_MARKERS) {
+        mapRef.current.setZoom(MIN_ZOOM_FOR_MARKERS);
+      }
+      setActivePin(store.name);
+      setCurrentScript("");
+      setIsDocentExpanded(true);
+      handleFetchAiDocent(store);
+    } else {
+      alert("이 상점은 아직 지도에 위치가 등록되지 않았어요.");
+    }
+    onFocusHandled?.();
+  }, [focusShopName, stores, naverLoaded]);
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-[#F0F3F4] text-on-surface">
       <div ref={mapElement} className="absolute inset-0 w-full h-full z-0" />
 
       {currentZoom < MIN_ZOOM_FOR_MARKERS && stores.length > 0 && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 bg-white/95 text-[#334155] text-xs font-semibold px-3 py-1.5 rounded-full shadow-md border border-[#E2E8F0] pointer-events-none">
+        <div className="absolute top-[calc(5rem+env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-20 bg-white/95 text-[#334155] text-xs font-semibold px-3 py-1.5 rounded-full shadow-md border border-[#E2E8F0] pointer-events-none">
           더 확대하면 점포가 표시됩니다
         </div>
       )}
 
       {/* Top Floating Search Bar */}
-      <div className="absolute top-4 left-4 right-4 z-30 max-w-lg mx-auto flex flex-col gap-2">
+      <div className="absolute top-[calc(1rem+env(safe-area-inset-top))] left-4 right-4 z-30 max-w-lg mx-auto flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <div className="flex-1 bg-white rounded-full shadow-lg flex items-center px-4 h-12 border border-outline-variant/30">
             <span className="material-symbols-outlined text-outline mr-2">search</span>

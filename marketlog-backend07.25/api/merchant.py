@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 import os
 import uuid
@@ -30,12 +30,27 @@ def resolve_store_id(db: Session, market_id: str, shop_name: str) -> "str | None
     return store.id if store else None
 
 
+def require_store_ready(db: Session, market_id: str, shop_name: str) -> Store:
+    """새 상품 등록은 점포 위치 + 연락처/영업시간이 채워져 있어야만 허용한다 — 상품은
+    있는데 지도엔 안 뜨고 연락할 방법도 없는 반쪽짜리 점포가 생기는 걸 막기 위함."""
+    store = (
+        db.query(Store)
+        .filter(Store.market_id == market_id, Store.name == shop_name)
+        .first()
+    )
+    if not store:
+        raise HTTPException(status_code=400, detail="상품을 등록하려면 먼저 '점포 위치 등록'을 해주세요.")
+    if not (store.phone or "").strip() or not (store.hours or "").strip():
+        raise HTTPException(status_code=400, detail="상품을 등록하려면 점포 정보에서 전화번호와 영업시간을 입력해주세요.")
+    return store
+
+
 # 수동 상품 등록/수정/삭제 (MerchantView 직접 입력 폼)
 class ProductIn(BaseModel):
     title: str
     category: str = "AI 추천상품"
-    price: int = 0
-    publicPrice: int = 0
+    price: int = Field(gt=0)
+    publicPrice: int = Field(0, ge=0)
     priceTag: str = ""
     grade: str = "A"
     imageUrl: str = ""
@@ -54,9 +69,10 @@ def create_product(
     db: Session = Depends(get_db),
 ):
     shop_name = require_merchant(current_user)
+    store = require_store_ready(db, "yangdong", shop_name)
     product = Product(
         market_id="yangdong",
-        store_id=resolve_store_id(db, "yangdong", shop_name),
+        store_id=store.id,
         region="광주광역시",
         title=payload.title,
         shop_name=shop_name,

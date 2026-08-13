@@ -43,14 +43,16 @@ export default function App() {
   const [userShopName, setUserShopName] = useState<string>("");
   const [userUsername, setUserUsername] = useState<string>("");
   const [userPhone, setUserPhone] = useState<string>("");
-  // 로그인 없이도 피드는 구경할 수 있어야 해서 기본값은 false(게스트) — 액션할 때만
-  // onOpenLogin 콜백으로 로그인을 유도한다. 앱을 새로 열 때마다 무조건 로그인 화면부터
-  // 막아서는 건 설치형 앱에서 특히 위화감이 크다.
+  // 앱은 항상 로그인 화면부터 시작한다. 저장된 토큰으로 세션이 복원되면(자동로그인)
+  // 아래 useEffect에서 바로 false로 내려가고, 복원 실패/토큰 없음이면 true로 유지된다.
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
   // 저장된 토큰으로 세션을 복원하는 동안 로그인 화면이 잠깐 번쩍였다 사라지는 걸 막기 위한 스플래시.
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [selectedRegion, setSelectedRegion] = useState<string>("광주광역시");
   const [selectedMarket, setSelectedMarket] = useState<MarketInfo>(MARKETS_DATA[0]);
+  // 상품 상세의 "상점 위치 지도에서 확인하기"에서 넘어왔을 때 지도가 바로 그 상점으로
+  // 이동/포커스하도록 전달하는 값 — MapView가 처리하고 나면 다시 null로 비운다.
+  const [mapFocusShopName, setMapFocusShopName] = useState<string | null>(null);
 
   const handleSelectRegion = (region: string) => {
     setSelectedRegion(region);
@@ -78,12 +80,13 @@ export default function App() {
       .finally(() => setIsFeedLoading(false));
   }, []);
 
-  // 저장된 토큰이 있으면 앱을 새로 열 때마다 다시 로그인하지 않고 세션을 복원한다.
-  // 토큰이 없거나 만료됐으면 조용히 게스트 상태로 둔다(로그인 화면을 강제로 띄우지 않음).
+  // 저장된 토큰이 있으면 앱을 새로 열 때마다 다시 로그인하지 않고 세션을 복원한다(자동로그인).
+  // 토큰이 없거나 만료됐으면 로그인 화면을 강제로 띄운다(게스트 진입 불가).
   useEffect(() => {
     const token = getAuthToken();
     if (!token) {
       setIsAuthChecking(false);
+      setIsLoginModalOpen(true);
       return;
     }
     fetchMe()
@@ -96,6 +99,7 @@ export default function App() {
       })
       .catch(() => {
         clearAuthToken();
+        setIsLoginModalOpen(true);
       })
       .finally(() => setIsAuthChecking(false));
   }, []);
@@ -115,6 +119,9 @@ export default function App() {
   const [cartItems, setCartItems] = useState<ProductItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  // 상인이 상품 등록/수정 폼에 뭔가 입력해둔 상태인지 — 뒤로가기가 홈(상인 화면)에서
+  // 바로 앱을 백그라운드로 보내버리기 전에 이걸 확인해서 작성 중인 내용을 지키게 한다.
+  const [isMerchantFormDirty, setIsMerchantFormDirty] = useState(false);
 
   // 이 앱은 모달/탭 전환을 브라우저 히스토리 없이 컴포넌트 상태로만 처리해서, 안드로이드
   // 뒤로가기(하드웨어 버튼/제스처)가 기본 동작(WebView 히스토리 뒤로가기)을 타면 갈 곳이
@@ -131,6 +138,11 @@ export default function App() {
         setIsAiScanOpen(false);
       } else if (activeTab !== "home") {
         setActiveTab("home");
+      } else if (isMerchantFormDirty) {
+        if (window.confirm("작성 중인 상품 정보가 있습니다. 저장하지 않고 나가시겠어요?")) {
+          setIsMerchantFormDirty(false);
+          CapacitorApp.minimizeApp();
+        }
       } else {
         CapacitorApp.minimizeApp();
       }
@@ -138,7 +150,7 @@ export default function App() {
     return () => {
       listener.then((l) => l.remove());
     };
-  }, [isNotificationOpen, selectedProduct, isAiScanOpen, activeTab]);
+  }, [isNotificationOpen, selectedProduct, isAiScanOpen, activeTab, isMerchantFormDirty]);
 
   const handleLoginSuccess = (
     role: UserRole,
@@ -166,6 +178,7 @@ export default function App() {
     setBookmarkedProducts([]);
     setScannedProducts([]);
     setActiveTab("home");
+    setIsLoginModalOpen(true);
   };
 
   const handleAddToCart = (product: ProductItem) => {
@@ -260,13 +273,6 @@ export default function App() {
     }
   };
 
-  const handleSelectShopOnMap = (shopName: string) => {
-    const foundProduct = products.find((p) => p.shopName === shopName);
-    if (foundProduct) {
-      setSelectedProduct(foundProduct);
-    }
-  };
-
   if (isAuthChecking) {
     return (
       <div className="min-h-screen bg-background-slate flex flex-col items-center justify-center gap-3">
@@ -282,7 +288,6 @@ export default function App() {
         isOpen={isLoginModalOpen}
         onClose={() => setIsLoginModalOpen(false)}
         onLoginSuccess={handleLoginSuccess}
-        currentRole={userRole}
         isFullScreen={true}
       />
     );
@@ -318,6 +323,7 @@ export default function App() {
               onDeleteProduct={handleDeleteProduct}
               onOpenLogin={() => setIsLoginModalOpen(true)}
               onSelectProduct={(p) => setSelectedProduct(p)}
+              onFormDirtyChange={setIsMerchantFormDirty}
             />
           ) : (
             <HomeFeed
@@ -339,7 +345,8 @@ export default function App() {
           <MapView
             selectedMarket={selectedMarket}
             onOpenAiScan={() => setIsAiScanOpen(true)}
-            onSelectShop={handleSelectShopOnMap}
+            focusShopName={mapFocusShopName}
+            onFocusHandled={() => setMapFocusShopName(null)}
           />
         )}
 
@@ -412,6 +419,7 @@ export default function App() {
           isBookmarked={bookmarkedProducts.some((p) => p.id === selectedProduct.id)}
           onToggleBookmark={handleToggleBookmarkProduct}
           onNavigateToMap={() => {
+            setMapFocusShopName(selectedProduct.shopName);
             setSelectedProduct(null);
             setActiveTab("map");
           }}
@@ -438,13 +446,6 @@ export default function App() {
           </div>
         </div>
       )}
-      {/* 5. Login & Role Selection Modal */}
-      <LoginModal
-        isOpen={isLoginModalOpen}
-        onClose={() => setIsLoginModalOpen(false)}
-        onLoginSuccess={handleLoginSuccess}
-        currentRole={userRole}
-      />
     </div>
   );
 }

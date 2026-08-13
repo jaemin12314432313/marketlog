@@ -41,4 +41,8 @@
     <!-- AI 스캔 카메라 촬영용 -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- 지도 "현재 위치" 버튼, 점포 위치 등록(navigator.geolocation)용 —
+         이게 없으면 시스템 설정에 위치 권한 항목 자체가 안 뜬다 -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 </manifest>

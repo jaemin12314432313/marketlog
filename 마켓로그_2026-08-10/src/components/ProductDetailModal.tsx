@@ -291,9 +291,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const recipe = getRecipeRecommendation(product);
 
   if (viewMode === "scan") {
-    const formattedGrade = product.grade
-      ? product.grade.replace(/Trafficlight|SAFE|CAUTION|ALERT/gi, "").trim() || "A+"
-      : "A+";
+    const formattedGrade = product.grade || "A+";
 
     return (
       <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
@@ -605,7 +603,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 </h2>
 
                 <div className="text-xs text-[#64748B] font-medium flex items-center justify-between pt-0.5 pb-1">
-                  <span>가게 번호: <strong className="text-[#334155]">{product.phone || "062-360-7000"}</strong></span>
+                  <span>가게 번호: <strong className="text-[#334155]">{storeInfo?.phone || "정보 없음"}</strong></span>
                   <span className="text-[#0052FF] font-bold">{product.category}</span>
                 </div>
 
@@ -642,7 +640,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </h3>
                   <span className="text-xs font-extrabold text-[#10B981] bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 flex items-center gap-1">
                     <span className="material-symbols-outlined text-xs" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
-                    품질 등급 {product.grade.replace(/Trafficlight|SAFE|CAUTION|ALERT/gi, "").trim() || "A+"}
+                    품질 등급 {product.grade || "A+"}
                   </span>
                 </div>
 
@@ -765,13 +763,13 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       )}
                       <div className="flex justify-between py-1.5">
                         <span className="text-[#64748B] font-medium">전화번호</span>
-                        {storeInfo?.phone || product.phone ? (
+                        {storeInfo?.phone ? (
                           <a
-                            href={`tel:${storeInfo?.phone || product.phone}`}
+                            href={`tel:${storeInfo.phone}`}
                             className="font-bold text-[#0052FF] hover:underline flex items-center gap-1"
                           >
                             <span className="material-symbols-outlined text-xs">call</span>
-                            {storeInfo?.phone || product.phone}
+                            {storeInfo.phone}
                           </a>
                         ) : (
                           <span className="font-bold text-[#94A3B8]">정보 없음</span>

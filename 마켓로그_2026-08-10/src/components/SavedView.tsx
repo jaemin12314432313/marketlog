@@ -25,7 +25,7 @@ export const SavedView: React.FC<SavedViewProps> = ({
 
   if (!isLoggedIn) {
     return (
-      <div className="w-full max-w-[600px] mx-auto pt-20 pb-28 px-4">
+      <div className="w-full max-w-[600px] mx-auto content-pt-safe content-pb-safe px-4">
         <div className="bg-surface-white rounded-2xl border border-[#E2E8F0] p-8 text-center space-y-4">
           <div className="w-14 h-14 rounded-2xl bg-blue-50 text-trust-blue flex items-center justify-center mx-auto">
             <span className="material-symbols-outlined text-3xl">bookmark</span>
@@ -49,7 +49,7 @@ export const SavedView: React.FC<SavedViewProps> = ({
   }
 
   return (
-    <div className="w-full max-w-[600px] mx-auto pt-20 pb-28 px-4 space-y-5">
+    <div className="w-full max-w-[600px] mx-auto content-pt-safe content-pb-safe px-4 space-y-5">
       {/* Page Title Header */}
       <div className="flex justify-between items-center">
         <div>

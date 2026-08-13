@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
+import { Capacitor } from "@capacitor/core";
+import { App as CapacitorApp } from "@capacitor/app";
 import { ProductItem, InspectionResult } from "../types";
 import { analyzeProduct } from "../lib/api";
 
@@ -40,6 +42,9 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
   const [saveSuccessToast, setSaveSuccessToast] = useState(false);
   const [hasCameraStream, setHasCameraStream] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  // 백그라운드에서 돌아왔을 때 카메라를 다시 켜기 위한 트리거 — isOpen은 그대로라
+  // effect를 다시 돌리려면 별도 값이 필요하다.
+  const [cameraRestartTick, setCameraRestartTick] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -111,6 +116,27 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
     return () => {
       isMounted = false;
       stopCamera();
+    };
+  }, [isOpen, cameraRestartTick]);
+
+  // 홈버튼/앱 전환으로 백그라운드에 가면 카메라 스트림을 꺼둔다 — 뒤로가기/모달
+  // 닫기만 스트림을 정리했어서, 백그라운드로 나갔다 돌아오면 카메라가 계속 켜져
+  // 있거나(배터리 낭비) 일부 기기에서 잠겨서 안 먹히는 문제가 있었다.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || !isOpen) return;
+    const listener = CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+      if (!isActive) {
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+        }
+        setHasCameraStream(false);
+      } else {
+        setCameraRestartTick((t) => t + 1);
+      }
+    });
+    return () => {
+      listener.then((l) => l.remove());
     };
   }, [isOpen]);
 
@@ -209,6 +235,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
   };
 
   const handleMerchantRegister = () => {
+    if (saveSuccessToast) return; // 저장 처리 중 버튼 연타로 중복 등록되는 것 방지
     if (inspectionResult) {
       if (!sellingPriceInput.trim()) {
         alert("판매가를 입력해주세요.");
@@ -225,7 +252,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
         price,
         publicPrice: inspectionResult.publicMarketPrice,
         priceTag: buildPriceTag(price, inspectionResult.publicMarketPrice),
-        grade: (inspectionResult.grade ? inspectionResult.grade.replace(/Trafficlight|SAFE|CAUTION|ALERT/gi, "").trim() || "A+" : "A+") as any,
+        grade: (inspectionResult.grade || "A+") as any,
         category: inspectionResult.category as any,
         imageUrl: currentViewImage,
         freshnessScore: inspectionResult.freshnessScore,
@@ -251,6 +278,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
   };
 
   const handleSaveResult = () => {
+    if (saveSuccessToast) return; // 저장 처리 중 버튼 연타로 중복 저장되는 것 방지
     if (inspectionResult) {
       if (!sellingPriceInput.trim()) {
         alert("판매가를 입력해주세요.");
@@ -266,7 +294,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
         price,
         publicPrice: inspectionResult.publicMarketPrice,
         priceTag: buildPriceTag(price, inspectionResult.publicMarketPrice),
-        grade: (inspectionResult.grade ? inspectionResult.grade.replace(/Trafficlight|SAFE|CAUTION|ALERT/gi, "").trim() || "A+" : "A+") as any,
+        grade: (inspectionResult.grade || "A+") as any,
         category: inspectionResult.category as any,
         imageUrl: currentViewImage,
         freshnessScore: inspectionResult.freshnessScore,
@@ -274,7 +302,6 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
         uniformityScore: inspectionResult.uniformityScore,
         description: inspectionResult.aiAnalysisSummary,
         isScannedProduct: true,
-        phone: "062-360-7000",
       };
 
       onSaveToSavedList(newSavedItem);
@@ -313,6 +340,15 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
 
         {/* Flash Screen Overlay */}
         {isFlashOn && <div className="absolute inset-0 bg-white/30 pointer-events-none z-10"></div>}
+
+        {/* Camera Access Failure Notice — 실패해도 아무 표시 없이 샘플 사진으로 조용히
+            대체되면, 유저는 자기 농산물이 아니라 샘플을 "스캔" 중인 걸 알 방법이 없다. */}
+        {cameraError && !capturedImage && (
+          <div className="absolute top-16 left-4 right-4 z-20 bg-amber-500/90 text-white text-xs font-bold rounded-xl px-3.5 py-2.5 flex items-center gap-2 shadow-lg">
+            <span className="material-symbols-outlined text-base shrink-0">videocam_off</span>
+            <span>{cameraError}</span>
+          </div>
+        )}
       </div>
 
       {/* Top & Bottom Vignette Gradients */}
@@ -461,7 +497,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
                   verified
                 </span>
                 <span>
-                  품질 등급 {inspectionResult?.grade ? inspectionResult.grade.replace(/Trafficlight|SAFE|CAUTION|ALERT/gi, "").trim() || "A+" : "A+"}
+                  품질 등급 {inspectionResult?.grade || "A+"}
                   {typeof inspectionResult?.gradeConfidencePercent === "number" && (
                     <span className="ml-1 font-bold opacity-80">({inspectionResult.gradeConfidencePercent}%)</span>
                   )}
@@ -599,7 +635,8 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
 
               <button
                 onClick={handleSaveResult}
-                className="flex-1 py-3 bg-[#0052FF] hover:bg-[#0043D6] text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+                disabled={saveSuccessToast}
+                className="flex-1 py-3 bg-[#0052FF] hover:bg-[#0043D6] disabled:opacity-60 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
               >
                 <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>
                   bookmark
@@ -610,7 +647,8 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
               {userRole === "merchant" && (
                 <button
                   onClick={handleMerchantRegister}
-                  className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-xs font-extrabold rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+                  disabled={saveSuccessToast}
+                  className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 disabled:opacity-60 text-white text-xs font-extrabold rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
                 >
                   <span className="material-symbols-outlined text-base">storefront</span>
                   점포 물건 등록

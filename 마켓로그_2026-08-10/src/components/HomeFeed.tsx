@@ -34,7 +34,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
   const [sortBy, setSortBy] = useState<"accuracy" | "price" | "grade">("accuracy");
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
 
-  const categories = ["AI 추천상품", "야채", "수산물", "정육", "과일"];
+  const categories = ["AI 추천상품", "야채", "수산물", "정육", "과일", "건어물"];
 
   const filteredProducts = products.filter((p) => {
     // 1. Region Filter
@@ -80,7 +80,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
   });
 
   return (
-    <div className="w-full max-w-[600px] mx-auto pt-20 pb-28 px-4 flex flex-col gap-5">
+    <div className="w-full max-w-[600px] mx-auto content-pt-safe content-pb-safe px-4 flex flex-col gap-5">
       {/* Search Input Bar */}
       <div className="relative w-full">
         <div className="bg-surface-white rounded-xl border border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.05)] flex items-center px-4 h-12 transition-all focus-within:border-trust-blue focus-within:ring-1 focus-within:ring-trust-blue">

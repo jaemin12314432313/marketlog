@@ -1,5 +1,6 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { ProductItem } from "../types";
+import { getStoreLocation, getStoreProfile } from "../lib/api";
 import { MerchantAiScanModal } from "./MerchantAiScanModal";
 import { StoreLocationPicker } from "./StoreLocationPicker";
 
@@ -19,6 +20,9 @@ interface MerchantViewProps {
   onDeleteProduct: (id: string) => Promise<boolean>;
   onOpenLogin: () => void;
   onSelectProduct: (product: ProductItem) => void;
+  // 작성 중인 등록/수정 폼에 실제 입력이 있는지 부모(App.tsx)에게 알린다 — 안드로이드
+  // 뒤로가기가 이 화면에서 바로 앱을 백그라운드로 보내버리기 전에 확인을 받기 위함.
+  onFormDirtyChange?: (dirty: boolean) => void;
 }
 
 export const MerchantView: React.FC<MerchantViewProps> = ({
@@ -31,9 +35,32 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
   onDeleteProduct,
   onOpenLogin,
   onSelectProduct,
+  onFormDirtyChange,
 }) => {
   const shopName = userDisplayName || "양동수산";
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
+  // null = 아직 확인 전, true/false = 실제로 위치가 등록돼 있는지. 이게 없으면 이미
+  // 저장에 성공해도 화면엔 항상 "등록해주세요"만 보여서 등록됐는지 알 길이 없었다.
+  const [hasStoreLocation, setHasStoreLocation] = useState<boolean | null>(null);
+  // 위치는 있어도 전화번호/영업시간이 비어있으면 상품은 있는데 연락할 방법이 없는
+  // 반쪽짜리 점포가 된다 — 신규 상품 등록은 이 세 가지가 다 채워졌을 때만 허용한다.
+  const [hasStoreContactInfo, setHasStoreContactInfo] = useState<boolean | null>(null);
+  const canRegisterProducts = hasStoreLocation && hasStoreContactInfo;
+
+  const refreshStoreReadiness = () => {
+    getStoreLocation()
+      .then((res) => setHasStoreLocation(Boolean(res.store)))
+      .catch((err) => console.error("점포 위치 확인 실패", err));
+    getStoreProfile()
+      .then((res) =>
+        setHasStoreContactInfo(Boolean(res.profile?.phone?.trim() && res.profile?.hours?.trim()))
+      )
+      .catch((err) => console.error("점포 연락처 확인 실패", err));
+  };
+
+  useEffect(() => {
+    refreshStoreReadiness();
+  }, []);
 
   // Form states for manual registration
   const [isFormOpen, setIsFormOpen] = useState(true);
@@ -45,11 +72,15 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
   const [price, setPrice] = useState<number | "">("");
   const [publicPrice, setPublicPrice] = useState<number | "">("");
   const [description, setDescription] = useState("");
-  const [phone, setPhone] = useState("062-360-7000");
   const [grade, setGrade] = useState<ProductItem["grade"]>("A+");
   const [freshnessScore, setFreshnessScore] = useState<number>(95);
   const [imageUrl, setImageUrl] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const isDirty = Boolean(title.trim() || price || description.trim() || imageUrl.trim());
+    onFormDirtyChange?.(isDirty);
+  }, [title, price, description, imageUrl, onFormDirtyChange]);
 
   // AI Recommendation for Description state
   const [recommendationSetIndex, setRecommendationSetIndex] = useState(0);
@@ -97,7 +128,6 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     setPrice(p.price);
     setPublicPrice(p.publicPrice || "");
     setDescription(p.description || "");
-    setPhone(p.phone || "062-360-7000");
     setGrade(p.grade || "A+");
     setFreshnessScore(p.freshnessScore || 95);
     setImageUrl(p.imageUrl || "");
@@ -111,10 +141,12 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
   const handleCancelEdit = () => {
     setEditingProductId(null);
     setTitle("");
+    setCategory("수산물");
     setPrice("");
     setPublicPrice("");
     setDescription("");
-    setPhone("062-360-7000");
+    setGrade("A+");
+    setFreshnessScore(95);
     setImageUrl("");
   };
 
@@ -122,12 +154,16 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
 
   const handleSubmitManual = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !price) {
-      alert("상품명과 판매 가격을 입력해 주세요.");
+    if (!editingProductId && !canRegisterProducts) {
+      alert("새 상품을 등록하려면 먼저 점포 위치와 전화번호/영업시간을 등록해주세요.");
+      return;
+    }
+    const numPrice = Number(price);
+    if (!title.trim() || !price || numPrice <= 0) {
+      alert("상품명과 판매 가격(1원 이상)을 입력해 주세요.");
       return;
     }
 
-    const numPrice = Number(price);
     const numPublicPrice = publicPrice ? Number(publicPrice) : Math.round(numPrice * 1.2);
     const diffPercent = Math.round(((numPublicPrice - numPrice) / numPublicPrice) * 100);
     const priceTag = diffPercent > 0 ? `공공 시세 대비 ${diffPercent}% 저렴` : "시세 적정가";
@@ -154,7 +190,6 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         defectScore: Math.max(0, 100 - freshnessScore - 2),
         uniformityScore: 95,
         description: description.trim() || `${shopName}에서 정성껏 등록한 ${title.trim()}입니다.`,
-        phone: phone.trim() || "062-360-7000",
         isMerchantUploaded: true,
       };
 
@@ -183,7 +218,6 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         defectScore: Math.max(0, 100 - freshnessScore - 2),
         uniformityScore: 95,
         description: description.trim() || `${shopName}에서 정성껏 등록한 ${title.trim()}입니다.`,
-        phone: phone.trim() || "062-360-7000",
         isMerchantUploaded: true,
       };
 
@@ -205,7 +239,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
   const merchantProducts = products.filter((p) => p.shopName === shopName);
 
   return (
-    <div className="w-full max-w-[600px] mx-auto pt-20 pb-28 px-4 space-y-6">
+    <div className="w-full max-w-[600px] mx-auto content-pt-safe content-pb-safe px-4 space-y-6">
       {/* Toast Banner */}
       {toastMessage && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#0F172A] text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-xl flex items-center gap-2 border border-slate-700 animate-in fade-in zoom-in duration-200">
@@ -223,15 +257,41 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
       >
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-lg">location_on</span>
+            <span className="material-symbols-outlined text-lg">
+              {hasStoreLocation ? "check_circle" : "location_on"}
+            </span>
           </div>
           <div className="min-w-0 text-left">
-            <h5 className="text-xs font-extrabold text-slate-900">점포 위치 등록</h5>
-            <p className="text-[11px] text-slate-500 mt-0.5">지도에서 내 점포 위치를 찍어야 상품이 지도에 표시돼요</p>
+            <h5 className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
+              {hasStoreLocation ? "점포 위치 등록됨" : "점포 위치 등록"}
+              {hasStoreLocation && (
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">등록완료</span>
+              )}
+            </h5>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              {hasStoreLocation
+                ? "지도에 등록된 내 점포 위치를 다시 눌러 수정할 수 있어요"
+                : "지도에서 내 점포 위치를 찍어야 상품이 지도에 표시돼요"}
+            </p>
           </div>
         </div>
         <span className="material-symbols-outlined text-emerald-600 shrink-0">chevron_right</span>
       </button>
+
+      {/* 위치/연락처가 아직 다 안 채워졌으면 새 상품 등록 자체가 막히므로(백엔드에서도
+          동일하게 거부), 폼을 열기 전에 뭐가 빠졌는지 미리 알려준다. */}
+      {(hasStoreLocation === false || hasStoreContactInfo === false) && (
+        <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50 flex items-start gap-3">
+          <span className="material-symbols-outlined text-amber-600 shrink-0">warning</span>
+          <div className="text-xs text-amber-900">
+            <p className="font-extrabold">아직 새 상품을 등록할 수 없어요</p>
+            <p className="mt-1 leading-relaxed text-amber-800">
+              {hasStoreLocation === false && "위쪽 '점포 위치 등록'으로 지도에 점포를 등록하고, "}
+              마이 탭의 '점포 상세정보'에서 전화번호와 영업시간을 입력해주세요.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Main Action Section: Store Item Registration */}
       <div className="space-y-3">
@@ -770,7 +830,10 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         isOpen={isLocationPickerOpen}
         onClose={() => setIsLocationPickerOpen(false)}
         marketName={marketName}
-        onSaved={() => showToast("점포 위치가 지도에 등록되었습니다!")}
+        onSaved={() => {
+          setHasStoreLocation(true);
+          showToast("점포 위치가 지도에 등록되었습니다!");
+        }}
       />
     </div>
   );

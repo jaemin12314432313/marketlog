@@ -287,7 +287,7 @@ export const MyWallet: React.FC<MyWalletProps> = ({
   // 없는 로그아웃 버튼)를 보여주는 대신, 이 탭을 명확한 로그인 진입점으로 쓴다.
   if (!isLoggedIn) {
     return (
-      <div className="w-full max-w-[600px] mx-auto pt-20 pb-28 px-4">
+      <div className="w-full max-w-[600px] mx-auto content-pt-safe content-pb-safe px-4">
         <div className="bg-white rounded-2xl border border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.05)] p-8 text-center space-y-4">
           <div className="w-14 h-14 rounded-2xl bg-blue-50 text-trust-blue flex items-center justify-center mx-auto">
             <span className="material-symbols-outlined text-3xl">account_circle</span>
@@ -311,7 +311,7 @@ export const MyWallet: React.FC<MyWalletProps> = ({
   }
 
   return (
-    <div className="w-full max-w-[600px] mx-auto pt-20 pb-28 px-4 space-y-6">
+    <div className="w-full max-w-[600px] mx-auto content-pt-safe content-pb-safe px-4 space-y-6">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#0F172A] text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-xl flex items-center gap-2 border border-slate-700 animate-in fade-in zoom-in duration-200">

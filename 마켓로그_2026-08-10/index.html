@@ -25,6 +25,10 @@
         font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
       }
 
+      html, body {
+        overflow-x: hidden;
+      }
+
       body {
         font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
         background-color: #F1F5F9;
@@ -34,6 +38,12 @@
 
       .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
       .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+
+      /* 상단/하단 고정바(Header, BottomNav)가 안전영역만큼 늘어나므로, 그 밑에 깔리는
+         페이지 콘텐츠도 고정된 pt-20/pb-28(80px/112px) 대신 같은 만큼 여유를 더해야
+         겹치지 않는다. */
+      .content-pt-safe { padding-top: calc(5rem + env(safe-area-inset-top, 0px)); }
+      .content-pb-safe { padding-bottom: calc(7rem + env(safe-area-inset-bottom, 20px)); }
 
       /* Scanning animation */
       @keyframes scanline {

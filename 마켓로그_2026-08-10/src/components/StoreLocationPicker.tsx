@@ -33,6 +33,13 @@ export const StoreLocationPicker: React.FC<StoreLocationPickerProps> = ({
   const [pin, setPin] = useState<{ lat: number; lng: number } | null>(initialPin);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingInitial, setIsLoadingInitial] = useState(mode === "save");
+  // 지도를 눌러서만 위치를 찾기엔 정확한 자리를 짚기 어렵다는 피드백 — 주소를 입력해
+  // 지오코딩(naver.maps.Service.geocode)으로 좌표를 찾은 뒤 그 자리로 지도/핀을 옮긴다.
+  const [addressQuery, setAddressQuery] = useState("");
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
+  const [addressResults, setAddressResults] = useState<
+    { roadAddress: string; jibunAddress: string; lat: number; lng: number }[]
+  >([]);
 
   const mapElement = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -146,6 +153,51 @@ export const StoreLocationPicker: React.FC<StoreLocationPickerProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, naverLoaded, isLoadingInitial]);
 
+  const handleAddressSearch = () => {
+    const query = addressQuery.trim();
+    if (!query) return;
+    const naver = (window as any).naver;
+    if (!naver?.maps?.Service) {
+      alert("지도 검색 기능을 아직 불러오는 중이에요. 잠시 후 다시 시도해주세요.");
+      return;
+    }
+    setIsSearchingAddress(true);
+    setAddressResults([]);
+    naver.maps.Service.geocode({ query }, (status: string, response: any) => {
+      setIsSearchingAddress(false);
+      if (status !== naver.maps.Service.Status.OK || !response?.v2?.addresses?.length) {
+        alert("검색 결과가 없어요. 도로명 주소나 지번 주소로 다시 시도해보세요.");
+        return;
+      }
+      setAddressResults(
+        response.v2.addresses.slice(0, 5).map((a: any) => ({
+          roadAddress: a.roadAddress,
+          jibunAddress: a.jibunAddress,
+          lat: parseFloat(a.y),
+          lng: parseFloat(a.x),
+        }))
+      );
+    });
+  };
+
+  const handleSelectAddressResult = (result: { lat: number; lng: number }) => {
+    setPin({ lat: result.lat, lng: result.lng });
+    setAddressResults([]);
+    setAddressQuery("");
+
+    const naver = (window as any).naver;
+    if (mapRef.current && naver) {
+      const point = new naver.maps.LatLng(result.lat, result.lng);
+      mapRef.current.setCenter(point);
+      mapRef.current.setZoom(19);
+      if (markerRef.current) {
+        markerRef.current.setPosition(point);
+      } else {
+        markerRef.current = new naver.maps.Marker({ position: point, map: mapRef.current });
+      }
+    }
+  };
+
   const handleClose = () => {
     mapRef.current = null;
     markerRef.current = null;
@@ -184,7 +236,7 @@ export const StoreLocationPicker: React.FC<StoreLocationPickerProps> = ({
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
           <div>
             <h3 className="font-extrabold text-slate-900 text-base">점포 위치 등록</h3>
-            <p className="text-xs text-slate-500 mt-0.5">지도를 눌러 내 점포 위치에 핀을 찍어주세요</p>
+            <p className="text-xs text-slate-500 mt-0.5">주소로 검색하거나, 지도를 눌러 내 점포 위치에 핀을 찍어주세요</p>
           </div>
           <button
             onClick={handleClose}
@@ -194,7 +246,54 @@ export const StoreLocationPicker: React.FC<StoreLocationPickerProps> = ({
           </button>
         </div>
 
-        <div className="relative w-full h-80 bg-slate-100 shrink-0">
+        <div className="px-4 pt-4 shrink-0 relative">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 flex items-center gap-2 bg-slate-100 rounded-xl px-3 h-11">
+              <span className="material-symbols-outlined text-slate-400 text-lg">search</span>
+              <input
+                type="text"
+                value={addressQuery}
+                onChange={(e) => setAddressQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddressSearch();
+                  }
+                }}
+                placeholder="도로명/지번 주소로 검색 (예: 광주 동구 대인동 12)"
+                className="flex-1 bg-transparent border-none focus:outline-none text-sm text-slate-800 placeholder-slate-400"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleAddressSearch}
+              disabled={isSearchingAddress || !addressQuery.trim()}
+              className="h-11 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-bold shrink-0 transition-colors"
+            >
+              {isSearchingAddress ? "검색 중..." : "검색"}
+            </button>
+          </div>
+
+          {addressResults.length > 0 && (
+            <div className="absolute left-4 right-4 top-[calc(100%-4px)] z-10 bg-white rounded-xl shadow-xl border border-slate-200 max-h-56 overflow-y-auto">
+              {addressResults.map((result, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleSelectAddressResult(result)}
+                  className="w-full text-left px-3.5 py-2.5 text-xs hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0"
+                >
+                  <p className="font-bold text-slate-800">{result.roadAddress || result.jibunAddress}</p>
+                  {result.roadAddress && result.jibunAddress && (
+                    <p className="text-slate-400 mt-0.5">{result.jibunAddress}</p>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="relative w-full h-80 bg-slate-100 shrink-0 mt-3">
           {(!naverLoaded || isLoadingInitial) && (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-8 h-8 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
