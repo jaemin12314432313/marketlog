@@ -45,4 +45,9 @@
          이게 없으면 시스템 설정에 위치 권한 항목 자체가 안 뜬다 -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- ACCESS_FINE_LOCATION만 선언하면 빌드 도구가 "GPS 하드웨어 필수"를 자동으로
+         추론해서, GPS 칩이 없는 기기(와이파이 전용 태블릿 등)가 Play스토어에서
+         이 앱을 아예 못 보게 된다. 위치 없이도 앱은 정상 동작하므로 명시적으로 선택사항 처리. -->
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
 </manifest>

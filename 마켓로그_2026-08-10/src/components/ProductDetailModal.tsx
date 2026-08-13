@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Browser } from "@capacitor/browser";
 import { ProductItem, MarketInfo } from "../types";
 import { fetchStoreByName, StoreInfo } from "../lib/api";
 
@@ -854,17 +855,18 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </div>
                 </div>
 
-                {/* Direct Link Button to YouTube */}
-                <a
-                  href={recipe.youtubeUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                {/* Direct Link Button to YouTube — 안드로이드 WebView는 target="_blank"
+                    링크를 열어줄 새 탭이 없어서 그냥 아무 반응이 없다. Capacitor Browser
+                    플러그인으로 외부 브라우저(커스텀 탭)를 직접 띄운다. */}
+                <button
+                  type="button"
+                  onClick={() => Browser.open({ url: recipe.youtubeUrl })}
                   className="w-full bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-xl font-extrabold text-xs shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-lg">search</span>
                   <span>유튜브에서 레시피 검색하기</span>
                   <span className="material-symbols-outlined text-sm">open_in_new</span>
-                </a>
+                </button>
               </div>
 
               {/* Divider */}
