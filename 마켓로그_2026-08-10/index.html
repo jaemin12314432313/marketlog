@@ -8,7 +8,13 @@
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     
-    <!-- Google Fonts & Material Symbols -->
+    <!-- Google Fonts & Material Symbols — 아이콘 폰트가 늦게 로드되면(특히 모바일 데이터)
+         display=block의 대기시간을 넘겨버려서 아이콘 대신 "storefront", "notifications" 같은
+         원래 리게이처 이름이 그냥 텍스트로 보여버린다(레이아웃이 통째로 밀려서 "화면이 안
+         맞는" 것처럼 보이는 원인이었다). preconnect로 DNS/TLS 핸드셰이크를 미리 끝내두면
+         실제 폰트 파일을 더 빨리 받기 시작해서 이 타임아웃에 걸릴 확률이 줄어든다. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block" rel="stylesheet" />
     
     <!-- Pretendard Web Font CDN -->

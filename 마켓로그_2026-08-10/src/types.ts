@@ -45,6 +45,7 @@ export interface InspectionResult {
   sellingPrice: number;
   publicMarketPrice: number;
   publicPriceUnit?: string; // "kg"면 publicMarketPrice가 실제 판매 단위가 아닌 1kg 환산가라는 뜻
+  gradeConfidencePercent?: number; // 등급 판정 확률(%) — 라벨만 보여주면 안 되고 이 값을 같이 표시할 것(비전팀 권고)
   priceDiffPercent: number;
   priceTrafficLight: TrafficLight;
   freshnessScore: number;

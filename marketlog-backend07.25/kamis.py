@@ -36,9 +36,11 @@ ITEM_CONFIG = {
     "감": {"category": "400", "kamis_name": "감", "kind_contains": None, "unit_weight_kg": 2},             # 10개 ≈ 2kg (개당 200g) — 현재 KAMIS 품목코드 없어 항상 폴백
 }
 
-# 우리 3단계 등급(특/상/보통) -> KAMIS 소매가격의 2단계 등급(상품/중품) 근사 매핑.
+# 등급 -> KAMIS 소매가격의 2단계 등급(상품/중품) 근사 매핑.
 # KAMIS 소매가는 상품(고급)/중품(중급) 두 단계만 제공해서 완전히 대응되진 않는다.
-GRADE_TO_RANK = {"특": "상품", "상": "상품", "보통": "중품"}
+# SCAN_MOCK 경로는 여전히 3단계(특/상/보통)를 쓰고, mlv2 실측 스캔 경로는 2단계
+# (특상/보통)를 쓰므로 둘 다 매핑해 둔다.
+GRADE_TO_RANK = {"특": "상품", "상": "상품", "특상": "상품", "보통": "중품"}
 
 _cache: dict = {"date": None, "prices": {}, "retry_after": None}
 _RETRY_COOLDOWN = timedelta(minutes=5)

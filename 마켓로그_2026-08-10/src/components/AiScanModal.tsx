@@ -174,7 +174,8 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
         setSellingPriceInput(json.data.sellingPrice ? String(json.data.sellingPrice) : "");
         setShowResult(true);
       } else {
-        setAnalyzeError("AI 분석 결과를 받지 못했습니다. 다시 촬영해주세요.");
+        // 사진에서 농산물을 못 찾은 정상적인 실패면 백엔드가 구체적인 안내(hint)를 준다.
+        setAnalyzeError(json.hint || "AI 분석 결과를 받지 못했습니다. 다시 촬영해주세요.");
       }
     } catch (err) {
       console.error(err);
@@ -461,9 +462,17 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
                 </span>
                 <span>
                   품질 등급 {inspectionResult?.grade ? inspectionResult.grade.replace(/Trafficlight|SAFE|CAUTION|ALERT/gi, "").trim() || "A+" : "A+"}
+                  {typeof inspectionResult?.gradeConfidencePercent === "number" && (
+                    <span className="ml-1 font-bold opacity-80">({inspectionResult.gradeConfidencePercent}%)</span>
+                  )}
                 </span>
               </div>
             </div>
+            {typeof inspectionResult?.gradeConfidencePercent === "number" && (
+              <p className="text-[10px] text-[#94A3B8] font-medium -mt-1.5">
+                등급은 참고용입니다. 확률이 낮을수록 판정 신뢰도가 낮아요.
+              </p>
+            )}
 
             {/* Price Details: 공공 판매가 */}
             <div className="bg-[#F8FAFC] rounded-xl p-3.5 border border-[#E2E8F0] flex items-center justify-between">

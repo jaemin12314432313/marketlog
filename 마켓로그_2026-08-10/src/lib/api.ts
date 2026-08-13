@@ -123,8 +123,11 @@ export function fetchStoreByName(name: string): Promise<{ status: string; store:
 
 export interface AnalyzeProductResponse {
   success: boolean;
-  data: InspectionResult;
+  data?: InspectionResult;
   isFallback?: boolean;
+  // success:false일 때만 내려옴 — 사진에서 농산물을 못 찾은 정상적인 실패 케이스.
+  reason?: string;
+  hint?: string;
 }
 
 export function analyzeProduct(payload: {

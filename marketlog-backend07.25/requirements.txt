@@ -19,3 +19,7 @@ torch==2.13.0
 torchvision==0.28.0
 timm==1.0.28
 Pillow==12.1.0
+
+# mlv2.pipeline (새 비전 파이프라인, 2026-08-13 교체)의 필수 의존 — YOLO 검출기.
+# 없으면 mlv2.pipeline import 자체가 실패한다.
+ultralytics>=8.3

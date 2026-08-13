@@ -17,38 +17,34 @@ from kamis import get_public_price as get_kamis_price
 
 router = APIRouter(tags=["Consumer"])
 
-# 체크포인트 2개(약 156MB)를 서버 기동 시점에 바로 올리면, 메모리가 빠듯한 배포
-# 환경(예: Render 무료 512MB)에서는 첫 요청을 받기도 전에 부팅 중에 OOM으로 죽어버려서
-# 로그인/피드/지도 등 AI 스캔과 무관한 기능까지 전부 못 쓰게 된다. 그래서 실제로 AI
-# 스캔이 처음 호출될 때 딱 한 번만 지연 로드한다 — 그러면 최소한 메모리가 부족해도
-# AI 스캔 기능만 실패하고 나머지 앱은 계속 살아있다.
-device = torch.device("cpu")
+# 체크포인트(약 180MB, YOLO 검출기+품목분류기+등급판정기 3개)를 서버 기동 시점에 바로
+# 올리면, 메모리가 빠듯한 배포 환경에서는 첫 요청을 받기도 전에 부팅 중에 OOM으로
+# 죽어버려서 로그인/피드/지도 등 AI 스캔과 무관한 기능까지 전부 못 쓰게 된다. 그래서
+# 실제로 AI 스캔이 처음 호출될 때 딱 한 번만 지연 로드한다 — 그러면 최소한 메모리가
+# 부족해도 AI 스캔 기능만 실패하고 나머지 앱은 계속 살아있다.
+#
+# 2026-08-13: 비전팀 새 파이프라인(mlv2.pipeline)으로 교체. 검출(YOLO) → 크롭 → 품목분류
+# → 등급판정 순으로 동작하고, 예전과 달리 "사진에서 농산물을 아예 못 찾음"(ok:false)이라는
+# 정상적인 실패 케이스가 생겼다. 마늘은 이 모델에서 사실상 지원하지 않는다(품목표 자체엔
+# 있지만 정확도가 낮아 "무"로 틀리게 확신하는 경우가 많음 — 비전팀 문서 참고).
 torch.set_num_threads(1)
-item_model = item_classes = item_img_size = None
-grading_model = grade_order = grading_img_size = None
+vision_pipeline = None
 _models_load_attempted = False
 
 def ensure_models_loaded():
-    global item_model, item_classes, item_img_size
-    global grading_model, grade_order, grading_img_size
-    global _models_load_attempted
+    global vision_pipeline, _models_load_attempted
     if _models_load_attempted:
         return
     _models_load_attempted = True
     try:
-        from marketlog_vision.infer_pipeline import load_item_model, load_grading_model
-        item_model, item_classes, item_img_size = load_item_model(
-            "checkpoints/item_recognition_effv2s_v2.pt", device
-        )
-        grading_model, grade_order, grading_img_size = load_grading_model(
-            "checkpoints/quality_grading_effv2s_v2.pt", device
-        )
+        from mlv2.pipeline import Pipeline
+        vision_pipeline = Pipeline(device="cpu")
         print("AI 모델 로드 완료")
     except Exception as e:
         print(f"모델 로드 실패 (Mock 모드): {e}")
 
-# 등급 매핑
-GRADE_MAP = {"특": "A+", "상": "A", "보통": "B"}
+# 등급 매핑 — mlv2는 3단계(특/상/보통)가 아니라 2단계(특상/보통)로 판정한다.
+GRADE_MAP = {"특상": "A+", "보통": "B"}
 
 # 품목별 공공 시세
 # 품목 인식 모델의 실제 10개 클래스(무·배추·양파·마늘·양배추·감·사과·배·감귤·감자) 기준.
@@ -205,22 +201,12 @@ def generate_ai_commentary(image: Image.Image, item_name: str, grade_kor: str) -
 
 
 def run_ai_inference(image: Image.Image) -> dict:
-    if item_model is None:
+    """성공/농산물 미검출 모두 dict로 돌려준다 — 호출부는 result["ok"]로 분기해야 한다.
+    예외(모델 로드 실패 등 진짜 오류)일 때만 None을 돌려준다."""
+    if vision_pipeline is None:
         return None
     try:
-        from marketlog_vision.infer_pipeline import run_pipeline
-        import tempfile
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-            image.save(tmp.name)
-            tmp_path = tmp.name
-        result = run_pipeline(
-            tmp_path,
-            item_model, item_classes, item_img_size,
-            grading_model, grade_order, grading_img_size,
-            device
-        )
-        os.unlink(tmp_path)
-        return result
+        return vision_pipeline.analyze(image)
     except Exception as e:
         print(f"추론 오류: {e}")
         return None
@@ -242,7 +228,7 @@ async def analyze_product(request: ScanRequest):
         await asyncio.to_thread(ensure_models_loaded)
 
     # base64 이미지 있으면 실제 모델 추론
-    if request.imageBase64 and item_model is not None:
+    if request.imageBase64 and vision_pipeline is not None:
         try:
             img_data = base64.b64decode(request.imageBase64.split(",")[-1])
             image = Image.open(io.BytesIO(img_data)).convert("RGB")
@@ -250,12 +236,22 @@ async def analyze_product(request: ScanRequest):
             # 끝날 때까지 다른 모든 요청까지 이벤트 루프에서 같이 멈춘다.
             result = await asyncio.to_thread(run_ai_inference, image)
 
-            if result:
+            if result is not None and not result.get("ok"):
+                # 사진에서 농산물을 아예 못 찾은 정상적인 실패 케이스 — SCAN_MOCK으로
+                # 조용히 덮지 않고 그대로 실패를 알린다. 예전에 이런 실패를 감춰서
+                # 가짜 성공 결과를 보여준 적이 있어서(마늘 사건), 이번엔 정직하게 간다.
+                return {
+                    "success": False,
+                    "reason": result.get("reason", "농산물을 인식하지 못했습니다."),
+                    "hint": result.get("hint", "상품이 화면 중앙에 오도록 다시 촬영해주세요."),
+                }
+
+            if result and result.get("ok"):
                 item_name = result["item"]
-                grade_kor = result["grade"]
+                grade_kor = result["grade"]  # "특상" | "보통" (mlv2는 2단계)
                 grade = GRADE_MAP.get(grade_kor, "A")
-                confidence = result["item_confidence"]
-                thresholds = result["grade_thresholds"]
+                confidence = result["item_conf"]
+                p_high = result["grade_p_high"]  # "특상"일 확률 — 라벨보다 이 확률이 더 정직하다
 
                 public_price = get_kamis_price(item_name, grade_kor)
                 is_kamis_verified = public_price is not None
@@ -275,10 +271,13 @@ async def analyze_product(request: ScanRequest):
                     uniformity = commentary["uniformityScore"]
                     summary = commentary["aiAnalysisSummary"]
                 else:
-                    freshness = int(thresholds[-1] * 100) if thresholds else 90
-                    defect = int((1 - thresholds[0]) * 100) if thresholds else 85
+                    # 예전엔 3단계 임계값 배열(grade_thresholds)로 근사했는데, mlv2는
+                    # "특상일 확률" 하나만 준다. 비전팀 문서 경고대로 이 등급 확률 자체가
+                    # 신뢰도 낮은 지표라(grade_reliable=False), 폴백 표시값 정도로만 쓴다.
+                    freshness = int(p_high * 100)
+                    defect = int((1 - p_high) * 60)
                     uniformity = int(confidence * 100)
-                    summary = f"AI 분석 결과 {item_name} {grade_kor}등급으로 판정되었습니다. (신뢰도: {confidence*100:.1f}%)"
+                    summary = f"AI 분석 결과 {item_name} {grade_kor}(으)로 판정되었습니다. (신뢰도: {confidence*100:.1f}%)"
 
                 return {
                     "success": True,
@@ -305,7 +304,10 @@ async def analyze_product(request: ScanRequest):
                             else "참고 시세 (KAMIS 데이터 없음 — 자체 추정치)"
                         ),
                         "aiAnalysisSummary": summary,
-                        "crossSellRecommendation": cross_sell
+                        "crossSellRecommendation": cross_sell,
+                        # 비전팀 문서 권고: 등급 라벨만 크게 보여주면 안 되고 확률을 같이
+                        # 노출해야 정직하다("특상 53%"와 "특상 99%"가 같아 보이면 안 됨).
+                        "gradeConfidencePercent": round(p_high * 100 if grade_kor == "특상" else (1 - p_high) * 100),
                     }
                 }
         except Exception as e:
