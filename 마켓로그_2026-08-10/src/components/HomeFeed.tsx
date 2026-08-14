@@ -2,6 +2,12 @@ import React, { useState } from "react";
 import { ProductItem, MarketInfo } from "../types";
 import { UserRole } from "./LoginModal";
 
+// 비전 파이프라인이 2단계(특상/보통) 등급으로 바뀌어서, 화면에도 A+/B 같은 영문 등급
+// 대신 실제 판정 체계와 맞는 한글 표기를 쓴다 (데이터 자체는 여전히 A+/B 등 문자로 저장됨).
+function displayGrade(grade: string): string {
+  return grade === "A+" ? "특상" : "보통";
+}
+
 interface HomeFeedProps {
   products: ProductItem[];
   selectedRegion?: string;
@@ -29,12 +35,12 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
   onToggleBookmark,
   isLoading = false,
 }) => {
-  const [selectedCategory, setSelectedCategory] = useState<string>("AI 추천상품");
+  const [selectedCategory, setSelectedCategory] = useState<string>("전체");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"accuracy" | "price" | "grade">("accuracy");
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
 
-  const categories = ["AI 추천상품", "야채", "수산물", "정육", "과일", "건어물"];
+  const categories = ["전체", "야채", "수산물", "정육", "과일", "건어물"];
 
   const filteredProducts = products.filter((p) => {
     // 1. Region Filter
@@ -52,7 +58,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
 
     // 2. Category Filter
     const matchesCategory =
-      selectedCategory === "전체" || selectedCategory === "AI 추천상품"
+      selectedCategory === "전체"
         ? true
         : selectedCategory === "야채"
         ? (p.category === "야채" || (p.category as string) === "신선야채")
@@ -117,14 +123,6 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
                   : "bg-white border border-[#E2E8F0] text-[#334155] hover:border-[#CBD5E1]"
               }`}
             >
-              {cat === "AI 추천상품" && (
-                <span
-                  className="material-symbols-outlined text-base text-[#0052FF]"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  stars
-                </span>
-              )}
               <span>{cat}</span>
             </button>
           );
@@ -279,18 +277,12 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
 
-                    {/* Badge: Top Right - AI Grade */}
+                    {/* Badge: Top Right - Grade */}
                     <div className="absolute top-2 right-2 bg-slate-900/80 backdrop-blur-md text-white px-2 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1 shadow-md z-10 border border-white/20">
                       <span className="material-symbols-outlined text-emerald-400 text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>
                         verified
                       </span>
-                      <span>{product.grade} 등급</span>
-                    </div>
-
-                    {/* Badge: Bottom Left Overlay - Freshness / Guarantee */}
-                    <div className="absolute bottom-2 left-2 bg-[#0052FF] text-white px-2 py-0.5 rounded-md text-[9px] font-extrabold shadow-sm z-10 flex items-center gap-0.5">
-                      <span className="material-symbols-outlined text-[10px]">auto_awesome</span>
-                      <span>AI 검증 {product.freshnessScore}점</span>
+                      <span>{displayGrade(product.grade)}</span>
                     </div>
                   </div>
 

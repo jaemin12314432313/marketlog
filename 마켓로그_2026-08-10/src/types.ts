@@ -14,7 +14,7 @@ export interface ProductItem {
   publicPrice: number;
   priceTag: string; // e.g. "공공 시세 대비 10% 저렴"
   grade: QualityGrade;
-  category: "AI 추천상품" | "야채" | "수산물" | "정육" | "과일" | "건어물";
+  category: "야채" | "수산물" | "정육" | "과일" | "건어물";
   imageUrl: string;
   freshnessScore: number;
   defectScore: number;
