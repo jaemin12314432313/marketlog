@@ -182,7 +182,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
               {sortBy === "latest"
                 ? "최신순"
                 : sortBy === "discount"
-                ? "혜택순"
+                ? "가성비순"
                 : sortBy === "priceLow"
                 ? "낮은가격순"
                 : "높은가격순"}
@@ -195,7 +195,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
               <div className="absolute left-0 top-full mt-1.5 w-36 bg-white rounded-xl shadow-xl border border-[#E2E8F0] py-1.5 z-50 flex flex-col gap-0.5 animate-in fade-in zoom-in-95 duration-150">
                 {[
                   { key: "latest", label: "최신순" },
-                  { key: "discount", label: "혜택순 (할인율)" },
+                  { key: "discount", label: "가성비순 (할인율)" },
                   { key: "priceLow", label: "낮은가격순" },
                   { key: "priceHigh", label: "높은가격순" },
                 ].map((opt) => (
