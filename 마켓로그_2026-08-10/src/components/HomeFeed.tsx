@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { ProductItem, MarketInfo } from "../types";
 import { UserRole } from "./LoginModal";
+import { ProductFilterModal } from "./ProductFilterModal";
 
 // 비전 파이프라인이 2단계(특상/보통) 등급으로 바뀌어서, 화면에도 A+/B 같은 영문 등급
 // 대신 실제 판정 체계와 맞는 한글 표기를 쓴다 (데이터 자체는 여전히 A+/B 등 문자로 저장됨).
@@ -35,15 +36,23 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
   onToggleBookmark,
   isLoading = false,
 }) => {
-  const [selectedCategory, setSelectedCategory] = useState<string>("전체");
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<"accuracy" | "price" | "grade">("accuracy");
+  const [sortBy, setSortBy] = useState<"latest" | "discount" | "priceLow" | "priceHigh">("latest");
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedGrades, setSelectedGrades] = useState<string[]>([]);
+  // [0, Infinity] = "가격 범위 미적용" — 필터 모달에서 실제 값으로 바뀌기 전까지는
+  // 아무 상품도 걸러내지 않는다.
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, Infinity]);
 
-  const categories = ["전체", "야채", "수산물", "정육", "과일", "건어물"];
+  const categories = ["야채", "수산물", "정육", "과일", "건어물"];
+  const activeFilterCount =
+    selectedCategories.length + selectedGrades.length + (priceRange[1] !== Infinity ? 1 : 0);
 
-  const filteredProducts = products.filter((p) => {
-    // 1. Region Filter
+  // 지역/검색어까지만 반영한 목록 — 필터 모달이 여기 기준으로 실시간 개수와 가격
+  // 범위를 계산한다(카테고리/등급/가격은 아직 안 걸렀으므로 전체 범위가 나온다).
+  const regionAndSearchFiltered = products.filter((p) => {
     let matchesRegion = true;
     if (selectedRegion && selectedRegion !== "전체") {
       const regionShort = selectedRegion.replace("광역시", "").replace("특별시", "").replace("특별자치시", "");
@@ -55,34 +64,48 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
         (selectedRegion === "부산광역시" && p.marketId === "jagalchi")
       );
     }
-
-    // 2. Category Filter
-    const matchesCategory =
-      selectedCategory === "전체"
-        ? true
-        : selectedCategory === "야채"
-        ? (p.category === "야채" || (p.category as string) === "신선야채")
-        : p.category === selectedCategory;
-
-    // 3. Search Query Filter
     const matchesSearch =
       p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.shopName.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesRegion && matchesSearch;
+  });
 
-    return matchesRegion && matchesCategory && matchesSearch;
+  const filteredProducts = regionAndSearchFiltered.filter((p) => {
+    const matchesCategory =
+      selectedCategories.length === 0
+        ? true
+        : selectedCategories.includes(p.category) ||
+          (selectedCategories.includes("야채") && (p.category as string) === "신선야채");
+
+    const matchesGrade =
+      selectedGrades.length === 0 ? true : selectedGrades.includes(displayGrade(p.grade));
+
+    const matchesPrice = p.price >= priceRange[0] && p.price <= priceRange[1];
+
+    return matchesCategory && matchesGrade && matchesPrice;
   });
 
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
-  // Sort products
+  // Sort products — "가격순"/"정확도순"은 카테고리가 섞인 피드 전체에서는 비교 자체가
+  // 무의미해서(사과랑 생선 가격을 비교하는 게 의미 없음), 항상 유의미한 기준(최신순)과
+  // 카테고리 안 가려도 공정한 기준(공공시세 대비 할인율순)으로 교체했다.
   const sortedProducts = [...filteredProducts].sort((a, b) => {
-    if (sortBy === "price") {
+    if (sortBy === "priceLow") {
       return a.price - b.price;
     }
-    if (sortBy === "grade") {
-      return b.freshnessScore - a.freshnessScore;
+    if (sortBy === "priceHigh") {
+      return b.price - a.price;
     }
-    return 0; // default order
+    if (sortBy === "discount") {
+      const discountOf = (p: ProductItem) =>
+        p.publicPrice > 0 ? (p.publicPrice - p.price) / p.publicPrice : -Infinity;
+      return discountOf(b) - discountOf(a);
+    }
+    // latest
+    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return bTime - aTime;
   });
 
   return (
@@ -109,24 +132,76 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
         </div>
       </div>
 
-      {/* Quick Category Chips */}
-      <section className="flex overflow-x-auto no-scrollbar -mx-4 px-4 snap-x gap-2.5 py-1">
-        {categories.map((cat) => {
-          const isActive = selectedCategory === cat;
-          return (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-4 py-2 rounded-full text-sm font-extrabold whitespace-nowrap active:scale-95 transition-all flex items-center gap-1.5 ${
-                isActive
-                  ? "bg-white border-2 border-[#0052FF] text-[#0052FF] shadow-sm"
-                  : "bg-white border border-[#E2E8F0] text-[#334155] hover:border-[#CBD5E1]"
-              }`}
-            >
-              <span>{cat}</span>
-            </button>
-          );
-        })}
+      {/* Filter / Sort Pills */}
+      <section className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setIsFilterModalOpen(true)}
+          className={`px-4 py-2 rounded-full text-sm font-extrabold flex items-center gap-1.5 transition-all active:scale-95 border ${
+            activeFilterCount > 0
+              ? "bg-blue-50 border-[#0052FF] text-[#0052FF]"
+              : "bg-white border-[#E2E8F0] text-[#334155] hover:border-[#CBD5E1]"
+          }`}
+        >
+          <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>
+            tune
+          </span>
+          <span>필터</span>
+          {activeFilterCount > 0 && (
+            <span className="w-4.5 h-4.5 min-w-[18px] rounded-full bg-[#0052FF] text-white text-[10px] font-extrabold flex items-center justify-center">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
+
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setIsSortDropdownOpen(!isSortDropdownOpen)}
+            className="px-4 py-2 rounded-full text-sm font-extrabold flex items-center gap-1.5 transition-all active:scale-95 border bg-white border-[#E2E8F0] text-[#334155] hover:border-[#CBD5E1]"
+          >
+            <span className="material-symbols-outlined text-lg">swap_vert</span>
+            <span>
+              {sortBy === "latest"
+                ? "최신순"
+                : sortBy === "discount"
+                ? "혜택순"
+                : sortBy === "priceLow"
+                ? "낮은가격순"
+                : "높은가격순"}
+            </span>
+          </button>
+
+          {isSortDropdownOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setIsSortDropdownOpen(false)} />
+              <div className="absolute left-0 top-full mt-1.5 w-36 bg-white rounded-xl shadow-xl border border-[#E2E8F0] py-1.5 z-50 flex flex-col gap-0.5 animate-in fade-in zoom-in-95 duration-150">
+                {[
+                  { key: "latest", label: "최신순" },
+                  { key: "discount", label: "혜택순 (할인율)" },
+                  { key: "priceLow", label: "낮은가격순" },
+                  { key: "priceHigh", label: "높은가격순" },
+                ].map((opt) => (
+                  <button
+                    key={opt.key}
+                    onClick={() => {
+                      setSortBy(opt.key as typeof sortBy);
+                      setIsSortDropdownOpen(false);
+                    }}
+                    className={`px-3 py-2 text-xs font-bold text-left flex items-center justify-between transition-colors ${
+                      sortBy === opt.key ? "bg-blue-50 text-[#0052FF]" : "text-[#334155] hover:bg-slate-50"
+                    }`}
+                  >
+                    <span>{opt.label}</span>
+                    {sortBy === opt.key && (
+                      <span className="material-symbols-outlined text-sm text-[#0052FF]">check</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </section>
 
       {/* Live Product Feed Container */}
@@ -362,7 +437,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
                       >
                         check_circle
                       </span>
-                      <span>AI {product.grade}</span>
+                      <span>{displayGrade(product.grade)}</span>
                     </div>
                   </div>
 
@@ -414,6 +489,21 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
           </div>
         )}
       </section>
+
+      <ProductFilterModal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        products={regionAndSearchFiltered}
+        categories={categories}
+        selectedCategories={selectedCategories}
+        selectedGrades={selectedGrades}
+        priceRange={priceRange}
+        onApply={({ categories: cats, grades, priceRange: range }) => {
+          setSelectedCategories(cats);
+          setSelectedGrades(grades);
+          setPriceRange(range);
+        }}
+      />
     </div>
   );
 };

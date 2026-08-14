@@ -45,6 +45,53 @@
       .content-pt-safe { padding-top: calc(6rem + env(safe-area-inset-top, 0px)); }
       .content-pb-safe { padding-bottom: calc(7rem + env(safe-area-inset-bottom, 20px)); }
 
+      /* 가격 범위 필터용 이중 슬라이더 — <input type="range"> 두 개를 겹쳐서 만든다.
+         트랙은 투명하게 하고 손잡이(thumb)만 보이게 해서, 아래 색칠된 바(track-fill)
+         위에 두 손잡이가 각자 움직이는 것처럼 보이게 한다. */
+      .range-slider {
+        -webkit-appearance: none;
+        appearance: none;
+        background: transparent;
+        pointer-events: none;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+      .range-slider::-webkit-slider-runnable-track {
+        -webkit-appearance: none;
+        background: transparent;
+        height: 100%;
+      }
+      .range-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        pointer-events: auto;
+        width: 20px;
+        height: 20px;
+        border-radius: 9999px;
+        background: #ffffff;
+        border: 3px solid #0052FF;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+        cursor: pointer;
+        margin-top: 0;
+      }
+      .range-slider::-moz-range-track {
+        background: transparent;
+        height: 100%;
+      }
+      .range-slider::-moz-range-thumb {
+        pointer-events: auto;
+        width: 20px;
+        height: 20px;
+        border-radius: 9999px;
+        background: #ffffff;
+        border: 3px solid #0052FF;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+        cursor: pointer;
+      }
+
       /* Scanning animation */
       @keyframes scanline {
         0% { transform: translateY(-100%); opacity: 0; }
