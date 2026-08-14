@@ -13,7 +13,9 @@ interface ProductFilterModalProps {
   // 여기서 실시간 개수·가격 범위를 계산한다.
   products: ProductItem[];
   categories: string[];
-  itemTypes: string[];
+  // 카테고리별로 그 아래 펼쳐질 품종 목록 — 없는 카테고리(수산물/정육/건어물 등)는 그냥
+  // 서브 목록 없이 카테고리 칩만 있는다.
+  itemTypesByCategory: Record<string, string[]>;
   selectedCategories: string[];
   selectedItemTypes: string[];
   selectedGrades: string[];
@@ -33,7 +35,7 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
   onClose,
   products,
   categories,
-  itemTypes,
+  itemTypesByCategory,
   selectedCategories,
   selectedItemTypes,
   selectedGrades,
@@ -143,7 +145,8 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
-          {/* Category multi-select */}
+          {/* Category multi-select — 선택한 카테고리 밑에 그 카테고리에 속하는 품종
+              (AI가 실제로 인식하는 10개 중 해당 카테고리 것만)이 바로 펼쳐진다. */}
           <div className="space-y-2.5">
             <h4 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">카테고리</h4>
             <div className="flex flex-wrap gap-2">
@@ -165,30 +168,33 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
                 );
               })}
             </div>
-          </div>
 
-          {/* Item Type multi-select — AI가 실제로 인식하는 10개 품종 */}
-          <div className="space-y-2.5">
-            <h4 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">품종</h4>
-            <div className="flex flex-wrap gap-2">
-              {itemTypes.map((item) => {
-                const isActive = draftItemTypes.includes(item);
-                return (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => toggleItemType(item)}
-                    className={`px-3.5 py-2 rounded-full text-sm font-bold transition-all active:scale-95 ${
-                      isActive
-                        ? "bg-[#0052FF] text-white shadow-sm"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    {item}
-                  </button>
-                );
-              })}
-            </div>
+            {categories
+              .filter((cat) => draftCategories.includes(cat) && itemTypesByCategory[cat]?.length)
+              .map((cat) => (
+                <div key={cat} className="pl-3 border-l-2 border-blue-100 space-y-1.5 mt-3">
+                  <p className="text-[11px] font-bold text-slate-400">{cat} 품종</p>
+                  <div className="flex flex-wrap gap-2">
+                    {itemTypesByCategory[cat].map((item) => {
+                      const isActive = draftItemTypes.includes(item);
+                      return (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => toggleItemType(item)}
+                          className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 ${
+                            isActive
+                              ? "bg-emerald-600 text-white shadow-sm"
+                              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
           </div>
 
           {/* Grade multi-select */}

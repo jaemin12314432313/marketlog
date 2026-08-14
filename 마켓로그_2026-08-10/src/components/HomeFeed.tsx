@@ -48,9 +48,14 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
   const [priceRange, setPriceRange] = useState<[number, number]>([0, Infinity]);
 
   const categories = ["야채", "수산물", "정육", "과일", "건어물"];
-  // AI 비전 모델이 실제로 인식하는 10개 품종 — 상품 제목에 이 단어가 포함돼 있는지로
-  // 매칭한다(백엔드에 품종을 구조화해서 저장하는 필드가 아직 없어서 임시로 이렇게 함).
-  const itemTypes = ["감", "감귤", "감자", "마늘", "무", "배", "배추", "사과", "양배추", "양파"];
+  // AI 비전 모델이 실제로 인식하는 10개 품종을 카테고리별로 묶어둔다 — 필터에서
+  // "야채" 선택하면 그 밑에 이 중 야채 것들만 펼쳐지는 식. 수산물/정육/건어물은
+  // AI가 인식하는 품종이 없어서 서브 목록이 안 뜬다. 상품 제목에 이 단어가 포함돼
+  // 있는지로 매칭한다(백엔드에 품종을 구조화해서 저장하는 필드가 아직 없어서 임시로 이렇게 함).
+  const itemTypesByCategory: Record<string, string[]> = {
+    야채: ["무", "배추", "마늘", "양파", "양배추", "감자"],
+    과일: ["사과", "배", "감", "감귤"],
+  };
   const activeFilterCount =
     selectedCategories.length +
     selectedItemTypes.length +
@@ -507,7 +512,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
         onClose={() => setIsFilterModalOpen(false)}
         products={regionAndSearchFiltered}
         categories={categories}
-        itemTypes={itemTypes}
+        itemTypesByCategory={itemTypesByCategory}
         selectedCategories={selectedCategories}
         selectedItemTypes={selectedItemTypes}
         selectedGrades={selectedGrades}
