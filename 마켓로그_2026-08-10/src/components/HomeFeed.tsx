@@ -80,7 +80,10 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
   });
 
   return (
-    <div className="w-full max-w-[600px] mx-auto content-pt-safe content-pb-safe px-4 flex flex-col gap-5">
+    <div
+      className="w-full max-w-[600px] mx-auto content-pb-safe px-4 flex flex-col gap-5"
+      style={{ paddingTop: "calc(5.25rem + env(safe-area-inset-top, 0px))" }}
+    >
       {/* Search Input Bar */}
       <div className="relative w-full">
         <div className="bg-surface-white rounded-xl border border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.05)] flex items-center px-4 h-12 transition-all focus-within:border-trust-blue focus-within:ring-1 focus-within:ring-trust-blue">

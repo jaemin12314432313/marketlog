@@ -215,7 +215,10 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
       <div className="absolute inset-x-0 bottom-0 h-72 bg-gradient-to-t from-black/90 via-black/50 to-transparent z-10 pointer-events-none"></div>
 
       {/* Top Header */}
-      <header className="relative z-20 pt-4 px-4 flex justify-between items-center w-full">
+      <header
+        className="relative z-20 px-4 flex justify-between items-center w-full"
+        style={{ paddingTop: "calc(1rem + env(safe-area-inset-top, 0px))" }}
+      >
         {/* Flash Toggle Button */}
         <button
           onClick={() => setIsFlashOn(!isFlashOn)}

@@ -356,7 +356,10 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
       <div className="absolute inset-x-0 bottom-0 h-72 bg-gradient-to-t from-black/90 via-black/50 to-transparent z-10 pointer-events-none"></div>
 
       {/* Top Header */}
-      <header className="relative z-20 pt-3 px-4 flex justify-between items-center w-full">
+      <header
+        className="relative z-20 px-4 flex justify-between items-center w-full"
+        style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top, 0px))" }}
+      >
         {/* Top Left: Flash Toggle */}
         <button
           onClick={() => setIsFlashOn(!isFlashOn)}

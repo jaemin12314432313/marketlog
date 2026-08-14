@@ -22,7 +22,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   return (
     <>
       {/* Mobile Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-1 pb-safe h-[72px] bg-surface-white border-t border-[#E2E8F0] shadow-[0_-1px_3px_rgba(0,0,0,0.05)] md:hidden">
+      <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-1 pb-safe min-h-[72px] bg-surface-white border-t border-[#E2E8F0] shadow-[0_-1px_3px_rgba(0,0,0,0.05)] md:hidden">
         {/* Home */}
         <button
           onClick={() => onSelectTab("home")}
