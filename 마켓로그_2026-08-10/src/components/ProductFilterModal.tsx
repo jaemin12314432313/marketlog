@@ -123,9 +123,14 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
 
   if (!isOpen) return null;
 
+  // 숫자 입력창에는 자유롭게(범위를 벗어나는 값도 잠깐은) 타이핑할 수 있게 두되,
+  // 슬라이더 손잡이는 항상 이 값으로 그려서 트랙 밖으로 튀어나가는 일이 없게 한다.
+  const clampedMin = Math.min(Math.max(draftMin, bounds.min), bounds.max);
+  const clampedMax = Math.min(Math.max(draftMax, bounds.min), bounds.max);
+
   const range = Math.max(1, bounds.max - bounds.min);
-  const leftPct = ((draftMin - bounds.min) / range) * 100;
-  const rightPct = ((draftMax - bounds.min) / range) * 100;
+  const leftPct = ((clampedMin - bounds.min) / range) * 100;
+  const rightPct = ((clampedMax - bounds.min) / range) * 100;
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center">
@@ -235,7 +240,7 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
                 className="range-slider"
                 min={bounds.min}
                 max={bounds.max}
-                value={draftMin}
+                value={clampedMin}
                 onChange={(e) => setDraftMin(Math.min(Number(e.target.value), draftMax))}
               />
               <input
@@ -243,7 +248,7 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
                 className="range-slider"
                 min={bounds.min}
                 max={bounds.max}
-                value={draftMax}
+                value={clampedMax}
                 onChange={(e) => setDraftMax(Math.max(Number(e.target.value), draftMin))}
               />
             </div>
@@ -257,7 +262,7 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
                     const v = Number(e.target.value);
                     setDraftMin(Number.isNaN(v) ? 0 : v);
                   }}
-                  onBlur={() => setDraftMin(Math.min(Math.max(draftMin, bounds.min), draftMax))}
+                  onBlur={() => setDraftMin(clampedMin)}
                   className="w-full min-w-0 bg-transparent border-none focus:outline-none text-sm font-bold text-slate-800 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
                 <span className="text-sm font-bold text-slate-500 shrink-0">원</span>
@@ -272,7 +277,7 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
                     const v = Number(e.target.value);
                     setDraftMax(Number.isNaN(v) ? 0 : v);
                   }}
-                  onBlur={() => setDraftMax(Math.max(Math.min(draftMax, bounds.max), draftMin))}
+                  onBlur={() => setDraftMax(clampedMax)}
                   className="w-full min-w-0 bg-transparent border-none focus:outline-none text-sm font-bold text-slate-800 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
                 <span className="text-sm font-bold text-slate-500 shrink-0">원</span>
