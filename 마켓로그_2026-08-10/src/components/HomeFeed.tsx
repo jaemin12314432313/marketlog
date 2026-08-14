@@ -41,14 +41,21 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedItemTypes, setSelectedItemTypes] = useState<string[]>([]);
   const [selectedGrades, setSelectedGrades] = useState<string[]>([]);
   // [0, Infinity] = "가격 범위 미적용" — 필터 모달에서 실제 값으로 바뀌기 전까지는
   // 아무 상품도 걸러내지 않는다.
   const [priceRange, setPriceRange] = useState<[number, number]>([0, Infinity]);
 
   const categories = ["야채", "수산물", "정육", "과일", "건어물"];
+  // AI 비전 모델이 실제로 인식하는 10개 품종 — 상품 제목에 이 단어가 포함돼 있는지로
+  // 매칭한다(백엔드에 품종을 구조화해서 저장하는 필드가 아직 없어서 임시로 이렇게 함).
+  const itemTypes = ["감", "감귤", "감자", "마늘", "무", "배", "배추", "사과", "양배추", "양파"];
   const activeFilterCount =
-    selectedCategories.length + selectedGrades.length + (priceRange[1] !== Infinity ? 1 : 0);
+    selectedCategories.length +
+    selectedItemTypes.length +
+    selectedGrades.length +
+    (priceRange[1] !== Infinity ? 1 : 0);
 
   // 지역/검색어까지만 반영한 목록 — 필터 모달이 여기 기준으로 실시간 개수와 가격
   // 범위를 계산한다(카테고리/등급/가격은 아직 안 걸렀으므로 전체 범위가 나온다).
@@ -77,12 +84,17 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
         : selectedCategories.includes(p.category) ||
           (selectedCategories.includes("야채") && (p.category as string) === "신선야채");
 
+    const matchesItemType =
+      selectedItemTypes.length === 0
+        ? true
+        : selectedItemTypes.some((item) => p.title.includes(item));
+
     const matchesGrade =
       selectedGrades.length === 0 ? true : selectedGrades.includes(displayGrade(p.grade));
 
     const matchesPrice = p.price >= priceRange[0] && p.price <= priceRange[1];
 
-    return matchesCategory && matchesGrade && matchesPrice;
+    return matchesCategory && matchesItemType && matchesGrade && matchesPrice;
   });
 
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -495,11 +507,14 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
         onClose={() => setIsFilterModalOpen(false)}
         products={regionAndSearchFiltered}
         categories={categories}
+        itemTypes={itemTypes}
         selectedCategories={selectedCategories}
+        selectedItemTypes={selectedItemTypes}
         selectedGrades={selectedGrades}
         priceRange={priceRange}
-        onApply={({ categories: cats, grades, priceRange: range }) => {
+        onApply={({ categories: cats, itemTypes: items, grades, priceRange: range }) => {
           setSelectedCategories(cats);
+          setSelectedItemTypes(items);
           setSelectedGrades(grades);
           setPriceRange(range);
         }}

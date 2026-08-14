@@ -13,11 +13,14 @@ interface ProductFilterModalProps {
   // 여기서 실시간 개수·가격 범위를 계산한다.
   products: ProductItem[];
   categories: string[];
+  itemTypes: string[];
   selectedCategories: string[];
+  selectedItemTypes: string[];
   selectedGrades: string[];
   priceRange: [number, number];
   onApply: (result: {
     categories: string[];
+    itemTypes: string[];
     grades: string[];
     priceRange: [number, number];
   }) => void;
@@ -30,7 +33,9 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
   onClose,
   products,
   categories,
+  itemTypes,
   selectedCategories,
+  selectedItemTypes,
   selectedGrades,
   priceRange,
   onApply,
@@ -42,6 +47,7 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
   }, [products]);
 
   const [draftCategories, setDraftCategories] = useState<string[]>(selectedCategories);
+  const [draftItemTypes, setDraftItemTypes] = useState<string[]>(selectedItemTypes);
   const [draftGrades, setDraftGrades] = useState<string[]>(selectedGrades);
   const [draftMin, setDraftMin] = useState<number>(priceRange[0]);
   const [draftMax, setDraftMax] = useState<number>(priceRange[1]);
@@ -51,6 +57,7 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     setDraftCategories(selectedCategories);
+    setDraftItemTypes(selectedItemTypes);
     setDraftGrades(selectedGrades);
     setDraftMin(priceRange[0]);
     setDraftMax(priceRange[1]);
@@ -60,6 +67,12 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
   const toggleCategory = (cat: string) => {
     setDraftCategories((prev) =>
       prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
+    );
+  };
+
+  const toggleItemType = (item: string) => {
+    setDraftItemTypes((prev) =>
+      prev.includes(item) ? prev.filter((i) => i !== item) : [...prev, item]
     );
   };
 
@@ -79,22 +92,30 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
   const liveCount = useMemo(() => {
     return products.filter((p) => {
       const matchesCategory = matchesDraftCategory(p);
+      const matchesItemType =
+        draftItemTypes.length === 0 || draftItemTypes.some((item) => p.title.includes(item));
       const matchesGrade = draftGrades.length === 0 || draftGrades.includes(displayGrade(p.grade));
       const matchesPrice = p.price >= draftMin && p.price <= draftMax;
-      return matchesCategory && matchesGrade && matchesPrice;
+      return matchesCategory && matchesItemType && matchesGrade && matchesPrice;
     }).length;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [products, draftCategories, draftGrades, draftMin, draftMax]);
+  }, [products, draftCategories, draftItemTypes, draftGrades, draftMin, draftMax]);
 
   const handleReset = () => {
     setDraftCategories([]);
+    setDraftItemTypes([]);
     setDraftGrades([]);
     setDraftMin(bounds.min);
     setDraftMax(bounds.max);
   };
 
   const handleApply = () => {
-    onApply({ categories: draftCategories, grades: draftGrades, priceRange: [draftMin, draftMax] });
+    onApply({
+      categories: draftCategories,
+      itemTypes: draftItemTypes,
+      grades: draftGrades,
+      priceRange: [draftMin, draftMax],
+    });
     onClose();
   };
 
@@ -140,6 +161,30 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
                     }`}
                   >
                     {cat}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Item Type multi-select — AI가 실제로 인식하는 10개 품종 */}
+          <div className="space-y-2.5">
+            <h4 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">품종</h4>
+            <div className="flex flex-wrap gap-2">
+              {itemTypes.map((item) => {
+                const isActive = draftItemTypes.includes(item);
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => toggleItemType(item)}
+                    className={`px-3.5 py-2 rounded-full text-sm font-bold transition-all active:scale-95 ${
+                      isActive
+                        ? "bg-[#0052FF] text-white shadow-sm"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    {item}
                   </button>
                 );
               })}
