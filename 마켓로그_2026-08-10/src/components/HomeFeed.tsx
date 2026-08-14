@@ -98,8 +98,8 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={`${selectedRegion === "전체" ? "전국" : selectedRegion} 상품명/점포명 검색 (예: 갈치, 양동수산)`}
-            className="flex-1 bg-transparent border-none focus:outline-none text-sm text-on-surface placeholder-outline font-medium"
+            placeholder={`${selectedRegion === "전체" ? "전국" : selectedRegion} 상품명/점포명 검색`}
+            className="flex-1 min-w-0 bg-transparent border-none focus:outline-none text-sm text-on-surface placeholder-outline font-medium overflow-hidden text-ellipsis"
           />
           {searchQuery && (
             <button onClick={() => setSearchQuery("")} className="text-outline hover:text-on-surface">
