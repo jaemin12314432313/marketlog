@@ -248,12 +248,34 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
               />
             </div>
             <div className="flex items-center gap-2">
-              <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800">
-                {draftMin.toLocaleString()}원
+              <div className="flex-1 flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus-within:border-[#0052FF]">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={draftMin}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setDraftMin(Number.isNaN(v) ? 0 : v);
+                  }}
+                  onBlur={() => setDraftMin(Math.min(Math.max(draftMin, bounds.min), draftMax))}
+                  className="w-full min-w-0 bg-transparent border-none focus:outline-none text-sm font-bold text-slate-800 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <span className="text-sm font-bold text-slate-500 shrink-0">원</span>
               </div>
               <span className="text-slate-400">—</span>
-              <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800">
-                {draftMax.toLocaleString()}원
+              <div className="flex-1 flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus-within:border-[#0052FF]">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={draftMax}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setDraftMax(Number.isNaN(v) ? 0 : v);
+                  }}
+                  onBlur={() => setDraftMax(Math.max(Math.min(draftMax, bounds.max), draftMin))}
+                  className="w-full min-w-0 bg-transparent border-none focus:outline-none text-sm font-bold text-slate-800 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <span className="text-sm font-bold text-slate-500 shrink-0">원</span>
               </div>
             </div>
           </div>
