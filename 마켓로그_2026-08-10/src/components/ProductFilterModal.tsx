@@ -286,8 +286,13 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
           </div>
         </div>
 
-        {/* Footer actions */}
-        <div className="shrink-0 border-t border-slate-100 p-4 flex items-center gap-2.5 content-pb-safe">
+        {/* Footer actions — content-pb-safe는 BottomNav 뒤에 깔리는 전체 페이지용(7rem)이라
+            여기 쓰면 모달 전체 높이가 max-h-[85vh]를 넘어서 버튼 줄이 화면 밖으로 잘렸다.
+            모달은 그냥 안전영역만큼만 여유를 주면 된다. */}
+        <div
+          className="shrink-0 border-t border-slate-100 p-4 flex items-center gap-2.5"
+          style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
+        >
           <button
             type="button"
             onClick={handleReset}

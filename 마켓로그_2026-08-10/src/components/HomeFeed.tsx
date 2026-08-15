@@ -9,6 +9,30 @@ function displayGrade(grade: string): string {
   return grade === "A+" ? "특상" : "보통";
 }
 
+// product.timeAgo는 등록 시점에 박제된 고정 문자열("방금 전 등록" 등)이라 시간이 지나도
+// 안 바뀐다 — 실제 경과 시간은 createdAt(진짜 타임스탬프)에서 매번 다시 계산해야 한다.
+function formatRelativeTime(createdAt?: string): string {
+  if (!createdAt) return "";
+  const created = new Date(createdAt).getTime();
+  if (Number.isNaN(created)) return "";
+  const diffMin = Math.floor((Date.now() - created) / 60000);
+  if (diffMin < 1) return "방금 전";
+  if (diffMin < 60) return `${diffMin}분 전`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}시간 전`;
+  const diffDay = Math.floor(diffHour / 24);
+  return `${diffDay}일 전`;
+}
+
+// 할인율순 정렬 기준(공공 시세 대비 할인율)과 동일한 계산인데, 정작 카드에는 안 보여서
+// 정렬을 해야만 알 수 있었다 — 가격 옆에 직접 표시한다. 공공가 정보가 없거나(publicPrice
+// 0 이하) 오히려 더 비싸면(마이너스 할인) 뱃지를 아예 숨긴다.
+function discountPercent(product: ProductItem): number | null {
+  if (!product.publicPrice || product.publicPrice <= 0) return null;
+  const percent = Math.round(((product.publicPrice - product.price) / product.publicPrice) * 100);
+  return percent > 0 ? percent : null;
+}
+
 interface HomeFeedProps {
   products: ProductItem[];
   selectedRegion?: string;
@@ -47,7 +71,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
   // 아무 상품도 걸러내지 않는다.
   const [priceRange, setPriceRange] = useState<[number, number]>([0, Infinity]);
 
-  const categories = ["야채", "수산물", "정육", "과일", "건어물"];
+  const categories = ["야채", "과일", "정육", "수산물", "건어물"];
   // AI 비전 모델이 실제로 인식하는 10개 품종을 카테고리별로 묶어둔다 — 필터에서
   // "야채" 선택하면 그 밑에 이 중 야채 것들만 펼쳐지는 식. 수산물/정육/건어물은
   // AI가 인식하는 품종이 없어서 서브 목록이 안 뜬다. 상품 제목에 이 단어가 포함돼
@@ -67,11 +91,20 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
   const regionAndSearchFiltered = products.filter((p) => {
     let matchesRegion = true;
     if (selectedRegion && selectedRegion !== "전체") {
-      const regionShort = selectedRegion.replace("광역시", "").replace("특별시", "").replace("특별자치시", "");
+      const regionShort = selectedRegion
+        .replace("특별자치시", "")
+        .replace("특별자치도", "")
+        .replace("통합특별시", "")
+        .replace("광역시", "")
+        .replace("특별시", "")
+        .replace("도", "");
       matchesRegion = Boolean(
         p.region === selectedRegion ||
         (p.region && p.region.includes(regionShort)) ||
-        (selectedRegion === "광주광역시" && p.marketId === "yangdong") ||
+        // 양동시장 데이터는 region이 옛 행정구역명("광주광역시")으로 저장돼 있어서, 통합
+        // 이후 명칭("전남광주통합특별시")을 골라도 그대로 매칭되게 해준다.
+        (selectedRegion === "전남광주통합특별시" &&
+          (p.marketId === "yangdong" || p.region === "광주광역시" || p.region === "전라남도")) ||
         (selectedRegion === "서울특별시" && p.marketId === "mangwon") ||
         (selectedRegion === "부산광역시" && p.marketId === "jagalchi")
       );
@@ -138,7 +171,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={`${selectedRegion === "전체" ? "전국" : selectedRegion} 상품명/점포명 검색`}
+            placeholder="상품명/점포명 검색"
             className="flex-1 min-w-0 bg-transparent border-none focus:outline-none text-sm text-on-surface placeholder-outline font-medium overflow-hidden text-ellipsis"
           />
           {searchQuery && (
@@ -182,7 +215,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
               {sortBy === "latest"
                 ? "최신순"
                 : sortBy === "discount"
-                ? "가성비순"
+                ? "할인율순"
                 : sortBy === "priceLow"
                 ? "낮은가격순"
                 : "높은가격순"}
@@ -192,10 +225,10 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
           {isSortDropdownOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setIsSortDropdownOpen(false)} />
-              <div className="absolute left-0 top-full mt-1.5 w-36 bg-white rounded-xl shadow-xl border border-[#E2E8F0] py-1.5 z-50 flex flex-col gap-0.5 animate-in fade-in zoom-in-95 duration-150">
+              <div className="absolute left-0 top-full mt-1.5 w-52 bg-white rounded-xl shadow-xl border border-[#E2E8F0] py-1.5 z-50 flex flex-col gap-0.5 animate-in fade-in zoom-in-95 duration-150">
                 {[
                   { key: "latest", label: "최신순" },
-                  { key: "discount", label: "가성비순 (할인율)" },
+                  { key: "discount", label: "공공시세 대비 할인율순" },
                   { key: "priceLow", label: "낮은가격순" },
                   { key: "priceHigh", label: "높은가격순" },
                 ].map((opt) => (
@@ -225,7 +258,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
       <section className="flex flex-col gap-3.5">
         <div className="flex justify-between items-center px-1 mb-0.5 relative">
           <h2 className="text-xl sm:text-2xl font-extrabold text-[#0F172A] tracking-tight flex items-center gap-2">
-            <span>실시간 인증 상품</span>
+            <span>AI 스캔 인증 상품</span>
             <span className="text-xs bg-[#0052FF] text-white px-2 py-0.5 rounded-full font-bold">
               {sortedProducts.length}
             </span>
@@ -259,27 +292,22 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
         {isLoading ? (
           <div className="bg-white rounded-2xl border border-[#E2E8F0] p-10 text-center text-xs text-outline font-medium flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-4 border-trust-blue border-t-transparent rounded-full animate-spin"></div>
-            <span>실시간 인증 상품을 불러오는 중입니다...</span>
+            <span>AI 스캔 인증 상품을 불러오는 중입니다...</span>
           </div>
         ) : sortedProducts.length === 0 ? (
           <div className="bg-white rounded-2xl border border-[#E2E8F0] p-8 text-center text-xs text-outline font-medium flex flex-col items-center gap-2">
-            <span className="material-symbols-outlined text-3xl text-slate-400">frown</span>
             <span>
               {selectedRegion === "전체"
                 ? "검색 결과와 일치하는 전통시장 인증 상품이 없습니다."
-                : `[${selectedRegion}] 지역에 해당 조건의 실시간 인증 상품이 아직 없습니다.`}
+                : `[${selectedRegion}] 지역에 해당 조건의 AI 스캔 인증 상품이 아직 없습니다.`}
             </span>
-            {selectedRegion !== "전체" && (
-              <span className="text-[11px] text-trust-blue font-bold">
-                상단 지역 선택에서 '전국 (전체)'로 변경해보세요!
-              </span>
-            )}
           </div>
         ) : viewMode === "grid" ? (
           /* 2-Column Grid Layout (matching reference market mall style) */
-          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 items-start">
             {sortedProducts.map((product) => {
               const isBookmarked = bookmarkedProductIds.includes(product.id);
+              const relativeTime = formatRelativeTime(product.createdAt);
 
               return (
                 <article
@@ -296,8 +324,12 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
                     />
 
                     {/* Badge: Top Right - Grade */}
-                    <div className="absolute top-2 right-2 bg-slate-900/80 backdrop-blur-md text-white px-2 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1 shadow-md z-10 border border-white/20">
-                      <span className="material-symbols-outlined text-emerald-400 text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                    <div
+                      className={`absolute top-2 right-2 text-white px-2 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1 shadow-md z-10 border border-white/20 ${
+                        product.grade.startsWith("A") ? "bg-[#00C875]" : "bg-[#0052FF]"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>
                         verified
                       </span>
                       <span>{displayGrade(product.grade)}</span>
@@ -305,20 +337,38 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
                   </div>
 
                   {/* Card Content Below Image */}
-                  <div className="pt-2.5 pb-1 px-0.5 flex-1 flex flex-col justify-between space-y-1.5">
-                    {/* Title with Shop Name in Brackets */}
+                  <div className="pt-2.5 pb-1 px-0.5 flex flex-col space-y-0.5">
+                    {/* Shop Name (top line) + Title (below) */}
                     <div>
-                      <h3 className="text-xs sm:text-sm font-extrabold text-[#0F172A] leading-snug line-clamp-2 group-hover:text-[#0052FF] transition-colors">
-                        <span className="text-[#0052FF] font-black mr-1">[{product.shopName}]</span>
+                      <p className="text-[11px] font-black text-[#0052FF] truncate leading-tight">{product.shopName}</p>
+                      <h3 className="text-xs sm:text-sm font-extrabold text-[#0F172A] leading-snug line-clamp-2 group-hover:text-[#0052FF] transition-colors mt-0.5">
                         {product.title}
+                        {product.unit && <span className="text-[#64748B] font-bold"> ({product.unit})</span>}
                       </h3>
+                      {relativeTime && (
+                        <p className="text-[11px] text-[#94A3B8] font-medium leading-tight mt-0.5">{relativeTime}</p>
+                      )}
                     </div>
 
                     {/* Price Section - Only Seller Price */}
-                    <div className="flex items-center justify-between gap-1 pt-0.5">
-                      <span className="text-base sm:text-lg font-black text-[#0F172A] tracking-tight">
-                        {product.price.toLocaleString()}원
-                      </span>
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="min-w-0">
+                        <div className="flex items-baseline gap-1 whitespace-nowrap leading-none">
+                          {discountPercent(product) !== null && (
+                            <span className="text-[#0052FF] font-black text-sm sm:text-base">
+                              {discountPercent(product)}%
+                            </span>
+                          )}
+                          <span className="text-base sm:text-lg font-black text-[#0F172A] tracking-tight">
+                            {product.price.toLocaleString()}원
+                          </span>
+                        </div>
+                        {discountPercent(product) !== null && (
+                          <span className="block text-[10px] font-bold text-[#94A3B8] mt-0.5 leading-tight">
+                            공공시세 대비 저렴
+                          </span>
+                        )}
+                      </div>
 
                       {/* Bookmark Circle Button */}
                       {onToggleBookmark && (
@@ -354,6 +404,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
           <div className="flex flex-col gap-3.5">
             {sortedProducts.map((product) => {
               const isBookmarked = bookmarkedProductIds.includes(product.id);
+              const relativeTime = formatRelativeTime(product.createdAt);
 
               return (
                 <article
@@ -389,10 +440,16 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
                     <div>
                       {/* Title and Bookmark options */}
                       <div className="flex justify-between items-start gap-1">
-                        <h3 className="text-sm sm:text-base font-extrabold text-[#0F172A] leading-snug line-clamp-2 group-hover:text-[#0052FF] transition-colors">
-                          <span className="text-[#0052FF] font-black mr-1">[{product.shopName}]</span>
-                          {product.title}
-                        </h3>
+                        <div>
+                          <p className="text-xs font-black text-[#0052FF] truncate">{product.shopName}</p>
+                          <h3 className="text-sm sm:text-base font-extrabold text-[#0F172A] leading-snug line-clamp-2 group-hover:text-[#0052FF] transition-colors mt-0.5">
+                            {product.title}
+                            {product.unit && <span className="text-[#64748B] font-bold"> ({product.unit})</span>}
+                          </h3>
+                          {relativeTime && (
+                            <p className="text-[11px] text-[#94A3B8] font-medium mt-0.5">{relativeTime}</p>
+                          )}
+                        </div>
                         {onToggleBookmark && (
                           <button
                             type="button"
@@ -420,10 +477,22 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
 
                     {/* Price Section - Only Seller Price */}
                     <div className="mt-2">
-                      <div className="text-xl sm:text-2xl font-black text-[#0F172A] tracking-tight">
-                        {product.price.toLocaleString()}
-                        <span className="text-base font-bold text-[#0F172A] ml-0.5">원</span>
+                      <div className="flex items-baseline gap-1 whitespace-nowrap">
+                        {discountPercent(product) !== null && (
+                          <span className="text-[#0052FF] font-black text-lg sm:text-xl">
+                            {discountPercent(product)}%
+                          </span>
+                        )}
+                        <div className="text-xl sm:text-2xl font-black text-[#0F172A] tracking-tight">
+                          {product.price.toLocaleString()}
+                          <span className="text-base font-bold text-[#0F172A] ml-0.5">원</span>
+                        </div>
                       </div>
+                      {discountPercent(product) !== null && (
+                        <span className="block text-[11px] font-bold text-[#94A3B8] mt-0.5">
+                          공공시세 대비 저렴
+                        </span>
+                      )}
                     </div>
                   </div>
                 </article>

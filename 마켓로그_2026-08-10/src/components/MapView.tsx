@@ -1,15 +1,22 @@
 import React, { useState, useEffect, useRef } from "react";
 import { TextToSpeech } from "@capacitor-community/text-to-speech";
 import { MarketInfo } from "../types";
+import { MARKETS_DATA } from "../data/initialData";
 import { fetchMapConfig, fetchMapStores, fetchDocentStory, MapStorePin } from "../lib/api";
 
 interface MapViewProps {
   selectedMarket: MarketInfo;
+  // 검색으로 다른 전통시장(양동/망원/자갈치)을 고르면 지도가 그 시장으로 전환된다.
+  onSelectMarket?: (market: MarketInfo) => void;
   onOpenAiScan: () => void;
   // 상품 상세 등 다른 화면에서 "이 상점 지도에서 확인하기"로 넘어왔을 때, 그 상점으로
   // 바로 이동/포커스하기 위한 이름. 처리 후 onFocusHandled로 부모 쪽 상태를 비운다.
   focusShopName?: string | null;
   onFocusHandled?: () => void;
+  // 상품 상세에서 넘어온 경우에만 채워진다 — 있을 때만 뒤로가기 버튼을 보여주고,
+  // 누르면 원래 보던 상품 상세로 돌아간다. 하단 탭에서 지도 탭을 직접 눌러 들어온
+  // 경우엔 없으므로 버튼도 안 뜬다.
+  onBack?: () => void;
 }
 
 const NAVER_SCRIPT_ID = "naver-maps-sdk";
@@ -70,17 +77,26 @@ function computeConvexHull(points: { lat: number; lng: number }[]): { lat: numbe
   return [...lower, ...upper];
 }
 
-function buildMarkerContent(store: MapStorePin): string {
+// isFocused: 다른 화면에서 "이 상점"으로 지목되어 넘어왔거나(포커스), 방금 클릭해서
+// activePin이 된 마커. 주변 점포 핀과 색/모양이 거의 같아서 눈에 안 띈다는 피드백이 있어,
+// 크기를 키우고 강렬한 빨간색으로 바꾸고 통통 튀는 애니메이션(animate-bounce)을 준다.
+// 카테고리 기본색을 전부 브랜드 블루로 통일해서(gwangju_market_data.py), 빨강은 이제
+// 강조 마커에만 쓰는 색이라 충돌이 없다.
+function buildMarkerContent(store: MapStorePin, isFocused: boolean): string {
   const productBadge = store.products.length
     ? `<span class="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-bold flex items-center justify-center border border-white">${store.products.length}</span>`
     : "";
+  const pinColor = isFocused ? "#EF4444" : store.badge_color;
+  const pinSizeClass = isFocused ? "w-12 h-12" : "w-9 h-9";
+  const iconSizeClass = isFocused ? "text-2xl" : "text-lg";
+  const bounceClass = isFocused ? "animate-bounce" : "";
   return `
-    <div class="flex flex-col items-center cursor-pointer group">
-      <div class="relative w-9 h-9 text-white rounded-full flex items-center justify-center shadow-md border-2 border-white group-hover:scale-110 transition-transform" style="background:${store.badge_color}">
-        <span class="material-symbols-outlined text-lg">${store.icon}</span>
+    <div class="flex flex-col items-center cursor-pointer group ${bounceClass}">
+      <div class="relative ${pinSizeClass} text-white rounded-full flex items-center justify-center shadow-lg border-2 border-white group-hover:scale-110 transition-transform" style="background:${pinColor}">
+        <span class="material-symbols-outlined ${iconSizeClass}">${store.icon}</span>
         ${productBadge}
       </div>
-      <span class="text-xs font-bold bg-white px-2 py-0.5 rounded-md mt-0.5 shadow-sm border border-[#E2E8F0]" style="color:${store.badge_color}">
+      <span class="text-xs font-bold bg-white px-2 py-0.5 rounded-md mt-0.5 shadow-sm border ${isFocused ? "border-[#EF4444]" : "border-[#E2E8F0]"}" style="color:${pinColor}">
         ${store.name}
       </span>
     </div>
@@ -89,9 +105,11 @@ function buildMarkerContent(store: MapStorePin): string {
 
 export const MapView: React.FC<MapViewProps> = ({
   selectedMarket,
+  onSelectMarket,
   onOpenAiScan,
   focusShopName,
   onFocusHandled,
+  onBack,
 }) => {
   const [isPlayingDocent, setIsPlayingDocent] = useState(false);
   const [docentElapsedSec, setDocentElapsedSec] = useState(0);
@@ -120,6 +138,14 @@ export const MapView: React.FC<MapViewProps> = ({
             s.notice.includes(trimmedQuery)
         )
         .slice(0, 8)
+    : [];
+  // 검색으로 다른 전통시장도 찾아서 바로 전환할 수 있게 한다 — 예전엔 지역 선택
+  // 드롭다운에서 "서울특별시" 같은 걸 고르면 지도가 몰래 다른 시장으로 바뀌었는데,
+  // 지역 필터와 지도 시장 전환은 서로 다른 기능이라 분리했다.
+  const marketResults = trimmedQuery
+    ? MARKETS_DATA.filter(
+        (m) => m.id !== selectedMarket.id && (m.name.includes(trimmedQuery) || m.city.includes(trimmedQuery))
+      )
     : [];
 
   const speechStartRef = useRef<number | null>(null);
@@ -286,6 +312,25 @@ export const MapView: React.FC<MapViewProps> = ({
     });
   }, [naverLoaded, mapCenter]);
 
+  // 지도 탭에 처음 들어오면 시장 중심이 아니라 내 실제 위치부터 보여주는 게 자연스럽다는
+  // 피드백 — 위치 권한이 없거나 실패해도 조용히 시장 중심에 그대로 머문다(수동 버튼과
+  // 달리 alert를 띄우지 않는다). 딱 한 번만 시도한다.
+  const hasAutoLocatedRef = useRef(false);
+  useEffect(() => {
+    if (hasAutoLocatedRef.current || !naverLoaded || !mapRef.current) return;
+    hasAutoLocatedRef.current = true;
+    goToCurrentLocation({ silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [naverLoaded, mapCenter]);
+
+  // 시장을 검색해서 바꾸면(위 useEffect가 stores/mapCenter를 새로 불러온다) 이미 만들어진
+  // 지도 인스턴스는 스스로 움직이지 않으므로, 새 중심으로 직접 옮겨준다.
+  useEffect(() => {
+    if (!mapRef.current || !mapCenter) return;
+    const naver = (window as any).naver;
+    mapRef.current.setCenter(new naver.maps.LatLng(mapCenter.lat, mapCenter.lng));
+  }, [mapCenter]);
+
   // 양동시장 전체를 하나의 영역으로 보여주는 외곽선/음영 오버레이 — 실제 점포 좌표의
   // 컨벡스 헐을 계산해서 그린다. 줌 레벨과 무관하게 항상 표시(마커와 달리 시장
   // 전체 범위를 인지하는 용도라 확대해야만 보일 필요가 없다).
@@ -358,7 +403,7 @@ export const MapView: React.FC<MapViewProps> = ({
         position: new naver.maps.LatLng(store.lat, store.lng),
         map: mapRef.current,
         icon: {
-          content: buildMarkerContent(store),
+          content: buildMarkerContent(store, activePin === store.name),
           anchor: new naver.maps.Point(40, 18),
         },
       });
@@ -378,7 +423,7 @@ export const MapView: React.FC<MapViewProps> = ({
       markersRef.current = [];
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [naverLoaded, stores, currentZoom]);
+  }, [naverLoaded, stores, currentZoom, activePin]);
 
   // Elapsed time is derived from a real wall-clock start time (speechStartRef), not a
   // fixed 1%/sec loop -- Web Speech API gives no true duration, so "seeking" below works
@@ -445,13 +490,13 @@ export const MapView: React.FC<MapViewProps> = ({
     setDocentElapsedSec(nextElapsed);
   };
 
-  const handleGoToCurrentLocation = () => {
+  const goToCurrentLocation = (opts: { silent?: boolean } = {}) => {
     if (!navigator.geolocation) {
-      alert("이 브라우저에서는 위치 확인을 지원하지 않습니다.");
+      if (!opts.silent) alert("이 브라우저에서는 위치 확인을 지원하지 않습니다.");
       return;
     }
     if (!mapRef.current) {
-      alert("지도를 아직 불러오는 중입니다. 잠시 후 다시 시도해 주세요.");
+      if (!opts.silent) alert("지도를 아직 불러오는 중입니다. 잠시 후 다시 시도해 주세요.");
       return;
     }
 
@@ -479,6 +524,7 @@ export const MapView: React.FC<MapViewProps> = ({
         }
       },
       (error) => {
+        if (opts.silent) return; // 자동 시도는 실패해도 조용히 시장 중심에 그대로 둔다
         const reason =
           error.code === error.PERMISSION_DENIED
             ? "위치 권한이 거부되었습니다. 브라우저 설정에서 위치 권한을 허용해 주세요."
@@ -488,6 +534,8 @@ export const MapView: React.FC<MapViewProps> = ({
       { enableHighAccuracy: true, timeout: 8000 }
     );
   };
+
+  const handleGoToCurrentLocation = () => goToCurrentLocation();
 
   const handleZoom = (delta: number) => {
     if (!mapRef.current) return;
@@ -534,6 +582,15 @@ export const MapView: React.FC<MapViewProps> = ({
     handleFetchAiDocent(store);
   };
 
+  // 시장 자체를 검색해서 골랐을 때 — 실제 지도 전환(중심 이동/점포·바운더리 다시 그리기)은
+  // selectedMarket이 바뀌면 아래 useEffect들이 알아서 처리하므로, 여기선 선택 상태만 정리한다.
+  const handleSelectSearchResultMarket = (market: MarketInfo) => {
+    setSearchQuery("");
+    setShowSearchResults(false);
+    setActivePin(null);
+    onSelectMarket?.(market);
+  };
+
   // 상품 상세 등 다른 화면의 "상점 위치 지도에서 확인하기"로 넘어왔을 때, 그 상점을
   // 찾아 자동으로 지도 중심을 옮기고 마커를 선택한 것처럼 만든다. stores가 로드되고
   // 지도 인스턴스가 만들어진 뒤에야 실행 가능하므로 둘 다 준비될 때까지 기다린다.
@@ -570,6 +627,15 @@ export const MapView: React.FC<MapViewProps> = ({
       {/* Top Floating Search Bar */}
       <div className="absolute top-[calc(1rem+env(safe-area-inset-top))] left-4 right-4 z-30 max-w-lg mx-auto flex flex-col gap-2">
         <div className="flex items-center gap-2">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="w-11 h-11 bg-white rounded-full shadow-lg flex items-center justify-center text-[#0F172A] border border-outline-variant/30 shrink-0"
+              title="이전 화면으로 돌아가기"
+            >
+              <span className="material-symbols-outlined">arrow_back</span>
+            </button>
+          )}
           <div className="flex-1 bg-white rounded-full shadow-lg flex items-center px-4 h-12 border border-outline-variant/30">
             <span className="material-symbols-outlined text-outline mr-2">search</span>
             <input
@@ -581,7 +647,7 @@ export const MapView: React.FC<MapViewProps> = ({
               }}
               onFocus={() => setShowSearchResults(true)}
               onBlur={() => setShowSearchResults(false)}
-              placeholder="점포, 편의시설, 주차장 검색"
+              placeholder="점포, 편의시설, 다른 전통시장 검색"
               className="flex-1 bg-transparent border-none focus:outline-none text-sm text-on-surface placeholder-outline"
             />
             {searchQuery && (
@@ -606,6 +672,29 @@ export const MapView: React.FC<MapViewProps> = ({
 
         {showSearchResults && trimmedQuery && (
           <div className="bg-white rounded-2xl shadow-lg border border-[#E2E8F0] max-h-72 overflow-y-auto">
+            {marketResults.length > 0 && (
+              <div>
+                <div className="px-4 pt-2.5 pb-1 text-[10px] font-extrabold text-outline uppercase tracking-wider">
+                  다른 전통시장
+                </div>
+                {marketResults.map((market) => (
+                  <button
+                    key={market.id}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handleSelectSearchResultMarket(market)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 text-left border-b border-[#F1F5F9]"
+                  >
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white shrink-0 bg-[#2563EB]">
+                      <span className="material-symbols-outlined text-base">storefront</span>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-on-surface truncate">{market.name}</div>
+                      <div className="text-xs text-outline truncate">{market.city}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
             {searchResults.length > 0 ? (
               searchResults.map((store) => (
                 <button
@@ -626,21 +715,15 @@ export const MapView: React.FC<MapViewProps> = ({
                   </div>
                 </button>
               ))
-            ) : (
+            ) : marketResults.length === 0 ? (
               <div className="px-4 py-3 text-sm text-outline text-center">검색 결과가 없습니다</div>
-            )}
+            ) : null}
           </div>
         )}
       </div>
 
       {/* Floating Action Map Controls (Left Middle) */}
       <div className="absolute left-3 top-1/3 transform -translate-y-1/2 flex flex-col gap-2 z-30">
-        <button
-          className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center text-[#2563EB] hover:bg-slate-50 transition-colors border border-[#E2E8F0]"
-          title="단골 점포"
-        >
-          <span className="material-symbols-outlined text-xl">favorite</span>
-        </button>
         <div className="bg-white rounded-2xl shadow-md flex flex-col overflow-hidden border border-[#E2E8F0]">
           <button
             onClick={() => handleZoom(1)}

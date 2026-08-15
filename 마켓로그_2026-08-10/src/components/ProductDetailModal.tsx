@@ -3,6 +3,35 @@ import { Browser } from "@capacitor/browser";
 import { ProductItem, MarketInfo } from "../types";
 import { fetchStoreByName, StoreInfo } from "../lib/api";
 
+// 비전 파이프라인이 2단계(특상/보통) 등급으로 바뀌어서, 화면에도 A+/B 같은 영문 등급
+// 대신 실제 판정 체계와 맞는 한글 표기를 쓴다 (HomeFeed/ProductFilterModal과 동일 규칙).
+function displayGrade(grade: string): string {
+  return grade === "A+" ? "특상" : "보통";
+}
+
+// product.timeAgo는 등록 시점에 박제된 고정 문자열이라 시간이 지나도 안 바뀐다 — 실제
+// 경과 시간은 createdAt(진짜 타임스탬프)에서 매번 다시 계산해야 한다 (HomeFeed와 동일 규칙).
+function formatRelativeTime(createdAt?: string): string {
+  if (!createdAt) return "";
+  const created = new Date(createdAt).getTime();
+  if (Number.isNaN(created)) return "";
+  const diffMin = Math.floor((Date.now() - created) / 60000);
+  if (diffMin < 1) return "방금 전";
+  if (diffMin < 60) return `${diffMin}분 전`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}시간 전`;
+  const diffDay = Math.floor(diffHour / 24);
+  return `${diffDay}일 전`;
+}
+
+// HomeFeed의 할인율 뱃지와 동일한 계산 (공공 시세 대비 할인율). 공공가 정보가 없거나
+// 오히려 더 비싸면(마이너스 할인) 뱃지를 아예 숨긴다.
+function discountPercent(product: ProductItem): number | null {
+  if (!product.publicPrice || product.publicPrice <= 0) return null;
+  const percent = Math.round(((product.publicPrice - product.price) / product.publicPrice) * 100);
+  return percent > 0 ? percent : null;
+}
+
 interface ProductDetailModalProps {
   product: ProductItem | null;
   marketInfo: MarketInfo;
@@ -242,6 +271,95 @@ function getRecipeRecommendation(product: ProductItem): RecipeRecommendation {
   );
 }
 
+interface QualityMetric {
+  label: string;
+  value: number;
+}
+
+// 사진 한 장(그것도 보통 개체 하나만 찍힌 사진)만으로 정직하게 판단 가능한 항목만 남긴다.
+// 당도·과즙감·속참(결구) 같은 내부 성분/구조는 사진으로 측정 불가능하고, "균일도"도 개체
+// 하나짜리 사진에서는 애초에 성립하지 않는 개념이라 뺐다. 대신 표면 무결성(흠집/손상 없음),
+// 색상·광택(숙성도 추정 근거), 품목 특유의 가시적 변화(미발아/정상색/형태온전성 등) 3가지는
+// 기본으로 두고, 품목에 진짜로 보이는 4번째 단서가 있으면 추가한다 — 사과/배/감/감귤처럼
+// 꼭지가 보이는 과일은 "꼭지 신선도"(마름 정도, 실제 청과 검수에서도 보는 지표), 무/양파/
+// 마늘/감자처럼 낱개 형태가 보이는 품목은 "형태 온전성"(이 개체가 휘거나 기형이 아닌지 —
+// 배치 균일도와는 다른, 사진 한 장으로도 보이는 개념)을 쓴다. 배추/양배추는 4번째로 내세울
+// 만한 게 약해서 3개로 둔다.
+//
+// 라벨은 전부 "값이 높을수록 좋다"로 통일한다 — "손상"/"갈라짐" 같은 결함 자체를 라벨로 쓰면
+// 숫자가 낮을수록 좋은 지표가 되어, 하나는 낮을수록/하나는 높을수록 좋은 지표가 같은 화면에
+// 섞여 색상만으로는 좋고 나쁨을 구분할 수 없었다. "무결성(손상 없음)"처럼 결함이 없는 정도로
+// 프레이밍하면 모든 지표가 "높을수록 좋음"으로 통일되어, 아래 getMetricColor의 임계치 색상이
+// 지표 종류와 상관없이 항상 같은 뜻(초록=우수)이 된다.
+//
+// 백엔드가 아직 품목별 세부 점수를 안 주므로(다음 단계), 지금은 이미 있는
+// freshness/defect/uniformity 3개 값 + 그 평균을 순서대로 매핑해 둔다.
+// getRecipeRecommendation과 동일한 순서 제약: "양배추"가 "배추"를, "감귤"이 "감"을 부분
+// 문자열로 포함하므로 더 구체적인 품목을 먼저 검사해야 한다.
+function getQualityMetrics(product: ProductItem): QualityMetric[] {
+  const title = product.title;
+
+  const fresh = product.freshnessScore ?? 90;
+  const integrity = Math.max(0, 100 - (product.defectScore ?? 5)); // 결함 적을수록 높은 점수
+  const uniform = product.uniformityScore ?? 92;
+  const avg = Math.round((fresh + integrity + uniform) / 3);
+  const values = [fresh, integrity, uniform, avg];
+
+  const withLabels = (labels: readonly string[]): QualityMetric[] =>
+    labels.map((label, i) => ({ label, value: values[i] }));
+
+  if (title.includes("무")) {
+    return withLabels(["표면 상태 (매끈함)", "표면 무결성 (흠집 · 갈라짐 없음)", "표피 색상", "형태 온전성 (곧은 정도)"]);
+  }
+
+  if (title.includes("양배추")) {
+    return withLabels(["겉잎 상태 (손상 없음)", "형태 온전성 (갈라짐 없음)", "색상 / 광택"]);
+  }
+
+  if (title.includes("배추")) {
+    return withLabels(["겉잎 상태 (손상 없음)", "형태 온전성 (갈라짐 없음)", "색상 / 광택"]);
+  }
+
+  if (title.includes("양파")) {
+    return withLabels(["껍질 광택", "미발아 상태 (싹틈 없음)", "표면 신선도 (무름 · 곰팡이 없음)", "형태 온전성 (구형 정도)"]);
+  }
+
+  if (title.includes("마늘")) {
+    return withLabels(["미발아 상태 (싹틈 없음)", "표면 상태 (흠집 · 변색 없음)", "껍질 광택", "알 형태 온전성"]);
+  }
+
+  if (title.includes("감귤") || title.includes("귤")) {
+    return withLabels(["껍질 상태 (흠집 · 곰팡이 없음)", "색상 선명도", "껍질 광택", "꼭지 신선도"]);
+  }
+
+  if (title.includes("감") && !title.includes("감자") && !title.includes("감귤")) {
+    return withLabels(["표면 무결성 (흠집 없음)", "색상 (숙성도 추정)", "표면 탄력 (주름 없음)", "꼭지 신선도"]);
+  }
+
+  if (title.includes("사과")) {
+    return withLabels(["표면 무결성 (흠집 · 멍 없음)", "착색도 (색택)", "표면 광택", "꼭지 신선도"]);
+  }
+
+  if (title.includes("배")) {
+    return withLabels(["표면 무결성 (흠집 없음)", "색상 / 광택", "표면 탄력 (주름 없음)", "꼭지 신선도"]);
+  }
+
+  if (title.includes("감자")) {
+    return withLabels(["표면 무결성 (흠집 · 상처 없음)", "정상 색상 (녹변 없음)", "미발아 상태 (싹틈 없음)", "형태 온전성"]);
+  }
+
+  // 10개 클래스 밖(수산물/정육/건어물 등)은 일반 기준으로 대체한다.
+  return withLabels(["표면 무결성 (손상 없음)", "색상 / 광택", "전체 외관"]);
+}
+
+// getQualityMetrics의 모든 라벨이 "높을수록 좋음"으로 통일되어 있으므로, 임계치 하나로
+// 신호등 색을 매길 수 있다 — 지표 종류와 무관하게 초록=우수/노랑=보통/빨강=주의.
+function getMetricColor(value: number): string {
+  if (value >= 80) return "#10B981"; // 우수
+  if (value >= 50) return "#F59E0B"; // 보통
+  return "#EF4444"; // 주의
+}
+
 export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   product,
   marketInfo,
@@ -253,19 +371,13 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 }) => {
   if (!product) return null;
 
-  const [viewMode, setViewMode] = useState<"scan" | "full">(
-    product?.isScannedProduct ? "scan" : "full"
-  );
   const [activeTab, setActiveTab] = useState<"description" | "shop" | "recipe">(initialTab);
   const [storeInfo, setStoreInfo] = useState<StoreInfo | null>(null);
   const [isStoreInfoLoaded, setIsStoreInfoLoaded] = useState(false);
+  // 모바일에선 hover 툴팁이 안 먹히니, 탭으로 여닫는 방식으로 공공 시세 출처를 보여준다.
+  const [showPublicPriceInfo, setShowPublicPriceInfo] = useState(false);
 
   React.useEffect(() => {
-    if (product?.isScannedProduct) {
-      setViewMode("scan");
-    } else {
-      setViewMode("full");
-    }
     setActiveTab(initialTab);
   }, [product, initialTab]);
 
@@ -290,176 +402,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   };
 
   const recipe = getRecipeRecommendation(product);
-
-  if (viewMode === "scan") {
-    const formattedGrade = product.grade || "A+";
-
-    return (
-      <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-        {/* Blurred Background Image Effect */}
-        <div className="absolute inset-0 z-0 overflow-hidden opacity-30 pointer-events-none">
-          <img
-            src={product.imageUrl}
-            alt={product.title}
-            className="w-full h-full object-cover blur-xl scale-110"
-          />
-        </div>
-
-        {/* AI Scan Result Sheet Card */}
-        <div className="bg-white w-full max-w-sm sm:max-w-md rounded-3xl p-5 sm:p-6 shadow-2xl border border-white/40 space-y-4 my-auto relative z-10 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
-          
-          {/* Top Badges */}
-          <div className="flex items-center justify-between gap-2">
-            <span className="bg-[#DBEAFE] text-[#1D4ED8] text-xs font-bold px-3 py-1 rounded-full">
-              {product.category || "농산물/과일류"}
-            </span>
-            <span className="bg-[#DCFCE7] text-[#166534] text-xs font-extrabold px-3 py-1 rounded-full flex items-center gap-1 border border-[#10B981]/20">
-              <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
-                verified
-              </span>
-              품질 등급 {formattedGrade}
-            </span>
-          </div>
-
-          {/* Product Scanned Photo */}
-          {product.imageUrl && (
-            <div className="relative w-full h-44 sm:h-52 rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
-              <img
-                src={product.imageUrl}
-                alt={product.title}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute bottom-2.5 left-2.5 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 border border-white/20">
-                <span className="material-symbols-outlined text-xs">center_focus_weak</span>
-                AI 스캔 원본 이미지
-              </div>
-            </div>
-          )}
-
-          {/* Product Title */}
-          <h2 className="text-xl sm:text-2xl font-black text-[#0F172A] leading-snug tracking-tight">
-            {product.title}
-          </h2>
-
-          {/* Price Box: 공공 판매가 */}
-          <div className="bg-[#F8FAFC] rounded-2xl p-4 border border-[#E2E8F0] flex items-center justify-between">
-            <span className="text-xs font-bold text-[#64748B] flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-sm text-[#0052FF]">account_balance</span>
-              공공 판매가
-            </span>
-            <div className="text-xl font-black text-[#0F172A]">
-              {product.publicPrice ? `${product.publicPrice.toLocaleString()}원` : "-"}
-            </div>
-          </div>
-
-          {/* AI 정밀 분석 지표 */}
-          <div className="space-y-2.5">
-            <div className="text-xs font-extrabold text-[#0F172A] flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-base text-[#0052FF]">analytics</span>
-              AI 정밀 분석 지표
-            </div>
-            <div className="grid grid-cols-3 gap-2 bg-[#F8FAFC] p-3 rounded-2xl border border-[#E2E8F0] text-center">
-              <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs">
-                <div className="text-[11px] font-bold text-slate-500">신선도</div>
-                <div className="text-base font-black text-emerald-600 mt-0.5">
-                  {product.freshnessScore ?? 98}점
-                </div>
-              </div>
-              <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs">
-                <div className="text-[11px] font-bold text-slate-500">결함도</div>
-                <div className="text-base font-black text-blue-600 mt-0.5">
-                  {product.defectScore ?? 5}점
-                </div>
-              </div>
-              <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs">
-                <div className="text-[11px] font-bold text-slate-500">균일도</div>
-                <div className="text-base font-black text-indigo-600 mt-0.5">
-                  {product.uniformityScore ?? 92}점
-                </div>
-              </div>
-            </div>
-
-            {/* 세부 항목별 백분율 및 프로그래스 바 */}
-            <div className="space-y-2 bg-[#F8FAFC] p-3.5 rounded-2xl border border-[#E2E8F0] text-xs">
-              <div>
-                <div className="flex justify-between items-center text-xs mb-1">
-                  <span className="font-bold text-[#334155]">신선도 (광택 / 수분도 / 신선도)</span>
-                  <span className="font-black text-[#10B981]">{product.freshnessScore ?? 98}%</span>
-                </div>
-                <div className="w-full h-2 bg-slate-200/80 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-[#10B981] rounded-full transition-all duration-500"
-                    style={{ width: `${product.freshnessScore ?? 98}%` }}
-                  ></div>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between items-center text-xs mb-1">
-                  <span className="font-bold text-[#334155]">표면 무결성 (상처 / 무름 없음)</span>
-                  <span className="font-black text-[#0052FF]">
-                    {product.defectScore !== undefined ? Math.max(0, 100 - product.defectScore) : 95}%
-                  </span>
-                </div>
-                <div className="w-full h-2 bg-slate-200/80 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-[#0052FF] rounded-full transition-all duration-500"
-                    style={{ width: `${product.defectScore !== undefined ? Math.max(0, 100 - product.defectScore) : 95}%` }}
-                  ></div>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between items-center text-xs mb-1">
-                  <span className="font-bold text-[#334155]">크기 / 중량 균일도</span>
-                  <span className="font-black text-indigo-600">{product.uniformityScore ?? 92}%</span>
-                </div>
-                <div className="w-full h-2 bg-slate-200/80 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-indigo-600 rounded-full transition-all duration-500"
-                    style={{ width: `${product.uniformityScore ?? 92}%` }}
-                  ></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* AI 스캔 종합 의견 */}
-          <div className="space-y-1.5">
-            <div className="text-xs font-extrabold text-[#0052FF] flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-base">psychology</span>
-              AI 스캔 종합 의견
-            </div>
-            <div className="bg-[#EFF6FF] rounded-2xl p-3.5 border border-[#BFDBFE] text-xs text-[#334155] font-medium leading-relaxed">
-              {product.description || "표면 광택이 우수하고 과육 손상이 거의 없으며 공공 시세 대비 가격 및 품질 신뢰도가 매우 높습니다."}
-            </div>
-          </div>
-
-          {/* Bottom Buttons */}
-          <div className="flex items-center gap-2 pt-1">
-            <button
-              onClick={onClose}
-              className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-[#334155] text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5"
-            >
-              <span className="material-symbols-outlined text-base">close</span>
-              닫기
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveTab("description");
-                setViewMode("full");
-              }}
-              className="flex-1 py-3 bg-[#0052FF] hover:bg-[#0043D6] text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-base">storefront</span>
-              가게 정보 보기
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const qualityMetrics = getQualityMetrics(product);
 
   return (
     <div className="fixed inset-0 z-50 bg-[#F8FAFC] flex flex-col w-full h-full overflow-y-auto animate-in fade-in duration-200">
@@ -478,23 +421,13 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           </button>
           <div>
             <h1 className="text-sm sm:text-base font-extrabold text-[#0F172A] line-clamp-1">
-              [{product.shopName}] {product.title}
+              {product.shopName ? `[${product.shopName}] ` : ""}
+              {product.title}
             </h1>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5">
-          {product.isScannedProduct && (
-            <button
-              onClick={() => setViewMode("scan")}
-              className="px-2.5 py-1 text-xs font-extrabold text-[#0052FF] bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 flex items-center gap-1 transition-colors mr-1"
-            >
-              <span className="material-symbols-outlined text-sm">auto_awesome</span>
-              <span className="hidden sm:inline">스캔 결과 카드</span>
-              <span className="sm:hidden">스캔 카드</span>
-            </button>
-          )}
-
           <button
             onClick={handleToggle}
             className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors border ${
@@ -534,11 +467,15 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
           {/* AI Grade & Freshness Badges */}
           <div className="absolute top-4 right-4 flex items-center gap-2">
-            <div className="bg-[#10B981] text-white px-3 py-1 rounded-full flex items-center gap-1 shadow-md border border-white/20 text-xs font-extrabold">
+            <div
+              className={`text-white px-3 py-1 rounded-full flex items-center gap-1 shadow-md border border-white/20 text-xs font-extrabold ${
+                product.grade?.startsWith("A") ? "bg-[#00C875]" : "bg-[#0052FF]"
+              }`}
+            >
               <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
                 verified
               </span>
-              <span>최상등급 ({product.grade})</span>
+              <span>{displayGrade(product.grade)}</span>
             </div>
           </div>
         </div>
@@ -558,17 +495,21 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               <span>상품설명</span>
             </button>
 
-            <button
-              onClick={() => setActiveTab("shop")}
-              className={`flex-1 py-3 border-b-2 transition-all flex items-center justify-center gap-1 ${
-                activeTab === "shop"
-                  ? "border-[#0052FF] text-[#0052FF] font-extrabold"
-                  : "border-transparent text-[#64748B] hover:text-[#0F172A]"
-              }`}
-            >
-              <span className="material-symbols-outlined text-base">storefront</span>
-              <span>가게정보</span>
-            </button>
+            {/* 특정 점포에 등록된 상품이 아니라 개인이 직접 스캔해서 저장한 기록(shopName
+                없음)은 보여줄 가게정보 자체가 없으므로 탭을 아예 숨긴다. */}
+            {product.shopName && (
+              <button
+                onClick={() => setActiveTab("shop")}
+                className={`flex-1 py-3 border-b-2 transition-all flex items-center justify-center gap-1 ${
+                  activeTab === "shop"
+                    ? "border-[#0052FF] text-[#0052FF] font-extrabold"
+                    : "border-transparent text-[#64748B] hover:text-[#0F172A]"
+                }`}
+              >
+                <span className="material-symbols-outlined text-base">storefront</span>
+                <span>가게정보</span>
+              </button>
+            )}
 
             <button
               onClick={() => setActiveTab("recipe")}
@@ -597,36 +538,63 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       {product.shopName}
                     </span>
                   </div>
-                  <span className="text-[11px] font-extrabold text-[#10B981] bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
-                    {product.grade} 등급
+                  <span
+                    className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border ${
+                      product.grade?.startsWith("A")
+                        ? "text-[#10B981] bg-emerald-50 border-emerald-100"
+                        : "text-[#0052FF] bg-blue-50 border-blue-100"
+                    }`}
+                  >
+                    {displayGrade(product.grade)} 등급
                   </span>
                 </div>
 
                 <h2 className="text-xl sm:text-2xl font-black text-[#0F172A] leading-snug">
                   {product.title}
+                  {product.unit && <span className="text-[#94A3B8] font-bold"> ({product.unit})</span>}
                 </h2>
 
-                <div className="text-xs text-[#64748B] font-medium flex items-center justify-between pt-0.5 pb-1">
-                  <span>가게 번호: <strong className="text-[#334155]">{storeInfo?.phone || "정보 없음"}</strong></span>
-                  <span className="text-[#0052FF] font-bold">{product.category}</span>
-                </div>
+                {formatRelativeTime(product.createdAt) && (
+                  <p className="text-[11px] text-[#94A3B8] font-medium">
+                    {formatRelativeTime(product.createdAt)} 등록
+                  </p>
+                )}
 
                 {/* Price Display: 실제 판매가 & 공공 판매가 */}
                 <div className="bg-[#F8FAFC] rounded-2xl p-4 border border-[#E2E8F0] grid grid-cols-2 gap-3 mt-3">
                   <div>
                     <span className="text-xs font-bold text-[#64748B] flex items-center gap-1">
-                      <span className="material-symbols-outlined text-xs text-[#0052FF]">sell</span>
-                      현장가
+                      현장 판매가
                     </span>
-                    <div className="text-xl font-black text-[#0F172A] mt-0.5">
-                      {product.price ? `${product.price.toLocaleString()}원` : "-"}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <div className="text-xl font-black text-[#0F172A] mt-0.5">
+                        {product.price ? `${product.price.toLocaleString()}원` : "-"}
+                      </div>
+                      {discountPercent(product) !== null && (
+                        <span className="text-[11px] font-extrabold text-[#0052FF] bg-blue-50 px-1.5 py-0.5 rounded-full">
+                          {discountPercent(product)}% 저렴
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   <div>
-                    <span className="text-xs font-bold text-[#64748B] flex items-center gap-1">
-                      <span className="material-symbols-outlined text-xs text-slate-500">account_balance</span>
-                      공공 시장가
+                    <span className="text-xs font-bold text-[#64748B] flex items-center gap-1 relative">
+                      공공 시세
+                      <button
+                        type="button"
+                        onClick={() => setShowPublicPriceInfo((v) => !v)}
+                        className="material-symbols-outlined text-xs text-slate-400 hover:text-slate-600 cursor-pointer"
+                        style={{ fontSize: "14px" }}
+                        title="한국농수산식품유통공사(KAMIS)에서 제공하는 해당 품목의 최신 소매 평균 시세입니다."
+                      >
+                        info
+                      </button>
+                      {showPublicPriceInfo && (
+                        <div className="absolute left-0 top-full mt-1 z-20 w-56 bg-[#0F172A] text-white text-[11px] font-medium leading-relaxed rounded-lg p-2.5 shadow-xl">
+                          한국농수산식품유통공사(KAMIS)에서 제공하는 해당 품목의 최신 소매 평균 시세입니다.
+                        </div>
+                      )}
                     </span>
                     <div className="text-xl font-bold text-[#475569] mt-0.5">
                       {product.publicPrice ? `${product.publicPrice.toLocaleString()}원` : "-"}
@@ -635,6 +603,19 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 </div>
               </div>
 
+              {/* 상품 소개 — 사장님이 쓴 홍보문구. 상호명은 위에서 이미 나왔으니 반복하지
+                  않고, 아래 AI 분석 카드들(파란/초록 톤)과 다르게 사장님이 직접 남긴 말이라는
+                  느낌이 들도록 따뜻한 색+말풍선 아이콘의 "사장님 한마디"로 감싼다. */}
+              {product.description && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                  <div className="flex items-center gap-1.5 text-xs font-extrabold text-amber-700 mb-1.5">
+                    <span className="material-symbols-outlined text-base">chat_bubble</span>
+                    사장님 한마디
+                  </div>
+                  <p className="text-xs text-slate-700 leading-relaxed font-medium">{product.description}</p>
+                </div>
+              )}
+
               {/* AI Metrics Breakdown */}
               <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E2E8F0] shadow-[0_2px_8px_rgba(0,0,0,0.03)] space-y-3">
                 <div className="flex justify-between items-center">
@@ -642,77 +623,51 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     <span className="material-symbols-outlined text-[#0052FF] text-base">analytics</span>
                     AI 정밀 분석 지표
                   </h3>
-                  <span className="text-xs font-extrabold text-[#10B981] bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 flex items-center gap-1">
+                  <span
+                    className={`text-xs font-extrabold px-2.5 py-1 rounded-full border flex items-center gap-1 ${
+                      product.grade?.startsWith("A")
+                        ? "text-[#10B981] bg-emerald-50 border-emerald-200"
+                        : "text-[#0052FF] bg-blue-50 border-blue-200"
+                    }`}
+                  >
                     <span className="material-symbols-outlined text-xs" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
-                    품질 등급 {product.grade || "A+"}
+                    품질 등급 {displayGrade(product.grade || "A+")}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#E2E8F0] text-center">
-                  <div className="bg-white p-2.5 rounded-lg border border-slate-200/60 shadow-2xs">
-                    <div className="text-[11px] font-bold text-slate-500">신선도</div>
-                    <div className="text-base font-black text-emerald-600 mt-0.5">
-                      {product.freshnessScore ?? 96}점
-                    </div>
-                  </div>
-                  <div className="bg-white p-2.5 rounded-lg border border-slate-200/60 shadow-2xs">
-                    <div className="text-[11px] font-bold text-slate-500">결함도</div>
-                    <div className="text-base font-black text-blue-600 mt-0.5">
-                      {product.defectScore ?? 94}점
-                    </div>
-                  </div>
-                  <div className="bg-white p-2.5 rounded-lg border border-slate-200/60 shadow-2xs">
-                    <div className="text-[11px] font-bold text-slate-500">균일도</div>
-                    <div className="text-base font-black text-indigo-600 mt-0.5">
-                      {product.uniformityScore ?? 92}점
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-3 pt-2">
-                  <div>
-                    <div className="flex justify-between items-center text-xs mb-1">
-                      <span className="font-bold text-[#334155]">신선도 (광택 / 수분도 / 신선도)</span>
-                      <span className="font-black text-[#10B981]">{product.freshnessScore}%</span>
-                    </div>
-                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-[#10B981] rounded-full transition-all duration-500" style={{ width: `${product.freshnessScore}%` }}></div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between items-center text-xs mb-1">
-                      <span className="font-bold text-[#334155]">표면 결함 (상처 / 무름 무결성)</span>
-                      <span className="font-black text-[#10B981]">{product.defectScore}%</span>
-                    </div>
-                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-[#10B981] rounded-full transition-all duration-500" style={{ width: `${product.defectScore}%` }}></div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between items-center text-xs mb-1">
-                      <span className="font-bold text-[#334155]">크기 / 중량 균일도</span>
-                      <span className="font-black text-[#0052FF]">{product.uniformityScore}%</span>
-                    </div>
-                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-[#0052FF] rounded-full transition-all duration-500" style={{ width: `${product.uniformityScore}%` }}></div>
-                    </div>
-                  </div>
+                <div className="space-y-3 pt-1">
+                  {qualityMetrics.map((metric) => {
+                    const color = getMetricColor(metric.value);
+                    return (
+                      <div key={metric.label}>
+                        <div className="flex justify-between items-center text-xs mb-1">
+                          <span className="font-bold text-[#334155]">{metric.label}</span>
+                          <span className="font-black" style={{ color }}>{metric.value}점</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{ width: `${metric.value}%`, backgroundColor: color }}
+                          ></div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Product AI Description & Opinion */}
-              <div className="text-xs text-[#475569] bg-white p-5 rounded-2xl border border-[#E2E8F0] shadow-[0_2px_8px_rgba(0,0,0,0.03)] leading-relaxed space-y-2">
-                <div className="font-extrabold text-[#0052FF] flex items-center gap-1.5 text-xs">
-                  <span className="material-symbols-outlined text-base">psychology</span>
-                  AI 스캔 종합 의견
+              {/* AI 스캔 종합 의견 — 실제 카메라 AI 스캔(제미나이)을 거친 상품에만 있는 값이라,
+                  없으면(수동 등록 상품) 이 섹션 자체를 숨긴다. 상인이 직접 쓴 상품 소개는
+                  위쪽에 별도로 보여준다. */}
+              {product.aiSummary && (
+                <div className="text-xs text-[#475569] bg-white p-5 rounded-2xl border border-[#E2E8F0] shadow-[0_2px_8px_rgba(0,0,0,0.03)] leading-relaxed space-y-2">
+                  <div className="font-extrabold text-[#0052FF] flex items-center gap-1.5 text-xs">
+                    <span className="material-symbols-outlined text-base">psychology</span>
+                    AI 스캔 종합 의견
+                  </div>
+                  <p className="text-slate-700 font-medium text-xs leading-relaxed">{product.aiSummary}</p>
                 </div>
-                <p className="text-slate-700 font-medium text-xs leading-relaxed">{product.description}</p>
-
-              </div>
-
-
+              )}
             </div>
           )}
 

@@ -2,41 +2,172 @@ import React, { useState, useEffect } from "react";
 import { UserRole } from "./LoginModal";
 import { ProductItem } from "../types";
 import { ApiError, getStoreProfile, updateProfile, updateStoreProfile } from "../lib/api";
+import { StoreLocationPicker } from "./StoreLocationPicker";
+import { StoreLocationThumbnail } from "./StoreLocationThumbnail";
+
+// 소비자쪽 홈 피드 필터와 같은 5개 카테고리로 맞춰서, 상인이 "주요 품목"을 직접 타이핑하는 대신
+// 체크 버튼으로 고르게 한다 — 오탈자 걱정 없이 손가락으로 누르기만 하면 된다.
+const SHOP_CATEGORY_OPTIONS = ["야채", "과일", "정육", "수산물", "건어물"];
+
+// 대분류를 고르면 그 밑에 세부 품목(중분류)도 체크로 고를 수 있게 한다. 야채/과일은 소비자
+// 필터에 이미 있는 품종 목록을 그대로 쓰고, 정육/수산물/건어물은 AI 인식 목록이 없어서
+// 자주 파는 품목 몇 개만 대충 추려 넣었다 — 목록에 없으면 아래 "직접 입력"에 적으면 된다.
+const SHOP_SUBCATEGORY_OPTIONS: Record<string, string[]> = {
+  야채: ["무", "배추", "마늘", "양파", "양배추", "감자"],
+  과일: ["사과", "배", "감", "감귤"],
+  정육: ["소고기", "돼지고기", "닭고기"],
+  수산물: ["고등어", "갈치", "오징어", "새우"],
+  건어물: ["멸치", "미역", "다시마"],
+};
+
+// 주요 품목은 결국 하나의 문자열(subtitle)로 저장되므로, 대분류/중분류/직접입력 선택 상태를
+// "야채(무·배추) / 수산물(고등어) / 트러플" 같은 문자열로 합쳤다 다시 풀어 쓴다.
+function parseShopCategoryValue(value: string): {
+  majors: string[];
+  subsByMajor: Record<string, string[]>;
+  custom: string;
+} {
+  const majors: string[] = [];
+  const subsByMajor: Record<string, string[]> = {};
+  const customParts: string[] = [];
+  const segments = value.split("/").map((s) => s.trim()).filter(Boolean);
+  for (const seg of segments) {
+    const match = seg.match(/^(.+?)\(([^)]*)\)$/);
+    const major = (match ? match[1] : seg).trim();
+    if (SHOP_CATEGORY_OPTIONS.includes(major)) {
+      majors.push(major);
+      subsByMajor[major] = match ? match[2].split("·").map((s) => s.trim()).filter(Boolean) : [];
+    } else {
+      customParts.push(seg);
+    }
+  }
+  return { majors, subsByMajor, custom: customParts.join(" / ") };
+}
+
+function buildShopCategoryValue(
+  majors: string[],
+  subsByMajor: Record<string, string[]>,
+  custom: string
+): string {
+  const parts = SHOP_CATEGORY_OPTIONS.filter((c) => majors.includes(c)).map((major) => {
+    const subs = subsByMajor[major] || [];
+    return subs.length > 0 ? `${major}(${subs.join("·")})` : major;
+  });
+  if (custom.trim()) parts.push(custom.trim());
+  return parts.join(" / ");
+}
+
+// 저장된 휴대폰 번호는 숫자만("01021814361") 들어있어서, 읽기 전용으로 보여줄 때 하이픈을
+// 넣어 "010-2181-4361" 형식으로 표시한다. 표준 11자리/10자리가 아니면 원본 그대로 둔다.
+function formatPhoneNumber(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length === 11) return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  if (digits.length === 10) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  return phone;
+}
+
+// 입력 중에도 숫자만 치면 바로 하이픈이 붙게 한다. 서울(02)은 국번이 2자리라 나머지
+// 지역번호/휴대폰(010, 031 등 3자리)과 자리수가 달라서 따로 나눠 처리한다.
+function formatPhoneAsYouType(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 11);
+  if (digits.startsWith("02")) {
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 5) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+    if (digits.length <= 9) return `${digits.slice(0, 2)}-${digits.slice(2, 5)}-${digits.slice(5)}`;
+    return `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6, 10)}`;
+  }
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  if (digits.length <= 10) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7, 11)}`;
+}
+
+// 영업시간은 "06:00 - 20:00" 또는 "06:00 - 20:00 (매주 화요일 휴무)"로 저장한다. 네이티브
+// time input을 쓰면 형식이 항상 "HH:MM"으로 강제되므로, 나중에 "지금 영업 중" 필터를 붙일 때도
+// 이 값을 그대로 파싱해서 쓸 수 있다. 이 형식으로 못 쪼개는 기존 자유 입력 값은 통째로 비고로
+// 남겨서 데이터가 사라지지 않게 한다.
+function parseShopHoursValue(value: string): { start: string; end: string; note: string } {
+  const match = value.trim().match(/^(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})\s*(?:\(([^)]*)\))?$/);
+  if (match) {
+    return { start: match[1], end: match[2], note: (match[3] || "").trim() };
+  }
+  return { start: "", end: "", note: value.trim() };
+}
+
+function buildShopHoursValue(start: string, end: string, note: string): string {
+  const range = start && end ? `${start} - ${end}` : "";
+  const trimmedNote = note.trim();
+  if (range && trimmedNote) return `${range} (${trimmedNote})`;
+  return range || trimmedNote;
+}
+
+// "직접 입력" 예시가 고른 대분류와 안 맞으면(정육을 골랐는데 수산물 예시가 뜨는 식) 어색해
+// 보이므로, 선택한 대분류에 맞는 예시를 보여준다.
+const SHOP_CUSTOM_ITEM_PLACEHOLDER: Record<string, string> = {
+  야채: "예: 열무, 깻잎",
+  과일: "예: 한라봉, 자두",
+  정육: "예: 한우, 흑돼지",
+  수산물: "예: 홍어, 병어",
+  건어물: "예: 오징어채, 먹태",
+};
+const SHOP_CUSTOM_ITEM_PLACEHOLDER_DEFAULT = "예: 젓갈, 나물";
+
+// 전통시장 상인 대부분은 요일 구분 없이 매일 같은 시간에 열고, 특정 요일에만 쉰다. 그래서
+// 정기휴무일은 자주 쓰는 패턴만 드롭다운으로 주고, 예외적인 경우만 직접 입력하게 한다.
+const HOURS_CLOSED_DAY_PRESETS = ["연중무휴", "매주 일요일", "첫째·셋째 주 일요일"];
 
 interface MyWalletProps {
   onNavigateToMap?: () => void;
+  marketName?: string;
   userRole?: UserRole;
   userDisplayName?: string;
+  userShopName?: string;
   userUsername?: string;
   userPhone?: string;
+  userAvatarIcon?: string;
+  userAvatarColor?: string;
+  userProfileImage?: string;
   isLoggedIn?: boolean;
   onOpenLogin?: () => void;
   onLogout?: () => void;
   products?: ProductItem[];
   onUpdateShopName?: (newName: string) => void;
   onProfileUpdated?: (displayName: string, phone: string) => void;
+  onAvatarStyleUpdated?: (icon: string, color: string) => void;
+  onProfileImageUpdated?: (image: string) => void;
 }
 
 export const MyWallet: React.FC<MyWalletProps> = ({
+  marketName = "광주 양동전통시장",
   userRole = "customer",
   userDisplayName,
+  userShopName = "",
   userUsername = "",
   userPhone = "",
+  userAvatarIcon = "",
+  userAvatarColor = "",
+  userProfileImage = "",
   isLoggedIn = false,
   onOpenLogin,
   onLogout,
   products = [],
   onUpdateShopName,
   onProfileUpdated,
+  onAvatarStyleUpdated,
+  onProfileImageUpdated,
 }) => {
+  // 상단 헤더에 쓰는 건 계정 표시 이름이다 — 점포 상세정보의 "상호명"과는 별개 값이라
+  // 여기서 섞어 쓰지 않는다.
   const initialShopName = userDisplayName || (userRole === "merchant" ? "양동수산 사장님" : "스마트 장보기 회원");
 
   // Merchant Store Details Editable State — 점포 위치 등록(지도 핀) 이후에만 저장 가능한
   // 실제 백엔드 데이터. hasStoreProfile이 false면 아직 위치 등록 전이라는 뜻.
   const [isEditingShopInfo, setIsEditingShopInfo] = useState(false);
   const [hasStoreProfile, setHasStoreProfile] = useState<boolean | null>(null); // null = 로딩 중
+  const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
+  const [locationVersion, setLocationVersion] = useState(0);
   const [shopInfo, setShopInfo] = useState({
-    name: initialShopName,
+    storeName: userShopName || initialShopName,
     marketName: "광주 양동전통시장",
     category: "",
     phone: "",
@@ -44,9 +175,10 @@ export const MyWallet: React.FC<MyWalletProps> = ({
     description: "",
   });
 
-  // Merchant Header Name Editing State
-  const [isEditingShopNameHeader, setIsEditingShopNameHeader] = useState(false);
-  const [shopNameHeaderInput, setShopNameHeaderInput] = useState(initialShopName);
+  // 영업시간 입력 모드 — "매일 동일하게 영업"이 기본값이라 시작/종료 시간 2개만 고르면
+  // 끝나고, 요일마다 다르게 여는 예외적인 상인만 체크를 풀어 자유 텍스트로 적는다.
+  const [isHoursDailyMode, setIsHoursDailyMode] = useState(true);
+  const [hoursClosedDayMode, setHoursClosedDayMode] = useState<string>(HOURS_CLOSED_DAY_PRESETS[0]);
 
   // Customer Profile & Nickname Editable State
   const [customerNickname, setCustomerNickname] = useState(
@@ -54,8 +186,14 @@ export const MyWallet: React.FC<MyWalletProps> = ({
   );
   const [isEditingCustomerNickname, setIsEditingCustomerNickname] = useState(false);
   const [customerNicknameInput, setCustomerNicknameInput] = useState(customerNickname);
-  const [customerProfileImage, setCustomerProfileImage] = useState<string | null>(null);
+  const [customerProfileImage, setCustomerProfileImage] = useState<string | null>(userProfileImage || null);
   const customerFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // 로그인 직후엔 아직 fetchMe()가 안 끝나 프로필 아바타 props가 빈 값으로 들어왔다가 뒤늦게
+  // 채워질 수 있어서, 값이 도착하면 화면에도 반영되게 동기화해준다.
+  useEffect(() => {
+    if (userProfileImage) setCustomerProfileImage(userProfileImage);
+  }, [userProfileImage]);
 
   // Personal Information Editing State — 실제 로그인한 유저의 진짜 정보를 사용한다.
   const [personalInfo, setPersonalInfo] = useState({
@@ -136,14 +274,21 @@ export const MyWallet: React.FC<MyWalletProps> = ({
 
   const handleCustomerImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setCustomerProfileImage(reader.result as string);
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const dataUrl = reader.result as string;
+      setCustomerProfileImage(dataUrl);
+      try {
+        await updateProfile({ profileImage: dataUrl });
+        onProfileImageUpdated?.(dataUrl);
         showToast("프로필 사진이 성공적으로 변경되었습니다.");
-      };
-      reader.readAsDataURL(file);
-    }
+      } catch (err) {
+        console.error(err);
+        alert("프로필 사진 저장에 실패했습니다. 잠시 후 다시 시도해주세요.");
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSaveCustomerNickname = (e?: React.FormEvent) => {
@@ -160,16 +305,21 @@ export const MyWallet: React.FC<MyWalletProps> = ({
     setIsEditingCustomerNickname(false);
   };
 
-  // User Profile Icon State
+  // User Profile Icon State — 저장된 값(userAvatarIcon/Color)이 있으면 그걸 쓰고,
+  // 한 번도 고른 적 없는 계정은 예전처럼 역할별 기본값을 보여준다.
   const [selectedIcon, setSelectedIcon] = useState<string>(
-    userRole === "merchant" ? "storefront" : "person"
+    userAvatarIcon || (userRole === "merchant" ? "storefront" : "person")
   );
   const [selectedBgGradient, setSelectedBgGradient] = useState<string>(
-    userRole === "merchant"
-      ? "from-emerald-500 to-teal-700"
-      : "from-blue-600 to-indigo-700"
+    userAvatarColor || (userRole === "merchant" ? "from-emerald-500 to-teal-700" : "from-blue-600 to-indigo-700")
   );
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
+  const [isSavingAvatar, setIsSavingAvatar] = useState(false);
+
+  useEffect(() => {
+    if (userAvatarIcon) setSelectedIcon(userAvatarIcon);
+    if (userAvatarColor) setSelectedBgGradient(userAvatarColor);
+  }, [userAvatarIcon, userAvatarColor]);
 
   // Available Icon & Color Options
   const iconOptions = [
@@ -198,16 +348,10 @@ export const MyWallet: React.FC<MyWalletProps> = ({
   const [editForm, setEditForm] = useState({ ...shopInfo });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (userDisplayName) {
-      setShopInfo((prev) => ({ ...prev, name: userDisplayName }));
-      setEditForm((prev) => ({ ...prev, name: userDisplayName }));
-    }
-  }, [userDisplayName]);
-
   // 점포 상세정보는 "점포 위치 등록"을 먼저 해야 저장할 Store 레코드가 생긴다 —
-  // 위치 등록 전이면 hasStoreProfile=false로 두고 안내 문구를 보여준다.
-  useEffect(() => {
+  // 위치 등록 전이면 hasStoreProfile=false로 두고 안내 문구를 보여준다. 위치 등록도
+  // 같은 Store 레코드 존재 여부로 판단하므로 hasStoreProfile을 그대로 재사용한다.
+  const refreshStoreProfile = () => {
     if (userRole !== "merchant") return;
     getStoreProfile()
       .then((res) => {
@@ -215,6 +359,7 @@ export const MyWallet: React.FC<MyWalletProps> = ({
           setHasStoreProfile(true);
           setShopInfo((prev) => ({
             ...prev,
+            storeName: res.profile!.name,
             category: res.profile!.subtitle,
             phone: res.profile!.phone,
             hours: res.profile!.hours,
@@ -228,6 +373,10 @@ export const MyWallet: React.FC<MyWalletProps> = ({
         console.error("점포 상세정보를 불러오지 못했습니다.", err);
         setHasStoreProfile(false);
       });
+  };
+
+  useEffect(() => {
+    refreshStoreProfile();
   }, [userRole]);
 
   const showToast = (msg: string) => {
@@ -245,14 +394,28 @@ export const MyWallet: React.FC<MyWalletProps> = ({
       return;
     }
     setEditForm({ ...shopInfo });
+    const loadedHours = parseShopHoursValue(shopInfo.hours);
+    setIsHoursDailyMode(Boolean(loadedHours.start) || !shopInfo.hours);
+    setHoursClosedDayMode(
+      HOURS_CLOSED_DAY_PRESETS.includes(loadedHours.note)
+        ? loadedHours.note
+        : loadedHours.note
+          ? "직접입력"
+          : HOURS_CLOSED_DAY_PRESETS[0]
+    );
     setIsEditingShopInfo(true);
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editForm.storeName.trim()) {
+      alert("상호명을 입력해주세요.");
+      return;
+    }
     setIsSavingShopInfo(true);
     try {
       const res = await updateStoreProfile({
+        name: editForm.storeName.trim(),
         subtitle: editForm.category,
         phone: editForm.phone,
         hours: editForm.hours,
@@ -260,13 +423,19 @@ export const MyWallet: React.FC<MyWalletProps> = ({
       });
       setShopInfo((prev) => ({
         ...prev,
+        storeName: res.profile.name,
         category: res.profile.subtitle,
         phone: res.profile.phone,
         hours: res.profile.hours,
         description: res.profile.storyText,
       }));
+      // 상호명이 상인 매칭 키(shop_name)라, 바뀐 값을 상위(App)에도 바로 반영해서
+      // 다른 화면(내 상품 등록 등)도 새로고침 없이 새 이름으로 맞춰지게 한다.
+      if (onUpdateShopName) {
+        onUpdateShopName(res.profile.name);
+      }
       setIsEditingShopInfo(false);
-      showToast("점포 기본 상세 정보가 성공적으로 수정되었습니다.");
+      showToast("점포 상세 정보가 성공적으로 수정되었습니다.");
     } catch (err) {
       console.error(err);
       alert("점포 상세정보 저장에 실패했습니다. 잠시 후 다시 시도해주세요.");
@@ -280,8 +449,44 @@ export const MyWallet: React.FC<MyWalletProps> = ({
     setIsEditingShopInfo(false);
   };
 
-  const currentShopName = shopInfo.name || initialShopName;
-  const merchantProducts = products.filter((p) => p.shopName === currentShopName);
+  // editForm.category는 buildShopCategoryValue()가 만든 문자열을 그대로 저장/전송한다.
+  // 체크 버튼을 그리거나 토글할 때만 parseShopCategoryValue()로 풀어서 쓴다.
+  const { majors: selectedShopCategories, subsByMajor: selectedShopSubcategories, custom: shopCategoryCustomText } =
+    parseShopCategoryValue(editForm.category);
+
+  const toggleShopCategory = (category: string) => {
+    setEditForm((prev) => {
+      const { majors, subsByMajor, custom } = parseShopCategoryValue(prev.category);
+      const nextMajors = majors.includes(category) ? majors.filter((c) => c !== category) : [...majors, category];
+      const nextSubs = { ...subsByMajor };
+      if (!nextMajors.includes(category)) delete nextSubs[category];
+      return { ...prev, category: buildShopCategoryValue(nextMajors, nextSubs, custom) };
+    });
+  };
+
+  const toggleShopSubcategory = (major: string, sub: string) => {
+    setEditForm((prev) => {
+      const { majors, subsByMajor, custom } = parseShopCategoryValue(prev.category);
+      const currentSubs = subsByMajor[major] || [];
+      const nextSubs = {
+        ...subsByMajor,
+        [major]: currentSubs.includes(sub) ? currentSubs.filter((s) => s !== sub) : [...currentSubs, sub],
+      };
+      return { ...prev, category: buildShopCategoryValue(majors, nextSubs, custom) };
+    });
+  };
+
+  const handleShopCategoryCustomChange = (text: string) => {
+    setEditForm((prev) => {
+      const { majors, subsByMajor } = parseShopCategoryValue(prev.category);
+      return { ...prev, category: buildShopCategoryValue(majors, subsByMajor, text) };
+    });
+  };
+
+  // 상품은 실제 상호명(shop_name)으로 붙어 있으므로, 계정 표시 이름이 아니라 점포
+  // 상세정보의 상호명(아직 못 불러왔다면 userShopName)으로 매칭한다.
+  const effectiveStoreName = shopInfo.storeName || userShopName || initialShopName;
+  const merchantProducts = products.filter((p) => p.shopName === effectiveStoreName);
 
   // 로그인하지 않은 상태에서는 로그인한 것처럼 보이는 가짜 프로필 카드(+ 눌러도 의미
   // 없는 로그아웃 버튼)를 보여주는 대신, 이 탭을 명확한 로그인 진입점으로 쓴다.
@@ -332,9 +537,6 @@ export const MyWallet: React.FC<MyWalletProps> = ({
               >
                 <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${selectedBgGradient} text-white flex items-center justify-center shadow-md relative overflow-hidden transition-transform group-hover:scale-105`}>
                   <span className="material-symbols-outlined text-3xl">{selectedIcon}</span>
-                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                    <span className="material-symbols-outlined text-base text-white">edit</span>
-                  </div>
                 </div>
                 <button
                   type="button"
@@ -344,54 +546,9 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                   <span className="material-symbols-outlined text-[12px]">settings</span>
                 </button>
               </div>
+              {/* 계정 표시 이름만 보여준다 — 상호명은 아래 "점포 상세 정보" 카드에서 따로 관리한다 */}
               <div className="min-w-0 flex-1">
-                {!isEditingShopNameHeader ? (
-                  <div className="flex items-center gap-1.5">
-                    <h2 className="text-base sm:text-lg font-extrabold text-[#0F172A] truncate">{currentShopName}</h2>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShopNameHeaderInput(currentShopName);
-                        setIsEditingShopNameHeader(true);
-                      }}
-                      className="text-slate-400 hover:text-emerald-600 transition-colors p-1 rounded-lg cursor-pointer flex items-center shrink-0"
-                      title="이름 수정"
-                    >
-                      <span className="material-symbols-outlined text-sm">edit</span>
-                    </button>
-                  </div>
-                ) : (
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const trimmed = shopNameHeaderInput.trim();
-                      if (trimmed) {
-                        setShopInfo((prev) => ({ ...prev, name: trimmed }));
-                        if (onUpdateShopName) {
-                          onUpdateShopName(trimmed);
-                        }
-                        showToast("이름이 수정되었습니다.");
-                      }
-                      setIsEditingShopNameHeader(false);
-                    }}
-                    className="flex items-center gap-1.5"
-                  >
-                    <input
-                      type="text"
-                      value={shopNameHeaderInput}
-                      onChange={(e) => setShopNameHeaderInput(e.target.value)}
-                      placeholder="이름 입력"
-                      className="px-2 py-0.5 text-xs sm:text-sm border border-emerald-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 w-36 text-slate-800 font-extrabold"
-                      autoFocus
-                    />
-                    <button
-                      type="submit"
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-2.5 py-1 rounded-lg transition-colors cursor-pointer shrink-0"
-                    >
-                      저장
-                    </button>
-                  </form>
-                )}
+                <h2 className="text-base sm:text-lg font-extrabold text-[#0F172A] truncate">{initialShopName}</h2>
               </div>
             </div>
 
@@ -485,9 +642,6 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                   <h2 className="text-base font-extrabold text-slate-900 group-hover/nick:text-[#0052FF] transition-colors truncate leading-none">
                     {customerNickname}
                   </h2>
-                  <span className="material-symbols-outlined text-sm text-slate-400 group-hover/nick:text-[#0052FF] transition-colors shrink-0">
-                    edit
-                  </span>
                 </div>
               )}
             </div>
@@ -522,7 +676,7 @@ export const MyWallet: React.FC<MyWalletProps> = ({
               <span className="material-symbols-outlined text-lg">manage_accounts</span>
             </div>
             <div>
-              <h3 className="font-extrabold text-slate-900 text-sm">개인정보 수정</h3>
+              <h3 className="font-extrabold text-slate-900 text-sm">계정 정보</h3>
             </div>
           </div>
           {!isEditingPersonalInfo && (
@@ -658,7 +812,7 @@ export const MyWallet: React.FC<MyWalletProps> = ({
               </div>
               <div>
                 <span className="text-slate-400 font-bold block text-[10px]">휴대폰 번호</span>
-                <span className="font-extrabold text-slate-800">{personalInfo.userPhone}</span>
+                <span className="font-extrabold text-slate-800">{formatPhoneNumber(personalInfo.userPhone)}</span>
               </div>
               <div>
                 <span className="text-slate-400 font-bold block text-[10px]">비밀번호</span>
@@ -677,7 +831,7 @@ export const MyWallet: React.FC<MyWalletProps> = ({
           <div className="flex items-center justify-between pb-2 border-b border-[#F1F5F9]">
             <h3 className="text-xs font-extrabold text-[#64748B] uppercase tracking-wider flex items-center gap-1.5">
               <span className="material-symbols-outlined text-base text-emerald-600">edit_note</span>
-              점포 기본 상세 정보
+              점포 상세 정보
             </h3>
             {!isEditingShopInfo ? (
               <button
@@ -693,6 +847,12 @@ export const MyWallet: React.FC<MyWalletProps> = ({
               </span>
             )}
           </div>
+
+          {/* 점포 위치 등록 — 지도의 실제 점포와 이름이 정확히 일치할 때만 상품이 지도에
+              뜨던 문제 때문에, 상인이 직접 자기 위치에 핀을 찍어 등록할 수 있게 한다.
+              전화번호/영업시간과 같은 곳에서 관리하도록 이 카드 안에 같이 둔다. 텍스트
+              박스 대신 실제 지도 썸네일로 보여줘서 글씨를 안 읽어도 바로 확인되게 한다. */}
+          <StoreLocationThumbnail onEdit={() => setIsLocationPickerOpen(true)} refreshKey={locationVersion} />
 
           {hasStoreProfile === false && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
@@ -710,7 +870,7 @@ export const MyWallet: React.FC<MyWalletProps> = ({
               <div className="space-y-2 text-xs divide-y divide-[#F1F5F9]">
                 <div className="flex justify-between py-1.5">
                   <span className="text-[#64748B] font-medium">상호명</span>
-                  <span className="font-extrabold text-[#0F172A]">{shopInfo.name}</span>
+                  <span className="font-extrabold text-[#0F172A]">{shopInfo.storeName}</span>
                 </div>
                 <div className="flex justify-between py-1.5">
                   <span className="text-[#64748B] font-medium">소속 전통시장</span>
@@ -741,49 +901,188 @@ export const MyWallet: React.FC<MyWalletProps> = ({
           ) : (
             /* Edit Form Mode */
             <form onSubmit={handleSaveEdit} className="space-y-3.5 text-xs">
-              {/* 상호명은 상단 이름 옆 연필 아이콘에서 변경한다 — 여기선 참고용 표시만 */}
+              {/* 상호명은 계정 표시 이름과 별개인 점포 이름이라, 여기 점포 상세정보 폼에서
+                  직접 고친다 — 저장 시 상인 매칭 키(shop_name)도 같이 옮겨준다. */}
               <div className="space-y-1">
                 <label className="font-bold text-[#334155] block">상호명</label>
                 <input
                   type="text"
-                  value={editForm.name}
-                  disabled
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-100 text-xs font-semibold text-slate-500 cursor-not-allowed"
+                  value={editForm.storeName}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, storeName: e.target.value }))}
+                  placeholder="예: 양동수산"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
                 />
-                <p className="text-[10px] text-slate-400">상호명은 상단 이름 옆 연필 아이콘에서 바꿀 수 있어요.</p>
               </div>
 
-              {/* 주요 품목 */}
-              <div className="space-y-1">
+              {/* 주요 품목 — 타이핑 대신 소비자 홈 피드와 같은 5개 카테고리를 체크 버튼으로 고른다 */}
+              <div className="space-y-1.5">
                 <label className="font-bold text-[#334155] block">주요 품목</label>
-                <input
-                  type="text"
-                  value={editForm.category}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, category: e.target.value }))}
-                  placeholder="예: 수산물 / 당일 산지 직송"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
-                />
+                <div className="flex flex-wrap gap-2">
+                  {SHOP_CATEGORY_OPTIONS.map((cat) => {
+                    const selected = selectedShopCategories.includes(cat);
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => toggleShopCategory(cat)}
+                        className={`px-4 py-2.5 rounded-xl border text-sm font-bold transition-colors flex items-center gap-1 cursor-pointer ${
+                          selected
+                            ? "bg-emerald-600 border-emerald-600 text-white"
+                            : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        {selected && <span className="material-symbols-outlined text-base leading-none">check</span>}
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-slate-400">파는 품목을 모두 눌러서 골라주세요. 여러 개 선택할 수 있어요.</p>
+
+                {/* 대분류를 고르면 그 밑에 세부 품목(중분류)이 펼쳐진다 */}
+                {selectedShopCategories.length > 0 && (
+                  <div className="space-y-2.5 pl-3 border-l-2 border-emerald-100 mt-1">
+                    {selectedShopCategories.map((major) => (
+                      <div key={major} className="space-y-1">
+                        <span className="text-[11px] font-bold text-slate-500">{major} 세부 품목 (선택)</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(SHOP_SUBCATEGORY_OPTIONS[major] || []).map((sub) => {
+                            const on = (selectedShopSubcategories[major] || []).includes(sub);
+                            return (
+                              <button
+                                key={sub}
+                                type="button"
+                                onClick={() => toggleShopSubcategory(major, sub)}
+                                className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer ${
+                                  on
+                                    ? "bg-emerald-500 border-emerald-500 text-white"
+                                    : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                                }`}
+                              >
+                                {on && <span className="material-symbols-outlined text-sm leading-none">check</span>}
+                                {sub}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 목록에 없는 품목은 여기에만 짧게 직접 입력 */}
+                <div className="space-y-1 pt-1">
+                  <label className="font-bold text-[#334155] block text-[11px]">목록에 없는 품목 직접 입력 (선택)</label>
+                  <input
+                    type="text"
+                    value={shopCategoryCustomText}
+                    onChange={(e) => handleShopCategoryCustomChange(e.target.value)}
+                    placeholder={
+                      SHOP_CUSTOM_ITEM_PLACEHOLDER[selectedShopCategories[0]] || SHOP_CUSTOM_ITEM_PLACEHOLDER_DEFAULT
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
+                  />
+                </div>
               </div>
 
-              {/* 영업시간 */}
-              <div className="space-y-1">
+              {/* 영업시간 — 시장 상인은 대부분 요일 구분 없이 매일 같은 시간에 열고 특정
+                  요일에만 쉬므로, 기본은 "매일 동일" 체크 + 시작/종료 시간 2개 + 정기휴무일
+                  드롭다운으로 끝나는 초간단 모드다. 체크를 풀면 요일별로 다르게 여는 예외
+                  케이스용 자유 텍스트로 바뀐다. 네이티브 타임 피커라 "HH:MM" 형식이 강제돼서
+                  나중에 "지금 영업 중" 필터도 이 값 그대로 쓸 수 있다. */}
+              <div className="space-y-1.5">
                 <label className="font-bold text-[#334155] block">영업시간</label>
-                <input
-                  type="text"
-                  value={editForm.hours}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, hours: e.target.value }))}
-                  placeholder="예: 08:00 - 20:00 (연중무휴)"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
-                />
+                <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isHoursDailyMode}
+                    onChange={() => setIsHoursDailyMode((v) => !v)}
+                    className="w-3.5 h-3.5 accent-emerald-600 cursor-pointer"
+                  />
+                  매일 동일하게 영업
+                </label>
+
+                {isHoursDailyMode ? (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="time"
+                        value={parseShopHoursValue(editForm.hours).start}
+                        onChange={(e) => {
+                          const { end } = parseShopHoursValue(editForm.hours);
+                          const note = hoursClosedDayMode === "직접입력" ? parseShopHoursValue(editForm.hours).note : hoursClosedDayMode;
+                          setEditForm((prev) => ({ ...prev, hours: buildShopHoursValue(e.target.value, end, note) }));
+                        }}
+                        className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
+                      />
+                      <span className="text-slate-400 font-bold shrink-0">~</span>
+                      <input
+                        type="time"
+                        value={parseShopHoursValue(editForm.hours).end}
+                        onChange={(e) => {
+                          const { start } = parseShopHoursValue(editForm.hours);
+                          const note = hoursClosedDayMode === "직접입력" ? parseShopHoursValue(editForm.hours).note : hoursClosedDayMode;
+                          setEditForm((prev) => ({ ...prev, hours: buildShopHoursValue(start, e.target.value, note) }));
+                        }}
+                        className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
+                      />
+                    </div>
+
+                    <div className="space-y-1 pt-1">
+                      <label className="text-[11px] font-bold text-slate-500 block">정기 휴무일</label>
+                      <select
+                        value={hoursClosedDayMode}
+                        onChange={(e) => {
+                          const mode = e.target.value;
+                          setHoursClosedDayMode(mode);
+                          const { start, end } = parseShopHoursValue(editForm.hours);
+                          setEditForm((prev) => ({
+                            ...prev,
+                            hours: buildShopHoursValue(start, end, mode === "직접입력" ? "" : mode),
+                          }));
+                        }}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold bg-white"
+                      >
+                        {HOURS_CLOSED_DAY_PRESETS.map((preset) => (
+                          <option key={preset} value={preset}>
+                            {preset}
+                          </option>
+                        ))}
+                        <option value="직접입력">직접 입력</option>
+                      </select>
+                      {hoursClosedDayMode === "직접입력" && (
+                        <input
+                          type="text"
+                          value={parseShopHoursValue(editForm.hours).note}
+                          onChange={(e) => {
+                            const { start, end } = parseShopHoursValue(editForm.hours);
+                            setEditForm((prev) => ({ ...prev, hours: buildShopHoursValue(start, end, e.target.value) }));
+                          }}
+                          placeholder="예: 매달 둘째 주 월요일 휴무"
+                          className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
+                        />
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <input
+                    type="text"
+                    value={editForm.hours}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, hours: e.target.value }))}
+                    placeholder="예: 평일 09:00-18:00, 주말 10:00-17:00"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
+                  />
+                )}
               </div>
 
-              {/* 전화번호 */}
+              {/* 전화번호 — 숫자만 쳐도 자동으로 하이픈이 붙고, 모바일에서 숫자 키패드가 뜬다 */}
               <div className="space-y-1">
                 <label className="font-bold text-[#334155] block">전화번호</label>
                 <input
-                  type="text"
+                  type="tel"
+                  inputMode="numeric"
                   value={editForm.phone}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, phone: e.target.value }))}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, phone: formatPhoneAsYouType(e.target.value) }))}
                   placeholder="062-365-1234"
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
                 />
@@ -905,18 +1204,43 @@ export const MyWallet: React.FC<MyWalletProps> = ({
               {/* Action Buttons */}
               <button
                 type="button"
-                onClick={() => {
-                  setIsIconPickerOpen(false);
-                  showToast("프로필 아이콘이 성공적으로 변경되었습니다.");
+                disabled={isSavingAvatar}
+                onClick={async () => {
+                  setIsSavingAvatar(true);
+                  try {
+                    await updateProfile({ avatarIcon: selectedIcon, avatarColor: selectedBgGradient });
+                    onAvatarStyleUpdated?.(selectedIcon, selectedBgGradient);
+                    setIsIconPickerOpen(false);
+                    showToast("프로필 아이콘이 성공적으로 변경되었습니다.");
+                  } catch (err) {
+                    console.error(err);
+                    alert("프로필 아이콘 저장에 실패했습니다. 잠시 후 다시 시도해주세요.");
+                  } finally {
+                    setIsSavingAvatar(false);
+                  }
                 }}
-                className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-extrabold text-xs shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
               >
                 <span className="material-symbols-outlined text-base">check_circle</span>
-                <span>아이콘 변경 완료</span>
+                <span>{isSavingAvatar ? "저장 중..." : "아이콘 변경 완료"}</span>
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Store Location Picker Modal */}
+      {userRole === "merchant" && (
+        <StoreLocationPicker
+          isOpen={isLocationPickerOpen}
+          onClose={() => setIsLocationPickerOpen(false)}
+          marketName={marketName}
+          onSaved={() => {
+            refreshStoreProfile();
+            setLocationVersion((v) => v + 1);
+            showToast("점포 위치가 지도에 등록되었습니다!");
+          }}
+        />
       )}
     </div>
   );

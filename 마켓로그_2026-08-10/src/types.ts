@@ -7,6 +7,7 @@ export type TrafficLight = "SAFE" | "CAUTION" | "ALERT";
 export interface ProductItem {
   id: string;
   title: string;
+  unit: string; // 예: "1kg", "3개" — 상품명과 분리해서 저장
   shopName: string;
   distance: string;
   timeAgo: string;
@@ -20,6 +21,9 @@ export interface ProductItem {
   defectScore: number;
   uniformityScore: number;
   description: string;
+  // 카메라 AI 스캔이 실제로 생성한 종합의견 (Gemini). 상인이 직접 입력했거나 "AI 추천
+  // 설명" 3개 중 고른 홍보문구인 description과는 별개 — 스캔을 거치지 않은 상품은 없다.
+  aiSummary?: string;
   isMerchantUploaded?: boolean;
   isScannedProduct?: boolean;
   region?: string;

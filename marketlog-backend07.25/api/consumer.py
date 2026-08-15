@@ -46,6 +46,29 @@ def ensure_models_loaded():
 # 등급 매핑 — mlv2는 3단계(특/상/보통)가 아니라 2단계(특상/보통)로 판정한다.
 GRADE_MAP = {"특상": "A+", "보통": "B"}
 
+# 품목 인식 모델의 실제 10개 클래스를 프론트(ProductItem.category: 야채/과일/수산물/정육/
+# 건어물)와 같은 체계로 매핑한다. 예전엔 실측 스캔 결과에 "농수산물"이라는 존재하지 않는
+# 카테고리를 그냥 박아 넣어서("배추"도 "농수산물"로 표시), 저장된 상품이 홈 피드의 카테고리
+# 필터에서 아예 안 걸리는 문제가 있었다. PUBLIC_PRICE_MAP과 동일한 순서 제약 — "배"/"감"이
+# "배추"/"양배추", "감귤"/"감자"의 부분 문자열이라 더 구체적인 품목명을 먼저 검사해야 한다.
+def get_item_category(item_name: str) -> str:
+    if "무" in item_name:
+        return "야채"
+    if "양배추" in item_name or "배추" in item_name:
+        return "야채"
+    if "양파" in item_name or "마늘" in item_name:
+        return "야채"
+    if "감귤" in item_name or "귤" in item_name:
+        return "과일"
+    if "감" in item_name and "감자" not in item_name and "감귤" not in item_name:
+        return "과일"
+    if "사과" in item_name or "배" in item_name:
+        return "과일"
+    if "감자" in item_name:
+        return "야채"
+    return "야채"  # 현재 인식 모델은 채소/과일류 10개 클래스만 다룬다
+
+
 # 품목별 공공 시세
 # 품목 인식 모델의 실제 10개 클래스(무·배추·양파·마늘·양배추·감·사과·배·감귤·감자) 기준.
 # "배"/"감"이 "배추"/"양배추", "감귤"/"감자"의 부분 문자열이라 substring 매칭 순서상
@@ -283,7 +306,7 @@ async def analyze_product(request: ScanRequest):
                     "success": True,
                     "data": {
                         "productName": item_name,
-                        "category": "농수산물",
+                        "category": get_item_category(item_name),
                         "grade": grade,
                         "qualityScore": uniformity,
                         "sellingPrice": 0,
@@ -357,7 +380,11 @@ def generate_docent_script_for_store(market_name: str, store: Store) -> str:
     """클릭한 '그 점포 하나'에 대한 도슨트를 생성한다 (구역 전체가 아니라).
     Gemini 실패 시 같은 점포 데이터로 만든 템플릿 문장으로 폴백한다.
     """
-    highlight = store.notice or store.category
+    # store.subtitle이 상인이 마이 탭에서 고른 실제 "주요 품목"
+    # (예: "수산물(고등어·갈치) / 건어물(멸치)") 이라 이걸 최우선으로 쓴다.
+    # notice는 상인이 입력할 수 있는 곳이 없어 항상 비어 있고, category는 지도 핀
+    # 아이콘용 기본값("store")이라 실제 품목 정보가 아니다 — 둘 다 최후 폴백일 뿐이다.
+    highlight = store.subtitle or store.notice or store.category
 
     client = get_gemini_client()
     if client is not None:
@@ -392,7 +419,7 @@ def generate_docent_script(market_name: str, alley_name: str, stores: list[Store
     """실제 DB 점포 데이터를 근거로 도슨트 해설을 생성한다.
     Gemini 키가 없거나 호출이 실패하면 같은 데이터로 만든 템플릿 문장으로 폴백한다.
     """
-    highlights = [f"{s.name}({s.notice})" if s.notice else s.name for s in stores[:4]]
+    highlights = [f"{s.name}({s.subtitle})" if s.subtitle else s.name for s in stores[:4]]
 
     client = get_gemini_client()
     if client is not None and highlights:

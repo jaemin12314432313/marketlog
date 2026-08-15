@@ -1,13 +1,40 @@
 import React, { useState, useRef, useEffect } from "react";
 import { ProductItem } from "../types";
-import { getStoreLocation, getStoreProfile } from "../lib/api";
+import { getStoreLocation, getStoreProfile, analyzeProduct } from "../lib/api";
 import { MerchantAiScanModal } from "./MerchantAiScanModal";
-import { StoreLocationPicker } from "./StoreLocationPicker";
 
 function formatRegisteredDate(isoString: string): string {
   const d = new Date(isoString);
   if (Number.isNaN(d.getTime())) return "";
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// 비전 파이프라인이 2단계(특상/보통) 등급으로 바뀌어서, 화면에도 A+/B 같은 영문 등급
+// 대신 실제 판정 체계와 맞는 한글 표기를 쓴다 (HomeFeed 등과 동일 규칙).
+function displayGrade(grade: string): string {
+  return grade === "A+" ? "특상" : "보통";
+}
+
+// 상품명에 "완도산 전복 (1kg)"처럼 무게/수량을 같이 적어버리면 공공시세 비교 같은 걸 짤 때
+// 텍스트를 파싱해야 해서 애를 먹는다 — 그래서 단위를 상품명과 분리된 필드로 따로 받는다.
+const PRODUCT_UNIT_OPTIONS = ["kg", "g", "개", "마리", "단", "봉지", "박스", "근"];
+
+// 상품 목록에 저장된 "1kg" 같은 값을 다시 [수량 입력칸]/[단위 드롭다운]으로 풀어서 보여준다.
+// 이 UI로 만들어진 게 아닌(과거) 값은 단위를 못 알아볼 수 있어 그때는 기본값으로 되돌린다.
+function parseProductUnit(unit: string): { amount: string; label: string } {
+  const match = unit.trim().match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
+  if (match && PRODUCT_UNIT_OPTIONS.includes(match[2].trim())) {
+    return { amount: match[1], label: match[2].trim() };
+  }
+  return { amount: "1", label: PRODUCT_UNIT_OPTIONS[0] };
+}
+
+// 가격 입력창에 숫자를 치면 바로 천 단위 콤마가 붙게 한다 — 0을 잘못 눌러도 자릿수가
+// 한눈에 보여서 실수를 줄일 수 있다.
+function formatPriceInput(raw: string): string {
+  const digits = raw.replace(/[^0-9]/g, "");
+  if (!digits) return "";
+  return Number(digits).toLocaleString();
 }
 
 interface MerchantViewProps {
@@ -38,7 +65,6 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
   onFormDirtyChange,
 }) => {
   const shopName = userDisplayName || "양동수산";
-  const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   // null = 아직 확인 전, true/false = 실제로 위치가 등록돼 있는지. 이게 없으면 이미
   // 저장에 성공해도 화면엔 항상 "등록해주세요"만 보여서 등록됐는지 알 길이 없었다.
   const [hasStoreLocation, setHasStoreLocation] = useState<boolean | null>(null);
@@ -68,13 +94,20 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<ProductItem | null>(null);
   const [title, setTitle] = useState("");
+  const [unitAmount, setUnitAmount] = useState("1");
+  const [unitLabel, setUnitLabel] = useState(PRODUCT_UNIT_OPTIONS[0]);
   const [category, setCategory] = useState<ProductItem["category"]>("수산물");
   const [price, setPrice] = useState<number | "">("");
   const [publicPrice, setPublicPrice] = useState<number | "">("");
   const [description, setDescription] = useState("");
   const [grade, setGrade] = useState<ProductItem["grade"]>("A+");
   const [freshnessScore, setFreshnessScore] = useState<number>(95);
+  const [defectScore, setDefectScore] = useState<number>(2);
+  const [uniformityScore, setUniformityScore] = useState<number>(95);
   const [imageUrl, setImageUrl] = useState("");
+  // 카메라 AI 스캔에서 실제로 받은 제미나이 종합의견 — 있을 때만 상세페이지에 "AI 스캔
+  // 종합 의견"이 표시된다. "AI 추천 설명" 3개 중 고르는 홍보문구(description)와는 별개.
+  const [aiSummary, setAiSummary] = useState<string | undefined>(undefined);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -124,13 +157,30 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
   const handleEditProduct = (p: ProductItem) => {
     setEditingProductId(p.id);
     setTitle(p.title);
+    const parsedUnit = parseProductUnit(p.unit || "");
+    setUnitAmount(parsedUnit.amount);
+    setUnitLabel(parsedUnit.label);
     setCategory(p.category);
     setPrice(p.price);
     setPublicPrice(p.publicPrice || "");
     setDescription(p.description || "");
     setGrade(p.grade || "A+");
     setFreshnessScore(p.freshnessScore || 95);
+    setDefectScore(p.defectScore ?? 2);
+    setUniformityScore(p.uniformityScore ?? 95);
     setImageUrl(p.imageUrl || "");
+
+    // 신선도/등급은 그날그날 실물 상태를 찍은 사진 기준이라, 등록한 날짜가 오늘이
+    // 아니면 그 데이터는 이미 낡은 정보다 — 이 경우 aiSummary를 비워서 "재스캔 전엔
+    // 저장 불가" 규칙(신규 등록과 동일한 게이트)이 그대로 걸리게 한다. 같은 날 안에
+    // 오타 고치는 정도의 수정까지 매번 재스캔을 요구하진 않는다.
+    const registeredDate = p.createdAt ? new Date(p.createdAt).toDateString() : null;
+    const isStale = registeredDate !== new Date().toDateString();
+    setAiSummary(isStale ? undefined : p.aiSummary);
+    if (isStale) {
+      showToast("이 상품은 오늘 등록된 게 아니라서, 수정하려면 AI 스캔을 다시 해야 합니다.");
+    }
+
     setIsFormOpen(true);
 
     setTimeout(() => {
@@ -141,16 +191,58 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
   const handleCancelEdit = () => {
     setEditingProductId(null);
     setTitle("");
+    setUnitAmount("1");
+    setUnitLabel(PRODUCT_UNIT_OPTIONS[0]);
     setCategory("수산물");
     setPrice("");
     setPublicPrice("");
     setDescription("");
     setGrade("A+");
     setFreshnessScore(95);
+    setDefectScore(2);
+    setUniformityScore(95);
     setImageUrl("");
+    setAiSummary(undefined);
   };
 
   const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
+  const [isAnalyzingDrop, setIsAnalyzingDrop] = useState(false);
+
+  // 사진을 드래그&드롭으로 넣는 것도 카메라 스캔과 동일하게 실제 AI 분석을 거치게 한다 —
+  // 그냥 파일만 미리보기에 꽂아두는 우회로를 열어두면 "스캔 필수" 규칙이 무의미해진다.
+  const handleDroppedImage = (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target?.result as string;
+      if (!base64) return;
+      setIsAnalyzingDrop(true);
+      try {
+        const result = await analyzeProduct({ imageBase64: base64 });
+        if (!result.success || !result.data) throw new Error("분석 실패");
+        const data = result.data;
+        setImageUrl(base64);
+        setTitle(data.productName);
+        setUnitAmount("1");
+        setUnitLabel(PRODUCT_UNIT_OPTIONS[0]);
+        setCategory(data.category as ProductItem["category"]);
+        setPrice(data.sellingPrice || 0);
+        setPublicPrice(data.publicMarketPrice);
+        setGrade((data.grade || "A+") as ProductItem["grade"]);
+        setFreshnessScore(data.freshnessScore);
+        setDefectScore(data.defectScore);
+        setUniformityScore(data.uniformityScore);
+        setAiSummary(data.aiAnalysisSummary);
+        setDescription("");
+      } catch (err) {
+        console.error(err);
+        alert("AI 분석에 실패했습니다. 잠시 후 다시 시도해주세요.");
+      } finally {
+        setIsAnalyzingDrop(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSubmitManual = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -163,10 +255,20 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
       alert("상품명과 판매 가격(1원 이상)을 입력해 주세요.");
       return;
     }
+    // 등급/신선도/공공시세는 전부 AI 스캔에서만 채워진다 — 스캔 없이 등록되면 이 값들이
+    // 전부 기본값(A+/95점/판매가×1.2)으로 그냥 박혀버려서 신뢰할 수 없는 정보가 된다.
+    // 신규 등록은 물론, 오늘이 아닌 날 등록된 상품을 수정할 때도(handleEditProduct에서
+    // aiSummary를 비워둔 경우) 재스캔 없이는 저장할 수 없게 막는다 — 실물은 매일 달라지는데
+    // 며칠 전 사진 기준 등급/신선도를 그대로 두고 가격만 고치는 걸 막기 위함.
+    if (!aiSummary) {
+      alert("AI 스캔을 먼저 진행해야 저장할 수 있습니다. 위 '스캔 사진'에서 AI 스캔을 실행해주세요.");
+      return;
+    }
 
     const numPublicPrice = publicPrice ? Number(publicPrice) : Math.round(numPrice * 1.2);
     const diffPercent = Math.round(((numPublicPrice - numPrice) / numPublicPrice) * 100);
     const priceTag = diffPercent > 0 ? `공공 시세 대비 ${diffPercent}% 저렴` : "시세 적정가";
+    const unit = unitAmount.trim() ? `${unitAmount.trim()}${unitLabel}` : "";
 
     const finalImage =
       imageUrl.trim() ||
@@ -177,6 +279,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
       const updatedProduct: ProductItem = {
         id: editingProductId,
         title: title.trim(),
+        unit,
         shopName: shopName,
         distance: existing?.distance || "양동전통시장 내 점포",
         timeAgo: "방금 수정됨",
@@ -187,9 +290,11 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         category: category,
         imageUrl: finalImage,
         freshnessScore: freshnessScore,
-        defectScore: Math.max(0, 100 - freshnessScore - 2),
-        uniformityScore: 95,
+        defectScore: defectScore,
+        uniformityScore: uniformityScore,
         description: description.trim() || `${shopName}에서 정성껏 등록한 ${title.trim()}입니다.`,
+        aiSummary: aiSummary,
+        isScannedProduct: Boolean(aiSummary),
         isMerchantUploaded: true,
       };
 
@@ -205,6 +310,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
       const newProduct: ProductItem = {
         id: `merchant-prod-${Date.now()}`,
         title: title.trim(),
+        unit,
         shopName: shopName,
         distance: "양동전통시장 내 점포",
         timeAgo: "방금 전 등록",
@@ -215,9 +321,11 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         category: category,
         imageUrl: finalImage,
         freshnessScore: freshnessScore,
-        defectScore: Math.max(0, 100 - freshnessScore - 2),
-        uniformityScore: 95,
+        defectScore: defectScore,
+        uniformityScore: uniformityScore,
         description: description.trim() || `${shopName}에서 정성껏 등록한 ${title.trim()}입니다.`,
+        aiSummary: aiSummary,
+        isScannedProduct: Boolean(aiSummary),
         isMerchantUploaded: true,
       };
 
@@ -248,46 +356,16 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         </div>
       )}
 
-      {/* 점포 위치 등록 — 지도의 실제 점포와 이름이 정확히 일치할 때만 상품이 지도에
-          뜨던 문제 때문에, 상인이 직접 자기 위치에 핀을 찍어 등록할 수 있게 한다. */}
-      <button
-        type="button"
-        onClick={() => setIsLocationPickerOpen(true)}
-        className="w-full p-4 rounded-2xl border border-emerald-200 bg-emerald-50/60 hover:bg-emerald-50 flex items-center justify-between gap-3 transition-colors"
-      >
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-lg">
-              {hasStoreLocation ? "check_circle" : "location_on"}
-            </span>
-          </div>
-          <div className="min-w-0 text-left">
-            <h5 className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
-              {hasStoreLocation ? "점포 위치 등록됨" : "점포 위치 등록"}
-              {hasStoreLocation && (
-                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">등록완료</span>
-              )}
-            </h5>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              {hasStoreLocation
-                ? "지도에 등록된 내 점포 위치를 다시 눌러 수정할 수 있어요"
-                : "지도에서 내 점포 위치를 찍어야 상품이 지도에 표시돼요"}
-            </p>
-          </div>
-        </div>
-        <span className="material-symbols-outlined text-emerald-600 shrink-0">chevron_right</span>
-      </button>
-
-      {/* 위치/연락처가 아직 다 안 채워졌으면 새 상품 등록 자체가 막히므로(백엔드에서도
-          동일하게 거부), 폼을 열기 전에 뭐가 빠졌는지 미리 알려준다. */}
+      {/* 점포 위치 등록 UI는 마이 탭의 '점포 기본 상세 정보' 카드로 옮겨서, 위치·전화번호·
+          영업시간을 한 곳에서 같이 관리하게 했다. 여기서는 등록 여부만 확인해서 상품
+          등록 자체를 막는 게이트로만 쓴다. */}
       {(hasStoreLocation === false || hasStoreContactInfo === false) && (
         <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50 flex items-start gap-3">
           <span className="material-symbols-outlined text-amber-600 shrink-0">warning</span>
           <div className="text-xs text-amber-900">
             <p className="font-extrabold">아직 새 상품을 등록할 수 없어요</p>
             <p className="mt-1 leading-relaxed text-amber-800">
-              {hasStoreLocation === false && "위쪽 '점포 위치 등록'으로 지도에 점포를 등록하고, "}
-              마이 탭의 '점포 상세정보'에서 전화번호와 영업시간을 입력해주세요.
+              마이 탭의 '점포 기본 상세 정보'에서 점포 위치와 전화번호, 영업시간을 먼저 등록해주세요.
             </p>
           </div>
         </div>
@@ -372,17 +450,44 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
             )}
           </div>
 
-          {/* Product Name */}
+          {/* Product Name — 무게/수량은 아래 "단위" 필드로 따로 받는다. 상품명에 섞어 쓰면
+              나중에 공공시세 비교 같은 걸 짤 때 텍스트를 파싱해야 해서 애를 먹는다. */}
           <div className="space-y-1">
             <label className="text-xs font-bold text-slate-700">상품명 *</label>
             <input
               type="text"
-              placeholder="예: 싱싱한 완도산 전복 (1kg)"
+              placeholder="예: 완도산 전복"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
               required
             />
+          </div>
+
+          {/* Unit / Weight */}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-700">단위/중량</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="1"
+                value={unitAmount}
+                onChange={(e) => setUnitAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+                className="w-20 shrink-0 px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+              />
+              <select
+                value={unitLabel}
+                onChange={(e) => setUnitLabel(e.target.value)}
+                className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium bg-white"
+              >
+                {PRODUCT_UNIT_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Category & Price */}
@@ -405,10 +510,14 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-700">판매 가격 (원) *</label>
               <input
-                type="number"
-                placeholder="예: 15000"
-                value={price}
-                onChange={(e) => setPrice(e.target.value === "" ? "" : Number(e.target.value))}
+                type="text"
+                inputMode="numeric"
+                placeholder="예: 15,000"
+                value={price === "" ? "" : price.toLocaleString()}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/[^0-9]/g, "");
+                  setPrice(digits === "" ? "" : Number(digits));
+                }}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
                 required
               />
@@ -466,7 +575,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
             ) : (
               /* Default state when NO photo is present: Clean Minimal Dropzone Preview Slot (Matching reference image) */
               <div
-                onClick={() => setIsMerchantScanOpen(true)}
+                onClick={() => !isAnalyzingDrop && setIsMerchantScanOpen(true)}
                 onDragOver={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -474,31 +583,28 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                 onDrop={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                    const file = e.dataTransfer.files[0];
-                    if (file.type.startsWith("image/")) {
-                      const reader = new FileReader();
-                      reader.onload = (event) => {
-                        if (event.target?.result) {
-                          setImageUrl(event.target.result as string);
-                        }
-                      };
-                      reader.readAsDataURL(file);
-                    }
-                  }
+                  if (isAnalyzingDrop) return;
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) handleDroppedImage(file);
                 }}
-                className="relative w-full rounded-2xl border-2 border-dashed border-slate-300 hover:border-emerald-500 bg-[#F8FAFC] hover:bg-emerald-50/40 transition-all p-4 sm:p-5 flex flex-col items-center cursor-pointer group shadow-2xs"
+                className={`relative w-full rounded-2xl border-2 border-dashed border-slate-300 hover:border-emerald-500 bg-[#F8FAFC] hover:bg-emerald-50/40 transition-all p-4 sm:p-5 flex flex-col items-center group shadow-2xs ${
+                  isAnalyzingDrop ? "cursor-wait opacity-70" : "cursor-pointer"
+                }`}
               >
                 {/* Primary Action Button & Icon */}
                 <div className="flex flex-col items-center justify-center text-center my-1.5">
                   <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-2 group-hover:scale-110 group-hover:bg-emerald-600 group-hover:text-white transition-all shadow-xs">
-                    <span className="material-symbols-outlined text-2xl font-light">
-                      photo_camera
-                    </span>
+                    {isAnalyzingDrop ? (
+                      <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <span className="material-symbols-outlined text-2xl font-light">
+                        photo_camera
+                      </span>
+                    )}
                   </div>
 
                   <p className="text-base sm:text-lg font-black text-slate-800 tracking-tight group-hover:text-emerald-900 transition-colors">
-                    클릭하여 AI 스캔 실행
+                    {isAnalyzingDrop ? "AI가 사진을 분석하는 중..." : "클릭하여 AI 스캔 실행"}
                   </p>
 
                   <p className="text-xs text-slate-500 mt-0.5 font-medium flex items-center gap-1">
@@ -631,16 +737,20 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
             )}
           </div>
 
-          {/* Submit Button */}
+          {/* Submit Button — 신규 등록이든, 오늘 스캔한 적 없는 상품을 수정하는 것이든
+              AI 스캔을 거치기 전엔 눌러도 소용없다는 걸 끝까지 가서야 알게 하지 않도록,
+              버튼 자체를 비활성화해서 미리 알려준다. */}
           <button
             type="submit"
-            disabled={isSubmittingProduct}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-extrabold text-xs shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+            disabled={isSubmittingProduct || !aiSummary}
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-extrabold text-xs shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <span className="material-symbols-outlined text-base">check</span>
             <span>
               {isSubmittingProduct
                 ? "처리 중..."
+                : !aiSummary
+                ? "AI 스캔을 먼저 진행해주세요"
                 : editingProductId
                 ? "상품 정보 수정 완료"
                 : "상품 등록 완료"}
@@ -689,8 +799,12 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                   {/* Product Image Thumbnail */}
                   <div className="w-20 h-20 rounded-xl bg-slate-100 overflow-hidden flex-shrink-0 relative">
                     <img src={p.imageUrl} alt={p.title} className="w-full h-full object-cover" />
-                    <span className="absolute top-1 left-1 bg-emerald-600 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded shadow-xs">
-                      {p.grade}
+                    <span
+                      className={`absolute top-1 left-1 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded shadow-xs ${
+                        p.grade?.startsWith("A") ? "bg-emerald-600" : "bg-[#0052FF]"
+                      }`}
+                    >
+                      {displayGrade(p.grade)}
                     </span>
                   </div>
 
@@ -705,6 +819,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                     )}
                     <h4 className="text-sm font-bold text-slate-900 truncate hover:text-emerald-600 transition-colors">
                       {p.title}
+                      {p.unit && <span className="text-slate-400 font-semibold"> ({p.unit})</span>}
                     </h4>
                     <div className="flex items-center gap-1.5">
                       <span className="text-base font-black text-slate-900">
@@ -810,29 +925,23 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
           // 폼에 스캔된 상품 정보와 사진 채워넣기 (바로 등록하지 않고, 폼 확인 후 '상품 등록 완료' 시 등록)
           setImageUrl(scannedProduct.imageUrl);
           setTitle(scannedProduct.title);
+          setUnitAmount("1");
+          setUnitLabel(PRODUCT_UNIT_OPTIONS[0]);
           setCategory(scannedProduct.category);
           setPrice(scannedProduct.price || "");
           setPublicPrice(scannedProduct.publicPrice || "");
           setDescription(scannedProduct.description || "");
           setGrade(scannedProduct.grade || "A+");
           setFreshnessScore(scannedProduct.freshnessScore || 95);
+          setDefectScore(scannedProduct.defectScore ?? 2);
+          setUniformityScore(scannedProduct.uniformityScore ?? 95);
+          setAiSummary(scannedProduct.aiSummary);
           setIsFormOpen(true);
           showToast(`'${scannedProduct.title}' AI 스캔 완료! 하단의 '상품 등록 완료'를 눌러 등록하세요.`);
 
           setTimeout(() => {
             formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
           }, 100);
-        }}
-      />
-
-      {/* Store Location Picker Modal */}
-      <StoreLocationPicker
-        isOpen={isLocationPickerOpen}
-        onClose={() => setIsLocationPickerOpen(false)}
-        marketName={marketName}
-        onSaved={() => {
-          setHasStoreLocation(true);
-          showToast("점포 위치가 지도에 등록되었습니다!");
         }}
       />
     </div>

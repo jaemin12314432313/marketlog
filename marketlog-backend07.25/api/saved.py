@@ -28,6 +28,8 @@ def scanned_to_dict(item: ScannedProduct) -> dict:
         "defectScore": item.defect_score,
         "uniformityScore": item.uniformity_score,
         "description": item.description,
+        "aiSummary": item.ai_summary,
+        "createdAt": item.created_at.isoformat() if item.created_at else None,
     }
 
 
@@ -85,6 +87,7 @@ class ScannedProductIn(BaseModel):
     defectScore: int = 0
     uniformityScore: int = 0
     description: str = ""
+    aiSummary: Optional[str] = None
 
 
 @router.get("/scanned")
@@ -120,6 +123,7 @@ def add_scanned(
         defect_score=payload.defectScore,
         uniformity_score=payload.uniformityScore,
         description=payload.description,
+        ai_summary=payload.aiSummary,
     )
     db.add(item)
     db.commit()

@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from api.map import router as map_router
 import os
+from sqlalchemy import inspect, text
 from api import merchant, consumer, recommend, auth, saved
 from db import Base, engine, SessionLocal
 import kamis
@@ -16,6 +17,28 @@ from seed import seed_if_empty
 load_dotenv()
 
 Base.metadata.create_all(bind=engine)
+
+# create_all은 없는 테이블만 만들고, 이미 있는 테이블에 나중에 추가된 컬럼은 채워주지 않는다.
+# products.unit(상품명/단위 분리)이나 users.avatar_*(프로필 사진/아이콘 저장)처럼 기존 DB
+# 파일에 없을 수 있는 컬럼은 여기서 직접 추가한다.
+_inspector = inspect(engine)
+_pending_columns = {
+    "products": [("unit", "VARCHAR NOT NULL DEFAULT ''")],
+    "users": [
+        ("avatar_icon", "VARCHAR"),
+        ("avatar_color", "VARCHAR"),
+        ("profile_image", "TEXT"),
+    ],
+    "scanned_products": [("ai_summary", "VARCHAR")],
+}
+for _table, _columns in _pending_columns.items():
+    if _table not in _inspector.get_table_names():
+        continue
+    _existing_columns = {col["name"] for col in _inspector.get_columns(_table)}
+    for _column_name, _column_def in _columns:
+        if _column_name not in _existing_columns:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {_table} ADD COLUMN {_column_name} {_column_def}"))
 
 _seed_db = SessionLocal()
 try:

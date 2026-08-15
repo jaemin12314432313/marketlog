@@ -1,6 +1,34 @@
 import React, { useState } from "react";
 import { ProductItem } from "../types";
 
+// 비전 파이프라인이 2단계(특상/보통) 등급으로 바뀌어서, 화면에도 A+/B 같은 영문 등급
+// 대신 실제 판정 체계와 맞는 한글 표기를 쓴다 (HomeFeed 등과 동일 규칙).
+function displayGrade(grade: string): string {
+  return grade === "A+" ? "특상" : "보통";
+}
+
+// product.timeAgo는 등록 시점에 박제된 고정 문자열이라 시간이 지나도 안 바뀐다 — HomeFeed와
+// 동일하게 실제 경과 시간은 createdAt에서 매번 다시 계산한다.
+function formatRelativeTime(createdAt?: string): string {
+  if (!createdAt) return "";
+  const created = new Date(createdAt).getTime();
+  if (Number.isNaN(created)) return "";
+  const diffMin = Math.floor((Date.now() - created) / 60000);
+  if (diffMin < 1) return "방금 전";
+  if (diffMin < 60) return `${diffMin}분 전`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}시간 전`;
+  const diffDay = Math.floor(diffHour / 24);
+  return `${diffDay}일 전`;
+}
+
+// HomeFeed와 동일한 공공시세 대비 할인율 계산 — 저장한 상품 카드도 피드와 같은 기준으로 보여준다.
+function discountPercent(product: ProductItem): number | null {
+  if (!product.publicPrice || product.publicPrice <= 0) return null;
+  const percent = Math.round(((product.publicPrice - product.price) / product.publicPrice) * 100);
+  return percent > 0 ? percent : null;
+}
+
 interface SavedViewProps {
   scannedProducts: ProductItem[];
   bookmarkedProducts: ProductItem[];
@@ -107,58 +135,92 @@ export const SavedView: React.FC<SavedViewProps> = ({
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-[#E2E8F0]">
-              {scannedProducts.map((product) => (
-                <article
-                  key={product.id}
-                  onClick={() => onSelectProduct({ ...product, isScannedProduct: true })}
-                  className="flex gap-4 py-3.5 group hover:bg-surface-container-low transition-colors rounded-xl px-1 relative cursor-pointer"
-                >
-                  <img
-                    src={product.imageUrl}
-                    alt={product.title}
-                    className="w-20 h-20 rounded-xl object-cover border border-[#E2E8F0] flex-shrink-0 shadow-sm"
-                  />
-                  <div className="flex-1 flex flex-col justify-between min-w-0">
-                    <div>
-                      <div className="flex justify-between items-start gap-2">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <h3 className="text-sm font-bold text-on-surface line-clamp-1 group-hover:text-trust-blue">
-                            {product.title}
-                          </h3>
-                        </div>
+            <div className="flex flex-col gap-3.5">
+              {scannedProducts.map((product) => {
+                const relativeTime = formatRelativeTime(product.createdAt);
+                return (
+                  <article
+                    key={product.id}
+                    onClick={() => onSelectProduct({ ...product, isScannedProduct: true })}
+                    className="py-3 sm:py-3.5 border-b border-[#E2E8F0] last:border-b-0 transition-all flex gap-3.5 items-center cursor-pointer group"
+                  >
+                    {/* Left Thumbnail Container */}
+                    <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden flex-shrink-0 border border-[#E2E8F0] bg-slate-100">
+                      <img
+                        src={product.imageUrl}
+                        alt={product.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div
+                        className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[11px] font-extrabold text-white flex items-center gap-1 shadow-sm z-10 ${
+                          product.grade?.startsWith("A") ? "bg-[#00C875]" : "bg-[#0052FF]"
+                        }`}
+                      >
+                        <span
+                          className="material-symbols-outlined text-[13px] font-extrabold"
+                          style={{ fontVariationSettings: "'FILL' 1" }}
+                        >
+                          check_circle
+                        </span>
+                        <span>{displayGrade(product.grade)}</span>
+                      </div>
+                    </div>
 
-                        {onRemoveScannedProduct && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onRemoveScannedProduct(product.id);
-                            }}
-                            className="text-outline hover:text-red-500 p-1 transition-colors flex-shrink-0"
-                            title="스캔 목록에서 삭제"
-                          >
-                            <span className="material-symbols-outlined text-base">delete</span>
-                          </button>
+                    {/* Right Details Container */}
+                    <div className="flex-1 flex flex-col justify-between self-stretch py-0.5 min-w-0">
+                      <div>
+                        <div className="flex justify-between items-start gap-1">
+                          <div className="min-w-0">
+                            {/* 특정 점포에 등록된 상품이 아니라 내가 직접 스캔한 개인 기록이라
+                                가게명 대신, 실제로 있는 데이터인 카테고리를 라벨로 보여준다. */}
+                            <p className="text-xs font-black text-[#0052FF] truncate">{product.category}</p>
+                            <h3 className="text-sm sm:text-base font-extrabold text-[#0F172A] leading-snug line-clamp-2 group-hover:text-[#0052FF] transition-colors mt-0.5">
+                              {product.title}
+                              {product.unit && <span className="text-[#64748B] font-bold"> ({product.unit})</span>}
+                            </h3>
+                            {relativeTime && (
+                              <p className="text-[11px] text-[#94A3B8] font-medium mt-0.5">{relativeTime}</p>
+                            )}
+                          </div>
+                          {onRemoveScannedProduct && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onRemoveScannedProduct(product.id);
+                              }}
+                              className="p-1 rounded-full transition-colors flex-shrink-0 text-[#94A3B8] hover:text-red-500 hover:bg-red-50"
+                              title="스캔 목록에서 삭제"
+                            >
+                              <span className="material-symbols-outlined text-xl">delete</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Price Section */}
+                      <div className="mt-2">
+                        <div className="flex items-baseline gap-1 whitespace-nowrap">
+                          {discountPercent(product) !== null && (
+                            <span className="text-[#0052FF] font-black text-lg sm:text-xl">
+                              {discountPercent(product)}%
+                            </span>
+                          )}
+                          <div className="text-xl sm:text-2xl font-black text-[#0F172A] tracking-tight">
+                            {product.price.toLocaleString()}
+                            <span className="text-base font-bold text-[#0F172A] ml-0.5">원</span>
+                          </div>
+                        </div>
+                        {discountPercent(product) !== null && (
+                          <span className="block text-[11px] font-bold text-[#94A3B8] mt-0.5">
+                            공공시세 대비 저렴
+                          </span>
                         )}
                       </div>
-
-                      <p className="text-xs text-outline font-medium mt-1 flex items-center gap-1">
-                        <span>{product.shopName}</span>
-                      </p>
                     </div>
-
-                    <div className="flex justify-between items-end mt-2">
-                      <div className="text-sm font-extrabold text-slate-900">
-                        {product.price.toLocaleString()}원
-                      </div>
-                      <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-[#DCFCE7] text-[#166534]">
-                        AI {product.grade}
-                      </span>
-                    </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>
@@ -176,61 +238,97 @@ export const SavedView: React.FC<SavedViewProps> = ({
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-[#E2E8F0]">
-              {bookmarkedProducts.map((product) => (
-                <article
-                  key={product.id}
-                  className="flex gap-4 py-3.5 group hover:bg-surface-container-low transition-colors rounded-xl px-1 relative"
-                >
-                  <img
-                    src={product.imageUrl}
-                    alt={product.title}
+            <div className="flex flex-col gap-3.5">
+              {bookmarkedProducts.map((product) => {
+                const relativeTime = formatRelativeTime(product.createdAt);
+                return (
+                  <article
+                    key={product.id}
                     onClick={() => onSelectProduct(product)}
-                    className="w-20 h-20 rounded-xl object-cover border border-[#E2E8F0] flex-shrink-0 cursor-pointer shadow-sm"
-                  />
-                  <div className="flex-1 flex flex-col justify-between min-w-0">
-                    <div>
-                      <div className="flex justify-between items-start gap-2">
-                        <h3
-                          onClick={() => onSelectProduct(product)}
-                          className="text-sm font-bold text-on-surface line-clamp-1 cursor-pointer hover:text-trust-blue"
+                    className="py-3 sm:py-3.5 border-b border-[#E2E8F0] last:border-b-0 transition-all flex gap-3.5 items-center cursor-pointer group"
+                  >
+                    {/* Left Thumbnail Container */}
+                    <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden flex-shrink-0 border border-[#E2E8F0] bg-slate-100">
+                      <img
+                        src={product.imageUrl}
+                        alt={product.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div
+                        className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[11px] font-extrabold text-white flex items-center gap-1 shadow-sm z-10 ${
+                          product.grade?.startsWith("A") ? "bg-[#00C875]" : "bg-[#0052FF]"
+                        }`}
+                      >
+                        <span
+                          className="material-symbols-outlined text-[13px] font-extrabold"
+                          style={{ fontVariationSettings: "'FILL' 1" }}
                         >
-                          {product.title}
-                        </h3>
+                          check_circle
+                        </span>
+                        <span>{displayGrade(product.grade)}</span>
+                      </div>
+                    </div>
 
-                        {onRemoveBookmarkedProduct && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onRemoveBookmarkedProduct(product.id);
-                            }}
-                            className="text-trust-blue hover:text-red-500 p-1 transition-colors flex-shrink-0"
-                            title="저장 해제"
-                          >
-                            <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>
-                              bookmark
-                            </span>
-                          </button>
-                        )}
+                    {/* Right Details Container */}
+                    <div className="flex-1 flex flex-col justify-between self-stretch py-0.5 min-w-0">
+                      <div>
+                        <div className="flex justify-between items-start gap-1">
+                          <div className="min-w-0">
+                            {product.shopName && (
+                              <p className="text-xs font-black text-[#0052FF] truncate">{product.shopName}</p>
+                            )}
+                            <h3 className="text-sm sm:text-base font-extrabold text-[#0F172A] leading-snug line-clamp-2 group-hover:text-[#0052FF] transition-colors mt-0.5">
+                              {product.title}
+                              {product.unit && <span className="text-[#64748B] font-bold"> ({product.unit})</span>}
+                            </h3>
+                            {relativeTime && (
+                              <p className="text-[11px] text-[#94A3B8] font-medium mt-0.5">{relativeTime}</p>
+                            )}
+                          </div>
+                          {onRemoveBookmarkedProduct && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onRemoveBookmarkedProduct(product.id);
+                              }}
+                              className="p-1 rounded-full transition-colors flex-shrink-0 text-[#0052FF] bg-blue-50 hover:bg-blue-100"
+                              title="저장 해제"
+                            >
+                              <span
+                                className="material-symbols-outlined text-xl"
+                                style={{ fontVariationSettings: "'FILL' 1" }}
+                              >
+                                bookmark
+                              </span>
+                            </button>
+                          )}
+                        </div>
                       </div>
 
-                      <p className="text-xs text-outline font-medium mt-1">
-                        {product.shopName}
-                      </p>
+                      {/* Price Section */}
+                      <div className="mt-2">
+                        <div className="flex items-baseline gap-1 whitespace-nowrap">
+                          {discountPercent(product) !== null && (
+                            <span className="text-[#0052FF] font-black text-lg sm:text-xl">
+                              {discountPercent(product)}%
+                            </span>
+                          )}
+                          <div className="text-xl sm:text-2xl font-black text-[#0F172A] tracking-tight">
+                            {product.price.toLocaleString()}
+                            <span className="text-base font-bold text-[#0F172A] ml-0.5">원</span>
+                          </div>
+                        </div>
+                        {discountPercent(product) !== null && (
+                          <span className="block text-[11px] font-bold text-[#94A3B8] mt-0.5">
+                            공공시세 대비 저렴
+                          </span>
+                        )}
+                      </div>
                     </div>
-
-                    <div className="flex justify-between items-end mt-2">
-                      <span className="text-sm font-extrabold text-slate-900">
-                        {product.price.toLocaleString()}원
-                      </span>
-                      <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-[#DCFCE7] text-[#166534]">
-                        AI {product.grade}
-                      </span>
-                    </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>

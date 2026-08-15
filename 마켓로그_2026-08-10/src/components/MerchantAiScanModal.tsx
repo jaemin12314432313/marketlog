@@ -155,6 +155,7 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
       const newProduct: ProductItem = {
         id: `merchant-ai-${Date.now()}`,
         title: data.productName,
+        unit: "",
         category: data.category as any,
         price: data.sellingPrice || 0,
         publicPrice: data.publicMarketPrice,
@@ -169,7 +170,11 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
         freshnessScore: data.freshnessScore,
         defectScore: data.defectScore,
         uniformityScore: data.uniformityScore,
-        description: data.aiAnalysisSummary,
+        // AI 스캔 종합의견(실제 제미나이 분석)과 상품설명(상인이 쓰는 홍보문구)은 서로
+        // 다른 값이다 — description은 비워두고, 상인이 직접 입력하거나 "AI 추천 설명"
+        // 중 하나를 고르게 한다.
+        description: "",
+        aiSummary: data.aiAnalysisSummary,
       };
 
       // 폼에 채워넣기만 함 (실제 등록은 MerchantView의 '상품 등록 완료' 클릭 시)

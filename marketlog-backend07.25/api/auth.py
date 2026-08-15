@@ -60,6 +60,9 @@ def serialize_user(user: User) -> dict:
         "displayName": user.display_name,
         "shopName": user.shop_name,
         "phone": user.phone,
+        "avatarIcon": user.avatar_icon,
+        "avatarColor": user.avatar_color,
+        "profileImage": user.profile_image,
     }
 
 
@@ -93,6 +96,9 @@ class UpdateProfileRequest(BaseModel):
     phone: Optional[str] = None
     currentPassword: Optional[str] = None
     newPassword: Optional[str] = None
+    avatarIcon: Optional[str] = None
+    avatarColor: Optional[str] = None
+    profileImage: Optional[str] = None
 
 
 @router.post("/register")
@@ -198,6 +204,12 @@ def update_profile(
         current_user.display_name = request.displayName.strip()
     if request.phone is not None and request.phone.strip():
         current_user.phone = request.phone.strip()
+    if request.avatarIcon is not None:
+        current_user.avatar_icon = request.avatarIcon
+    if request.avatarColor is not None:
+        current_user.avatar_color = request.avatarColor
+    if request.profileImage is not None:
+        current_user.profile_image = request.profileImage
 
     db.commit()
     db.refresh(current_user)

@@ -48,6 +48,7 @@ def require_store_ready(db: Session, market_id: str, shop_name: str) -> Store:
 # 수동 상품 등록/수정/삭제 (MerchantView 직접 입력 폼)
 class ProductIn(BaseModel):
     title: str
+    unit: str = ""  # 예: "1kg", "3개" — 상품명과 분리해서 저장
     category: str = "AI 추천상품"
     price: int = Field(gt=0)
     publicPrice: int = Field(0, ge=0)
@@ -58,6 +59,8 @@ class ProductIn(BaseModel):
     defectScore: int = 0
     uniformityScore: int = 0
     description: str = ""
+    aiSummary: str | None = None
+    isScannedProduct: bool = False
     distance: str = "양동전통시장 내 점포"
     timeAgo: str = "방금 전 등록"
 
@@ -75,6 +78,7 @@ def create_product(
         store_id=store.id,
         region="광주광역시",
         title=payload.title,
+        unit=payload.unit,
         shop_name=shop_name,
         distance=payload.distance,
         time_ago=payload.timeAgo,
@@ -88,6 +92,8 @@ def create_product(
         defect_score=payload.defectScore,
         uniformity_score=payload.uniformityScore,
         description=payload.description,
+        ai_summary=payload.aiSummary,
+        is_scanned_product=payload.isScannedProduct,
         is_merchant_uploaded=True,
     )
     db.add(product)
@@ -111,6 +117,7 @@ def update_product(
         raise HTTPException(status_code=403, detail="본인 점포의 상품만 수정할 수 있습니다.")
 
     product.title = payload.title
+    product.unit = payload.unit
     product.distance = payload.distance
     product.time_ago = payload.timeAgo
     product.price = payload.price
@@ -123,6 +130,8 @@ def update_product(
     product.defect_score = payload.defectScore
     product.uniformity_score = payload.uniformityScore
     product.description = payload.description
+    product.ai_summary = payload.aiSummary
+    product.is_scanned_product = payload.isScannedProduct
     db.commit()
     db.refresh(product)
     return {"success": True, "product": product_to_dict(product)}
@@ -218,6 +227,7 @@ def set_store_location(
 # 다 날아가는 가짜 기능이었다. Store 레코드가 있어야 저장할 수 있으므로(점포 위치
 # 등록이 선행되어야 함) 없으면 안내 메시지와 함께 404를 돌려준다.
 class StoreProfileRequest(BaseModel):
+    name: str | None = None  # 상호명 — 계정 표시 이름과는 별개의 점포 이름
     subtitle: str | None = None  # 주요 품목
     phone: str | None = None
     hours: str | None = None
@@ -226,6 +236,7 @@ class StoreProfileRequest(BaseModel):
 
 def _store_profile_dict(store: Store) -> dict:
     return {
+        "name": store.name,
         "subtitle": store.subtitle,
         "phone": store.phone,
         "hours": store.hours,
@@ -266,6 +277,16 @@ def update_store_profile(
             status_code=404,
             detail="먼저 점포 위치를 등록해주세요. (점포 위치 등록 후 상세정보를 저장할 수 있습니다.)",
         )
+
+    # 상호명은 Store.name이자 상인 매칭 키(shop_name)라, 이름이 실제로 바뀌면 User.shop_name과
+    # 이 상인의 기존 상품들(Product.shop_name)도 같이 옮겨줘야 상품이 새 이름 밑에서도 계속
+    # 지도/내 상품 목록에 붙어 있는다. 공백이면 무시 — 상호명을 빈 값으로 지울 순 없다.
+    if payload.name is not None and payload.name.strip() and payload.name.strip() != store.name:
+        new_name = payload.name.strip()
+        old_name = store.name
+        store.name = new_name
+        current_user.shop_name = new_name
+        db.query(Product).filter(Product.shop_name == old_name).update({"shop_name": new_name})
 
     if payload.subtitle is not None:
         store.subtitle = payload.subtitle

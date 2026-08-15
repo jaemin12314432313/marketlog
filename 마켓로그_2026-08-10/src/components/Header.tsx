@@ -84,8 +84,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Region Dropdown Menu */}
           {isDropdownOpen && (
             <div className="absolute top-11 right-0 w-48 sm:w-56 bg-surface-white rounded-xl shadow-xl border border-[#E2E8F0] py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
-              <div className="px-3 py-1.5 text-[11px] font-extrabold text-outline uppercase tracking-wider flex items-center gap-1">
-                <span className="material-symbols-outlined text-xs">map</span>
+              <div className="px-3 py-1.5 text-[11px] font-extrabold text-outline uppercase tracking-wider">
                 <span>지역(도/시) 선택</span>
               </div>
               <div className="max-h-64 overflow-y-auto">
@@ -107,8 +106,17 @@ export const Header: React.FC<HeaderProps> = ({
                       }`}
                     >
                       <div className="flex items-center gap-1.5">
-                        <span className="text-xs">
-                          {region === "전체" ? "🌐" : "📍"}
+                        <span
+                          className={`material-symbols-outlined text-sm shrink-0 ${
+                            isSelected
+                              ? userRole === "merchant"
+                                ? "text-emerald-600"
+                                : "text-trust-blue"
+                              : "text-outline"
+                          }`}
+                          style={{ fontVariationSettings: "'FILL' 1" }}
+                        >
+                          location_on
                         </span>
                         <span>{region === "전체" ? "전국 (전체)" : region}</span>
                       </div>

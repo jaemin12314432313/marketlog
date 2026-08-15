@@ -168,6 +168,9 @@ export interface AuthUser {
   displayName: string;
   shopName?: string | null;
   phone?: string | null;
+  avatarIcon?: string | null;
+  avatarColor?: string | null;
+  profileImage?: string | null;
 }
 
 export interface AuthResponse {
@@ -224,6 +227,9 @@ export function updateProfile(payload: {
   phone?: string;
   currentPassword?: string;
   newPassword?: string;
+  avatarIcon?: string;
+  avatarColor?: string;
+  profileImage?: string;
 }): Promise<{ success: boolean; user: AuthUser }> {
   return apiFetch("/api/v1/auth/me", {
     method: "PUT",
@@ -312,6 +318,7 @@ export function setStoreLocation(payload: { lat: number; lng: number }): Promise
 }
 
 export interface StoreProfile {
+  name: string;
   subtitle: string;
   phone: string;
   hours: string;
@@ -323,6 +330,7 @@ export function getStoreProfile(): Promise<{ success: boolean; profile: StorePro
 }
 
 export function updateStoreProfile(payload: {
+  name?: string;
   subtitle?: string;
   phone?: string;
   hours?: string;

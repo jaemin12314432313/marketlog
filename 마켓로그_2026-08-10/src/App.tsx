@@ -43,28 +43,29 @@ export default function App() {
   const [userShopName, setUserShopName] = useState<string>("");
   const [userUsername, setUserUsername] = useState<string>("");
   const [userPhone, setUserPhone] = useState<string>("");
+  // 마이 탭 프로필 아바타(아이콘/색상/사진) — 백엔드에 저장돼서 탭을 옮겼다 와도(MyWallet
+  // 언마운트) 유지된다.
+  const [userAvatarIcon, setUserAvatarIcon] = useState<string>("");
+  const [userAvatarColor, setUserAvatarColor] = useState<string>("");
+  const [userProfileImage, setUserProfileImage] = useState<string>("");
   // 앱은 항상 로그인 화면부터 시작한다. 저장된 토큰으로 세션이 복원되면(자동로그인)
   // 아래 useEffect에서 바로 false로 내려가고, 복원 실패/토큰 없음이면 true로 유지된다.
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
   // 저장된 토큰으로 세션을 복원하는 동안 로그인 화면이 잠깐 번쩍였다 사라지는 걸 막기 위한 스플래시.
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
-  const [selectedRegion, setSelectedRegion] = useState<string>("광주광역시");
+  const [selectedRegion, setSelectedRegion] = useState<string>("전체");
   const [selectedMarket, setSelectedMarket] = useState<MarketInfo>(MARKETS_DATA[0]);
   // 상품 상세의 "상점 위치 지도에서 확인하기"에서 넘어왔을 때 지도가 바로 그 상점으로
   // 이동/포커스하도록 전달하는 값 — MapView가 처리하고 나면 다시 null로 비운다.
   const [mapFocusShopName, setMapFocusShopName] = useState<string | null>(null);
+  // 위와 같은 흐름으로 지도에 왔을 때, 뒤로가기를 누르면 원래 보던 상품 상세로 돌아갈 수
+  // 있도록 그 상품을 기억해둔다 — 예전엔 onNavigateToMap이 selectedProduct를 바로 지워서,
+  // 지도까지 갔다가 다시 상품으로 돌아갈 방법이 하단 탭바로 홈에 가는 것뿐이었다.
+  const [mapReturnProduct, setMapReturnProduct] = useState<ProductItem | null>(null);
+  // 상품 상세로 돌아간 뒤 그걸 닫았을 때도, 원래 있던 탭(보통 홈 피드)이 아니라 "map"
+  // 탭이 그대로 남아있으면 안 되므로 지도로 넘어가기 직전의 탭을 같이 기억해둔다.
+  const [mapReturnTab, setMapReturnTab] = useState<TabType | null>(null);
 
-  const handleSelectRegion = (region: string) => {
-    setSelectedRegion(region);
-    // Sync market if region directly matches a known market
-    if (region === "서울특별시") {
-      setSelectedMarket(MARKETS_DATA[1]);
-    } else if (region === "부산광역시") {
-      setSelectedMarket(MARKETS_DATA[2]);
-    } else if (region === "광주광역시") {
-      setSelectedMarket(MARKETS_DATA[0]);
-    }
-  };
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [scannedProducts, setScannedProducts] = useState<ProductItem[]>([]);
   const [bookmarkedProducts, setBookmarkedProducts] = useState<ProductItem[]>([]);
@@ -96,6 +97,9 @@ export default function App() {
         setUserShopName(res.user.shopName || "");
         setUserUsername(res.user.username);
         setUserPhone(res.user.phone || "");
+        setUserAvatarIcon(res.user.avatarIcon || "");
+        setUserAvatarColor(res.user.avatarColor || "");
+        setUserProfileImage(res.user.profileImage || "");
       })
       .catch(() => {
         clearAuthToken();
@@ -136,6 +140,11 @@ export default function App() {
         setSelectedProduct(null);
       } else if (isAiScanOpen) {
         setIsAiScanOpen(false);
+      } else if (activeTab === "map" && mapReturnProduct) {
+        setSelectedProduct(mapReturnProduct);
+        setMapReturnProduct(null);
+        setActiveTab(mapReturnTab ?? "home");
+        setMapReturnTab(null);
       } else if (activeTab !== "home") {
         setActiveTab("home");
       } else if (isMerchantFormDirty) {
@@ -150,20 +159,26 @@ export default function App() {
     return () => {
       listener.then((l) => l.remove());
     };
-  }, [isNotificationOpen, selectedProduct, isAiScanOpen, activeTab, isMerchantFormDirty]);
+  }, [isNotificationOpen, selectedProduct, isAiScanOpen, activeTab, isMerchantFormDirty, mapReturnProduct, mapReturnTab]);
 
   const handleLoginSuccess = (
     role: UserRole,
     displayName: string,
     shopName?: string,
     username?: string,
-    phone?: string
+    phone?: string,
+    avatarIcon?: string,
+    avatarColor?: string,
+    profileImage?: string
   ) => {
     setUserRole(role);
     setUserDisplayName(displayName);
     setUserShopName(shopName || "");
     setUserUsername(username || "");
     setUserPhone(phone || "");
+    setUserAvatarIcon(avatarIcon || "");
+    setUserAvatarColor(avatarColor || "");
+    setUserProfileImage(profileImage || "");
     setIsLoginModalOpen(false);
     setActiveTab("home");
   };
@@ -175,6 +190,9 @@ export default function App() {
     setUserRole("customer");
     setUserUsername("");
     setUserPhone("");
+    setUserAvatarIcon("");
+    setUserAvatarColor("");
+    setUserProfileImage("");
     setBookmarkedProducts([]);
     setScannedProducts([]);
     setActiveTab("home");
@@ -185,13 +203,21 @@ export default function App() {
     setCartItems((prev) => [...prev, product]);
   };
 
+  // 스캔 목록 저장은 매번 새 레코드를 만드는 API라(북마크처럼 존재 여부로 걸러지지 않음),
+  // 저장 중에 또 누르면 진짜로 중복 레코드가 생긴다 — 진행 중엔 추가 클릭을 무시한다.
+  const [isSavingScannedProduct, setIsSavingScannedProduct] = useState(false);
+
   const handleSaveScannedProduct = async (scannedProduct: ProductItem) => {
+    if (isSavingScannedProduct) return;
+    setIsSavingScannedProduct(true);
     try {
       const { id, ...rest } = scannedProduct;
       const res = await addScannedProduct(rest);
       setScannedProducts((prev) => [res.product, ...prev]);
     } catch (err) {
       console.error("AI 스캔 저장 실패", err);
+    } finally {
+      setIsSavingScannedProduct(false);
     }
   };
 
@@ -204,11 +230,19 @@ export default function App() {
     }
   };
 
+  // 북마크 아이콘을 빠르게 여러 번 누르면, 첫 요청이 끝나기 전엔 bookmarkedProducts가
+  // 아직 안 바뀌어서 "exists" 판정이 매번 false로 나와 addBookmark가 중복 호출되고 목록에
+  // 같은 상품이 여러 번 들어갔다 — 처리 중인 상품 id는 추가 클릭을 무시하게 막는다.
+  const [pendingBookmarkIds, setPendingBookmarkIds] = useState<Set<string>>(new Set());
+
   const handleToggleBookmarkProduct = async (product: ProductItem) => {
     if (!getAuthToken()) {
       setIsLoginModalOpen(true);
       return;
     }
+    if (pendingBookmarkIds.has(product.id)) return;
+    setPendingBookmarkIds((prev) => new Set(prev).add(product.id));
+
     const exists = bookmarkedProducts.some((p) => p.id === product.id);
     try {
       if (exists) {
@@ -216,10 +250,16 @@ export default function App() {
         setBookmarkedProducts((prev) => prev.filter((p) => p.id !== product.id));
       } else {
         await addBookmark(product.id);
-        setBookmarkedProducts((prev) => [product, ...prev]);
+        setBookmarkedProducts((prev) => (prev.some((p) => p.id === product.id) ? prev : [product, ...prev]));
       }
     } catch (err) {
       console.error("찜 처리 실패", err);
+    } finally {
+      setPendingBookmarkIds((prev) => {
+        const next = new Set(prev);
+        next.delete(product.id);
+        return next;
+      });
     }
   };
 
@@ -300,7 +340,7 @@ export default function App() {
         <Header
           selectedRegion={selectedRegion}
           allRegions={REGIONS_DATA}
-          onSelectRegion={handleSelectRegion}
+          onSelectRegion={setSelectedRegion}
           onOpenNotifications={() => setIsNotificationOpen(true)}
           activeTab={activeTab}
           userRole={userRole}
@@ -344,9 +384,20 @@ export default function App() {
         {activeTab === "map" && (
           <MapView
             selectedMarket={selectedMarket}
+            onSelectMarket={setSelectedMarket}
             onOpenAiScan={() => setIsAiScanOpen(true)}
             focusShopName={mapFocusShopName}
             onFocusHandled={() => setMapFocusShopName(null)}
+            onBack={
+              mapReturnProduct
+                ? () => {
+                    setSelectedProduct(mapReturnProduct);
+                    setMapReturnProduct(null);
+                    setActiveTab(mapReturnTab ?? "home");
+                    setMapReturnTab(null);
+                  }
+                : undefined
+            }
           />
         )}
 
@@ -366,19 +417,29 @@ export default function App() {
         {activeTab === "my" && (
           <MyWallet
             products={products}
+            marketName={selectedMarket.name}
             onNavigateToMap={() => setActiveTab("map")}
             userRole={userRole}
             userDisplayName={userDisplayName}
+            userShopName={userShopName}
             userUsername={userUsername}
             userPhone={userPhone}
+            userAvatarIcon={userAvatarIcon}
+            userAvatarColor={userAvatarColor}
+            userProfileImage={userProfileImage}
             isLoggedIn={Boolean(userUsername)}
             onOpenLogin={() => setIsLoginModalOpen(true)}
             onLogout={handleLogout}
-            onUpdateShopName={(newName) => setUserDisplayName(newName)}
+            onUpdateShopName={(newName) => setUserShopName(newName)}
             onProfileUpdated={(displayName, phone) => {
               setUserDisplayName(displayName);
               setUserPhone(phone);
             }}
+            onAvatarStyleUpdated={(icon, color) => {
+              setUserAvatarIcon(icon);
+              setUserAvatarColor(color);
+            }}
+            onProfileImageUpdated={(image) => setUserProfileImage(image)}
           />
         )}
       </main>
@@ -390,6 +451,10 @@ export default function App() {
         userRole={userRole}
         onSelectTab={(tab) => {
           setIsAiScanOpen(false);
+          if (tab !== "map") {
+            setMapReturnProduct(null);
+            setMapReturnTab(null);
+          }
           setActiveTab(tab);
         }}
         onOpenAiScan={() => setIsAiScanOpen((prev) => !prev)}
@@ -420,6 +485,8 @@ export default function App() {
           onToggleBookmark={handleToggleBookmarkProduct}
           onNavigateToMap={() => {
             setMapFocusShopName(selectedProduct.shopName);
+            setMapReturnProduct(selectedProduct);
+            setMapReturnTab(activeTab);
             setSelectedProduct(null);
             setActiveTab("map");
           }}

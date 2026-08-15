@@ -12,6 +12,82 @@ function buildPriceTag(price: number, publicPrice: number): string {
   return "공공 시세와 동일";
 }
 
+// 비전 파이프라인이 2단계(특상/보통) 등급으로 바뀌어서, 화면에도 A+/B 같은 영문 등급
+// 대신 실제 판정 체계와 맞는 한글 표기를 쓴다 (HomeFeed/ProductDetailModal과 동일 규칙).
+function displayGrade(grade: string): string {
+  return grade === "A+" ? "특상" : "보통";
+}
+
+interface QualityMetric {
+  label: string;
+  value: number;
+}
+
+// ProductDetailModal의 getQualityMetrics/getMetricColor와 동일한 기준 — 저장 후 상품
+// 상세페이지에서 보는 지표와 스캔 직후 여기서 보는 지표가 서로 달라선 안 되므로 그대로
+// 맞춘다. 사진 한 장으로 정직하게 판단 가능한 항목만 남기고(당도·균일도 등은 제외),
+// 라벨은 전부 "높을수록 좋음"으로 통일해 임계치 색상이 항상 같은 뜻(초록=우수)이 되게 한다.
+function getQualityMetrics(productName: string, freshnessScore?: number, defectScore?: number, uniformityScore?: number): QualityMetric[] {
+  const title = productName;
+
+  const fresh = freshnessScore ?? 90;
+  const integrity = Math.max(0, 100 - (defectScore ?? 5));
+  const uniform = uniformityScore ?? 92;
+  const avg = Math.round((fresh + integrity + uniform) / 3);
+  const values = [fresh, integrity, uniform, avg];
+
+  const withLabels = (labels: readonly string[]): QualityMetric[] =>
+    labels.map((label, i) => ({ label, value: values[i] }));
+
+  if (title.includes("무")) {
+    return withLabels(["표면 상태 (매끈함)", "표면 무결성 (흠집 · 갈라짐 없음)", "표피 색상", "형태 온전성 (곧은 정도)"]);
+  }
+
+  if (title.includes("양배추")) {
+    return withLabels(["겉잎 상태 (손상 없음)", "형태 온전성 (갈라짐 없음)", "색상 / 광택"]);
+  }
+
+  if (title.includes("배추")) {
+    return withLabels(["겉잎 상태 (손상 없음)", "형태 온전성 (갈라짐 없음)", "색상 / 광택"]);
+  }
+
+  if (title.includes("양파")) {
+    return withLabels(["껍질 광택", "미발아 상태 (싹틈 없음)", "표면 신선도 (무름 · 곰팡이 없음)", "형태 온전성 (구형 정도)"]);
+  }
+
+  if (title.includes("마늘")) {
+    return withLabels(["미발아 상태 (싹틈 없음)", "표면 상태 (흠집 · 변색 없음)", "껍질 광택", "알 형태 온전성"]);
+  }
+
+  if (title.includes("감귤") || title.includes("귤")) {
+    return withLabels(["껍질 상태 (흠집 · 곰팡이 없음)", "색상 선명도", "껍질 광택", "꼭지 신선도"]);
+  }
+
+  if (title.includes("감") && !title.includes("감자") && !title.includes("감귤")) {
+    return withLabels(["표면 무결성 (흠집 없음)", "색상 (숙성도 추정)", "표면 탄력 (주름 없음)", "꼭지 신선도"]);
+  }
+
+  if (title.includes("사과")) {
+    return withLabels(["표면 무결성 (흠집 · 멍 없음)", "착색도 (색택)", "표면 광택", "꼭지 신선도"]);
+  }
+
+  if (title.includes("배")) {
+    return withLabels(["표면 무결성 (흠집 없음)", "색상 / 광택", "표면 탄력 (주름 없음)", "꼭지 신선도"]);
+  }
+
+  if (title.includes("감자")) {
+    return withLabels(["표면 무결성 (흠집 · 상처 없음)", "정상 색상 (녹변 없음)", "미발아 상태 (싹틈 없음)", "형태 온전성"]);
+  }
+
+  return withLabels(["표면 무결성 (손상 없음)", "색상 / 광택", "전체 외관"]);
+}
+
+function getMetricColor(value: number): string {
+  if (value >= 80) return "#10B981";
+  if (value >= 50) return "#F59E0B";
+  return "#EF4444";
+}
+
 interface AiScanModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -31,7 +107,6 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
   userDisplayName,
   onMerchantRegisterProduct,
 }) => {
-  const [selectedPreset, setSelectedPreset] = useState<"radish" | "apple" | "potato">("apple");
   const [isFlashOn, setIsFlashOn] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -48,22 +123,9 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const [inspectionResult, setInspectionResult] = useState<InspectionResult | null>(null);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
-
-  // 예전 샘플 키(딸기/갈치/삼겹살 → radish/apple/potato)를 이름만 바꿨을 뿐, 실제 이미지는
-  // 그대로 남아있어서 "apple"을 눌러도 딸기 사진이 뜨는 등 이름과 사진이 전부 안 맞았다.
-  // 시드 상품 피드에서 이미 실제로 검증된(무/사과/감자가 맞게 나오는) 이미지로 교체.
-  const sampleImages = {
-    apple:
-      "https://plus.unsplash.com/premium_photo-1724249990837-f6dfcb7f3eaa?auto=format&fit=crop&w=800&q=80",
-    radish:
-      "https://plus.unsplash.com/premium_photo-1726736510146-4703a18e3c6e?auto=format&fit=crop&w=800&q=80",
-    potato:
-      "https://plus.unsplash.com/premium_photo-1724256031338-b5bfba816cfd?auto=format&fit=crop&w=800&q=80",
-  };
 
   // Start / Stop Camera
   useEffect(() => {
@@ -105,7 +167,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
             console.warn("Camera access failed or unavailable:", err);
             if (isMounted) {
               setHasCameraStream(false);
-              setCameraError("실제 카메라를 불러올 수 없어 샘플 비디오 화면으로 대체합니다.");
+              setCameraError("카메라 접근 권한을 확인해주세요.");
             }
           });
       }
@@ -138,6 +200,20 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
     return () => {
       listener.then((l) => l.remove());
     };
+  }, [isOpen]);
+
+  // 이 모달은 App.tsx에서 isOpen으로 보이기만 할 뿐 계속 마운트돼 있어서, X로 닫아도
+  // 촬영 사진/분석 결과/입력한 판매가가 그대로 남아있다가 다시 열면 이전 스캔 결과부터
+  // 보여주는 문제가 있었다. 열릴 때마다 깨끗한 카메라 화면부터 시작하게 초기화한다.
+  useEffect(() => {
+    if (isOpen) {
+      setCapturedImage(null);
+      setShowResult(false);
+      setSellingPriceInput("");
+      setInspectionResult(null);
+      setAnalyzeError(null);
+      setSaveSuccessToast(false);
+    }
   }, [isOpen]);
 
   // Flash / Torch toggle
@@ -173,28 +249,24 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
     return null;
   };
 
-  const currentViewImage = capturedImage || sampleImages[selectedPreset];
-
-  // Camera Trigger/Snap Function
-  const handleSnapCamera = async (presetKey?: "radish" | "apple" | "potato", customBase64?: string) => {
-    const key = presetKey || selectedPreset;
-    if (presetKey) setSelectedPreset(presetKey);
-
-    let activeBase64 = customBase64;
-    if (!activeBase64) {
-      const liveFrame = captureFrameFromVideo();
-      if (liveFrame) {
-        activeBase64 = liveFrame;
-        setCapturedImage(liveFrame);
-      }
+  // Camera Trigger/Snap Function — 카메라가 실패해서 실제로 찍은 사진이 없으면, 예전엔
+  // sampleId만으로도 백엔드가 조용히 "사과" 목데이터(SCAN_MOCK)를 돌려줘서 마치 실제로
+  // 스캔에 성공한 것처럼 가짜 결과가 나왔다. 카메라가 없으면 애초에 분석을 시도하지 않고
+  // 정직하게 실패를 알린다.
+  const handleSnapCamera = async () => {
+    const liveFrame = captureFrameFromVideo();
+    if (!liveFrame) {
+      setAnalyzeError("카메라를 사용할 수 없어 촬영할 수 없습니다. 카메라 권한을 확인해주세요.");
+      return;
     }
+    setCapturedImage(liveFrame);
 
     setIsAnalyzing(true);
     setShowResult(false);
     setAnalyzeError(null);
 
     try {
-      const json = await analyzeProduct({ sampleId: key, imageBase64: activeBase64 });
+      const json = await analyzeProduct({ imageBase64: liveFrame });
       if (json.success && json.data && json.data.productName) {
         setInspectionResult(json.data);
         setSellingPriceInput(json.data.sellingPrice ? String(json.data.sellingPrice) : "");
@@ -208,19 +280,6 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
       setAnalyzeError("AI 분석에 실패했습니다. 네트워크 상태를 확인 후 다시 시도해주세요.");
     } finally {
       setIsAnalyzing(false);
-    }
-  };
-
-  const handleCameraFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
-        setCapturedImage(base64);
-        handleSnapCamera(selectedPreset, base64);
-      };
-      reader.readAsDataURL(file);
     }
   };
 
@@ -246,6 +305,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
       const newProductItem: ProductItem = {
         id: `merchant-scan-${Date.now()}`,
         title: inspectionResult.productName,
+        unit: "",
         shopName: merchantShop,
         distance: "양동전통시장 내 점포",
         timeAgo: "AI 스캔 즉시 등록",
@@ -254,11 +314,13 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
         priceTag: buildPriceTag(price, inspectionResult.publicMarketPrice),
         grade: (inspectionResult.grade || "A+") as any,
         category: inspectionResult.category as any,
-        imageUrl: currentViewImage,
+        imageUrl: capturedImage || "",
         freshnessScore: inspectionResult.freshnessScore,
         defectScore: inspectionResult.defectScore,
         uniformityScore: inspectionResult.uniformityScore,
-        description: inspectionResult.aiAnalysisSummary,
+        description: "",
+        aiSummary: inspectionResult.aiAnalysisSummary,
+        isScannedProduct: true,
         isMerchantUploaded: true,
       };
 
@@ -285,10 +347,15 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
         return;
       }
       const price = parseInt(sellingPriceInput, 10) || 0;
+      // 이건 특정 점포에 등록하는 게 아니라 사용자가 직접 촬영해서 개인 저장목록에
+      // 남기는 기록이라, 실제로 없는 점포 정보를 지어내지 않는다(예전엔 카테고리별로
+      // "양동수산"/"양동정육"/"싱싱청과"를 무작정 붙였는데, 실제로 그 점포에서 산 게
+      // 아닌데도 그런 것처럼 보여서 오해를 줬다).
       const newSavedItem: ProductItem = {
         id: `scan-${Date.now()}`,
         title: inspectionResult.productName,
-        shopName: inspectionResult.category === "수산물" ? "양동수산" : inspectionResult.category === "정육" ? "양동정육" : "싱싱청과",
+        unit: "",
+        shopName: "",
         distance: "촬영 장소",
         timeAgo: "방금 스캔",
         price,
@@ -296,11 +363,12 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
         priceTag: buildPriceTag(price, inspectionResult.publicMarketPrice),
         grade: (inspectionResult.grade || "A+") as any,
         category: inspectionResult.category as any,
-        imageUrl: currentViewImage,
+        imageUrl: capturedImage || "",
         freshnessScore: inspectionResult.freshnessScore,
         defectScore: inspectionResult.defectScore,
         uniformityScore: inspectionResult.uniformityScore,
-        description: inspectionResult.aiAnalysisSummary,
+        description: "",
+        aiSummary: inspectionResult.aiAnalysisSummary,
         isScannedProduct: true,
       };
 
@@ -316,7 +384,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-x-0 top-0 bottom-[calc(72px+env(safe-area-inset-bottom))] md:bottom-0 z-40 bg-black text-white flex flex-col justify-between overflow-hidden select-none">
+    <div className="fixed inset-0 z-[9999] bg-black text-white flex flex-col justify-between overflow-hidden select-none">
       {/* Background Live Camera Video or Captured Image Viewport */}
       <div className="absolute inset-0 z-0 bg-black flex items-center justify-center overflow-hidden">
         {/* Real Live Camera Stream */}
@@ -330,19 +398,26 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
           }`}
         />
 
-        {/* Fallback Image or Captured Snapshot */}
-        {(!hasCameraStream || capturedImage) && (
+        {/* Captured Snapshot */}
+        {capturedImage && (
           <div
             className="absolute inset-0 bg-cover bg-center transition-all duration-300"
-            style={{ backgroundImage: `url('${currentViewImage}')` }}
+            style={{ backgroundImage: `url('${capturedImage}')` }}
           />
+        )}
+
+        {/* 카메라를 못 쓰면 가짜 샘플 사진 대신 정직하게 "카메라 사용 불가" 상태를 보여준다. */}
+        {!hasCameraStream && !capturedImage && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white/40">
+            <span className="material-symbols-outlined text-5xl">videocam_off</span>
+            <p className="text-xs font-medium">카메라를 사용할 수 없습니다</p>
+          </div>
         )}
 
         {/* Flash Screen Overlay */}
         {isFlashOn && <div className="absolute inset-0 bg-white/30 pointer-events-none z-10"></div>}
 
-        {/* Camera Access Failure Notice — 실패해도 아무 표시 없이 샘플 사진으로 조용히
-            대체되면, 유저는 자기 농산물이 아니라 샘플을 "스캔" 중인 걸 알 방법이 없다. */}
+        {/* Camera Access Failure Notice */}
         {cameraError && !capturedImage && (
           <div className="absolute top-16 left-4 right-4 z-20 bg-amber-500/90 text-white text-xs font-bold rounded-xl px-3.5 py-2.5 flex items-center gap-2 shadow-lg">
             <span className="material-symbols-outlined text-base shrink-0">videocam_off</span>
@@ -432,16 +507,6 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
         )}
       </div>
 
-      {/* Hidden Native File Input */}
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={handleCameraFileChange}
-        className="hidden"
-      />
-
       {/* Toast Notification when saved */}
       {saveSuccessToast && (
         <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 bg-[#00C875] text-white px-5 py-2.5 rounded-full shadow-2xl font-bold text-xs flex items-center gap-2 border border-white/20 animate-bounce">
@@ -451,24 +516,14 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
       )}
 
       {/* Bottom Shutter & Controls Container */}
-      <div className="relative z-30 w-full px-4 pb-3 max-w-md mx-auto space-y-3">
+      <div
+        className="relative z-30 w-full px-4 max-w-md mx-auto space-y-3"
+        style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
+      >
         {!showResult ? (
           /* Shutter Row */
-          <div className="flex items-center justify-center gap-8 px-6 pt-2">
-            {/* Left Gallery Thumbnail Button */}
-            <button
-              onClick={() => cameraInputRef.current?.click()}
-              className="w-12 h-12 rounded-full border-2 border-white/90 overflow-hidden bg-black/60 flex items-center justify-center p-0.5 shadow-lg active:scale-90 transition-transform group"
-              title="갤러리 사진 선택"
-            >
-              <img
-                src={currentViewImage}
-                alt="Gallery preview"
-                className="w-full h-full object-cover rounded-full group-hover:scale-110 transition-transform"
-              />
-            </button>
-
-            {/* Main Center Camera Shutter Button (Triggers AI Analysis) */}
+          <div className="flex items-center justify-center px-6 pt-2">
+            {/* Center Camera Shutter Button (Triggers AI Analysis) */}
             <button
               onClick={() => handleSnapCamera()}
               disabled={isAnalyzing}
@@ -484,40 +539,38 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
           </div>
         ) : (
           /* Scanned Produce Result Card Sheet */
-          <div className="bg-white text-black rounded-2xl shadow-2xl border border-[#E2E8F0] p-4 flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 max-h-[82vh] overflow-y-auto">
+          <div
+            className="bg-white text-black rounded-2xl shadow-2xl border border-[#E2E8F0] p-4 flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 overflow-y-auto"
+            style={{ maxHeight: "calc(100dvh - 140px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))" }}
+          >
             {/* Title & Grade Header */}
             <div className="flex justify-between items-start">
               <div>
                 <span className="text-[11px] font-bold text-[#0052FF] bg-[#DBEAFE] px-2 py-0.5 rounded">
-                  {inspectionResult?.category || "농수산물"}
+                  {inspectionResult?.category || "야채"}
                 </span>
                 <h2 className="text-lg font-bold text-[#0F172A] mt-1">
                   {inspectionResult?.productName}
                 </h2>
               </div>
-              <div className="bg-[#DCFCE7] text-[#166534] px-2.5 py-1 rounded-full font-extrabold text-xs flex items-center gap-1 border border-[#10B981]/20 shadow-xs flex-shrink-0">
+              <div
+                className={`px-2.5 py-1 rounded-full font-extrabold text-xs flex items-center gap-1 border shadow-xs flex-shrink-0 ${
+                  inspectionResult?.grade?.startsWith("A")
+                    ? "bg-[#DCFCE7] text-[#166534] border-[#10B981]/20"
+                    : "bg-blue-50 text-[#0052FF] border-[#0052FF]/20"
+                }`}
+              >
                 <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
                   verified
                 </span>
-                <span>
-                  품질 등급 {inspectionResult?.grade || "A+"}
-                  {typeof inspectionResult?.gradeConfidencePercent === "number" && (
-                    <span className="ml-1 font-bold opacity-80">({inspectionResult.gradeConfidencePercent}%)</span>
-                  )}
-                </span>
+                <span>품질 등급 {displayGrade(inspectionResult?.grade || "A+")}</span>
               </div>
             </div>
-            {typeof inspectionResult?.gradeConfidencePercent === "number" && (
-              <p className="text-[10px] text-[#94A3B8] font-medium -mt-1.5">
-                등급은 참고용입니다. 확률이 낮을수록 판정 신뢰도가 낮아요.
-              </p>
-            )}
 
-            {/* Price Details: 공공 판매가 */}
+            {/* Price Details: 공공시세 */}
             <div className="bg-[#F8FAFC] rounded-xl p-3.5 border border-[#E2E8F0] flex items-center justify-between">
               <span className="text-xs font-bold text-[#64748B] flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-sm text-[#0052FF]">account_balance</span>
-                공공 판매가{inspectionResult?.publicPriceUnit === "kg" ? " (1kg 기준)" : ""}
+                공공시세{inspectionResult?.publicPriceUnit === "kg" ? " (1kg 기준)" : ""}
               </span>
               <div className="text-lg font-black text-[#0F172A]">
                 {inspectionResult?.publicMarketPrice ? `${inspectionResult.publicMarketPrice.toLocaleString()}원` : "-"}
@@ -527,7 +580,6 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
             {/* 이 매대 판매가 — AI는 카메라만으로 실제 판매가를 알 수 없어 직접 입력받는다 */}
             <div className="bg-white rounded-xl p-3.5 border border-[#0052FF]/30 flex items-center justify-between gap-3">
               <span className="text-xs font-bold text-[#64748B] flex items-center gap-1.5 shrink-0">
-                <span className="material-symbols-outlined text-sm text-[#0052FF]">sell</span>
                 이 매대 판매가
               </span>
               <div className="flex items-center gap-1">
@@ -543,75 +595,37 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
               </div>
             </div>
 
-            {/* AI 정밀 분석 지표 */}
+            {/* AI 정밀 분석 지표 — 상품 상세페이지(ProductDetailModal)와 완전히 같은 기준.
+                스캔 직후 여기서 보는 지표와, 저장 후 피드에 올라간 뒤 보는 지표가 서로
+                다르면 안 되므로 동일한 getQualityMetrics/getMetricColor를 그대로 쓴다. */}
             <div className="space-y-2.5">
               <div className="text-xs font-extrabold text-[#0F172A] flex items-center gap-1">
                 <span className="material-symbols-outlined text-sm text-[#0052FF]">analytics</span>
                 AI 정밀 분석 지표
               </div>
-              <div className="grid grid-cols-3 gap-2 bg-[#F8FAFC] p-2.5 rounded-xl border border-[#E2E8F0] text-center">
-                <div className="bg-white p-2 rounded-lg border border-slate-100 shadow-2xs">
-                  <div className="text-[10px] font-bold text-slate-500">신선도</div>
-                  <div className="text-sm font-black text-emerald-600 mt-0.5">
-                    {inspectionResult?.freshnessScore ?? 98}점
-                  </div>
-                </div>
-                <div className="bg-white p-2 rounded-lg border border-slate-100 shadow-2xs">
-                  <div className="text-[10px] font-bold text-slate-500">결함도</div>
-                  <div className="text-sm font-black text-blue-600 mt-0.5">
-                    {inspectionResult?.defectScore ?? 5}점
-                  </div>
-                </div>
-                <div className="bg-white p-2 rounded-lg border border-slate-100 shadow-2xs">
-                  <div className="text-[10px] font-bold text-slate-500">균일도</div>
-                  <div className="text-sm font-black text-indigo-600 mt-0.5">
-                    {inspectionResult?.uniformityScore ?? 92}점
-                  </div>
-                </div>
-              </div>
-
-              {/* 세부 항목별 백분율 및 프로그래스 바 */}
               <div className="space-y-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#E2E8F0] text-xs">
-                <div>
-                  <div className="flex justify-between items-center text-[11px] mb-1">
-                    <span className="font-bold text-[#334155]">신선도 (광택 / 수분도 / 신선도)</span>
-                    <span className="font-black text-[#10B981]">{inspectionResult?.freshnessScore ?? 98}%</span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-200/80 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-[#10B981] rounded-full transition-all duration-500"
-                      style={{ width: `${inspectionResult?.freshnessScore ?? 98}%` }}
-                    ></div>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between items-center text-[11px] mb-1">
-                    <span className="font-bold text-[#334155]">표면 무결성 (상처 / 무름 없음)</span>
-                    <span className="font-black text-[#0052FF]">
-                      {inspectionResult?.defectScore !== undefined ? Math.max(0, 100 - inspectionResult.defectScore) : 95}%
-                    </span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-200/80 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-[#0052FF] rounded-full transition-all duration-500"
-                      style={{ width: `${inspectionResult?.defectScore !== undefined ? Math.max(0, 100 - inspectionResult.defectScore) : 95}%` }}
-                    ></div>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between items-center text-[11px] mb-1">
-                    <span className="font-bold text-[#334155]">크기 / 중량 균일도</span>
-                    <span className="font-black text-indigo-600">{inspectionResult?.uniformityScore ?? 92}%</span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-200/80 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-indigo-600 rounded-full transition-all duration-500"
-                      style={{ width: `${inspectionResult?.uniformityScore ?? 92}%` }}
-                    ></div>
-                  </div>
-                </div>
+                {getQualityMetrics(
+                  inspectionResult?.productName || "",
+                  inspectionResult?.freshnessScore,
+                  inspectionResult?.defectScore,
+                  inspectionResult?.uniformityScore
+                ).map((metric) => {
+                  const color = getMetricColor(metric.value);
+                  return (
+                    <div key={metric.label}>
+                      <div className="flex justify-between items-center text-[11px] mb-1">
+                        <span className="font-bold text-[#334155]">{metric.label}</span>
+                        <span className="font-black" style={{ color }}>{metric.value}점</span>
+                      </div>
+                      <div className="w-full h-2 bg-slate-200/80 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${metric.value}%`, backgroundColor: color }}
+                        ></div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

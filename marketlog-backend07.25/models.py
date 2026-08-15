@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, String, Integer, Boolean, Float, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, Integer, Boolean, Float, DateTime, ForeignKey, UniqueConstraint, Text
 from sqlalchemy.orm import relationship
 
 from db import Base
@@ -21,6 +21,12 @@ class User(Base):
     display_name = Column(String, nullable=False)
     phone = Column(String, nullable=False, default="")
     shop_name = Column(String, nullable=True)
+    # 마이 탭에서 고르는 프로필 아바타 — 아이콘/색상(주로 상인)과 실제 사진(주로 소비자)
+    # 둘 다 저장 API가 없어서 화면을 나갔다 오면(탭 전환 시 MyWallet이 언마운트됨) 매번
+    # 초기화되던 걸 고치기 위해 추가했다. profile_image는 data URL(base64)이라 Text로 둔다.
+    avatar_icon = Column(String, nullable=True)
+    avatar_color = Column(String, nullable=True)
+    profile_image = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     bookmarks = relationship("Bookmark", back_populates="user", cascade="all, delete-orphan")
@@ -60,6 +66,7 @@ class ScannedProduct(Base):
     defect_score = Column(Integer, nullable=False, default=0)
     uniformity_score = Column(Integer, nullable=False, default=0)
     description = Column(String, nullable=False, default="")
+    ai_summary = Column(String, nullable=True)
 
     user = relationship("User", back_populates="scanned_products")
 
@@ -115,6 +122,7 @@ class Product(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     title = Column(String, nullable=False)
+    unit = Column(String, nullable=False, default="")  # 예: "1kg", "3개" — 상품명과 분리해서 저장
     shop_name = Column(String, nullable=False)
     distance = Column(String, nullable=False, default="")
     time_ago = Column(String, nullable=False, default="")
@@ -129,12 +137,18 @@ class Product(Base):
     uniformity_score = Column(Integer, nullable=False, default=0)
     description = Column(String, nullable=False, default="")
     is_merchant_uploaded = Column(Boolean, nullable=False, default=False)
+    # 카메라 AI 스캔이 실제로(Gemini 등을 통해) 생성한 종합의견 — 상인이 직접 입력하거나
+    # "AI 추천 설명" 3개 중 고른 홍보문구(description)와는 별개다. 스캔을 거치지 않은
+    # 상품은 이 값이 비어 있고, 그 경우 상세페이지의 "AI 스캔 종합 의견" 섹션 자체를 숨긴다.
+    ai_summary = Column(String, nullable=True)
+    is_scanned_product = Column(Boolean, nullable=False, default=False)
 
 
 def product_to_dict(product: Product) -> dict:
     return {
         "id": product.id,
         "title": product.title,
+        "unit": product.unit,
         "shopName": product.shop_name,
         "distance": product.distance,
         "timeAgo": product.time_ago,
@@ -148,6 +162,8 @@ def product_to_dict(product: Product) -> dict:
         "defectScore": product.defect_score,
         "uniformityScore": product.uniformity_score,
         "description": product.description,
+        "aiSummary": product.ai_summary,
+        "isScannedProduct": product.is_scanned_product,
         "isMerchantUploaded": product.is_merchant_uploaded,
         "region": product.region,
         "marketId": product.market_id,

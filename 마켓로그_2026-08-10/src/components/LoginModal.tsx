@@ -32,7 +32,10 @@ interface LoginModalProps {
     userDisplayName: string,
     shopName?: string,
     username?: string,
-    phone?: string
+    phone?: string,
+    avatarIcon?: string,
+    avatarColor?: string,
+    profileImage?: string
   ) => void;
   isFullScreen?: boolean;
 }
@@ -109,7 +112,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         res.user.displayName,
         res.user.shopName ?? undefined,
         res.user.username,
-        res.user.phone ?? undefined
+        res.user.phone ?? undefined,
+        res.user.avatarIcon ?? undefined,
+        res.user.avatarColor ?? undefined,
+        res.user.profileImage ?? undefined
       );
       onClose();
     } catch (err) {
