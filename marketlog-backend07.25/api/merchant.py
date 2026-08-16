@@ -19,8 +19,9 @@ def require_merchant(current_user: User) -> str:
 
 
 def merchant_market_id(current_user: User) -> str:
-    """가입 시 고른 소속 전통시장 — 이 값 기준으로 점포/상품이 전부 그 시장에 묶인다.
-    market_id가 없는 기존 계정(이 필드가 생기기 전에 가입)은 "yangdong"으로 취급한다."""
+    """로그인 후 마이 탭에서 고른 소속 전통시장 — 이 값 기준으로 점포/상품이 전부 그
+    시장에 묶인다. market_id가 없는 기존 계정(이 필드가 생기기 전에 가입해 이미 점포가
+    있는 경우)은 "yangdong"으로 취급한다."""
     return current_user.market_id or "yangdong"
 
 
@@ -174,6 +175,48 @@ def delete_product(
     return {"success": True}
 
 
+# 소속 전통시장 선택 — 가입 절차를 짧게 하려고 회원가입 때는 안 받고, 로그인 후 마이
+# 탭에서 점포 정보를 처음 채우려 할 때 한 번만 고르게 한다. 한 번 고르면 그 이후엔
+# 바꿀 수 없다(점포/상품이 이미 이 시장 기준으로 등록되기 시작하므로).
+class SetMarketRequest(BaseModel):
+    marketId: str | None = None
+    # 목록에 없는 시장은 직접 입력으로 새로 만든다 — 좌표를 아직 모르니 0,0으로 두고,
+    # 이 상인이 처음 점포 위치를 등록하는 순간(set_store_location) 그 좌표로 채운다.
+    customName: str | None = None
+    customRegion: str | None = None
+
+
+@router.put("/api/v1/merchant/market")
+def set_merchant_market(
+    payload: SetMarketRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    require_merchant(current_user)
+    if current_user.market_id:
+        raise HTTPException(status_code=400, detail="이미 소속 전통시장이 설정되어 있습니다.")
+
+    if payload.marketId:
+        if not db.query(Market).filter(Market.id == payload.marketId).first():
+            raise HTTPException(status_code=400, detail="존재하지 않는 전통시장입니다.")
+        current_user.market_id = payload.marketId
+    elif payload.customName and payload.customName.strip():
+        market = Market(
+            id=f"custom-{uuid.uuid4().hex[:10]}",
+            name=payload.customName.strip(),
+            city=(payload.customRegion or "").strip(),
+            center_lat=0.0,
+            center_lng=0.0,
+        )
+        db.add(market)
+        current_user.market_id = market.id
+    else:
+        raise HTTPException(status_code=400, detail="소속 전통시장을 선택하거나 이름을 입력해주세요.")
+
+    db.commit()
+    return {"success": True, "marketId": current_user.market_id}
+
+
 # 상인 점포 위치 등록/조회 — 지도의 실제 점포 데이터(공공데이터 463개)와 상인 shop_name이
 # 정확히 일치할 때만 상품이 지도에 뜨던 문제를 해결한다. 상인이 지도에서 직접 자기 점포
 # 위치에 핀을 찍으면, 그 이름으로 새 Store를 만들거나(없으면) 기존 걸 갱신한다.
@@ -217,6 +260,12 @@ def set_store_location(
         store.lng = payload.lng
     else:
         market = db.query(Market).filter(Market.id == market_id).first()
+        # 직접입력으로 새로 만든 시장은 좌표를 몰라서 0,0으로 시작했다 — 이 상인이 처음
+        # 점포 위치를 찍는 순간이 그 시장의 실제 위치를 알 수 있는 첫 기회이므로, 지도
+        # 중심 좌표로 그대로 채워준다.
+        if market and market.center_lat == 0.0 and market.center_lng == 0.0:
+            market.center_lat = payload.lat
+            market.center_lng = payload.lng
         store = Store(
             market_id=market_id,
             name=shop_name,

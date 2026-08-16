@@ -116,8 +116,10 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=409, detail="이미 사용 중인 아이디입니다.")
 
-    resolved_market_id = request.marketId or "yangdong"
-    if request.role == "merchant" and not db.query(Market).filter(Market.id == resolved_market_id).first():
+    # 소속 전통시장은 이제 가입 때 받지 않는다 — 로그인 후 마이 탭에서 점포 정보를 처음
+    # 채우려 할 때 고른다(PUT /api/v1/merchant/market). marketId를 굳이 보내는 옛 클라이언트가
+    # 있을 수 있으니 필드 자체는 남겨두되, 보냈을 때만 검증한다.
+    if request.role == "merchant" and request.marketId and not db.query(Market).filter(Market.id == request.marketId).first():
         raise HTTPException(status_code=400, detail="존재하지 않는 전통시장입니다.")
 
     user = User(
@@ -127,7 +129,7 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
         display_name=request.displayName,
         phone=request.phone,
         shop_name=request.shopName,
-        market_id=resolved_market_id if request.role == "merchant" else None,
+        market_id=request.marketId if request.role == "merchant" else None,
     )
     db.add(user)
     db.commit()

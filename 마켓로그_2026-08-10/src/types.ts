@@ -37,6 +37,9 @@ export interface MarketInfo {
   id: string;
   name: string;
   city: string;
+  // REGIONS_DATA의 값과 일치 — 상인 가입 후 마이 탭에서 "지역 선택 → 그 지역 시장 선택"
+  // 2단계 필터에 쓴다.
+  region: string;
   congestion: "원활" | "보통" | "혼잡";
   parkingCapacity: string; // e.g. "24/80면 여유"
   toiletLocation: string; // e.g. "수산동 2층, 중앙광장"

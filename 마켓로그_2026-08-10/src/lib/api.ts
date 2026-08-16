@@ -187,7 +187,6 @@ export function register(payload: {
   displayName: string;
   phone: string;
   shopName?: string;
-  marketId?: string;
 }): Promise<AuthResponse> {
   return apiFetch<AuthResponse>("/api/v1/auth/register", {
     method: "POST",
@@ -314,6 +313,17 @@ export function getStoreLocation(): Promise<{ success: boolean; store: StoreLoca
 
 export function setStoreLocation(payload: { lat: number; lng: number }): Promise<{ success: boolean; store: StoreLocation }> {
   return apiFetch("/api/v1/merchant/store-location", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+// 소속 전통시장 선택 — 가입 때는 안 받고, 로그인 후 마이 탭에서 점포 정보를 처음
+// 채우려 할 때 한 번만 호출한다.
+export function setMerchantMarket(
+  payload: { marketId: string } | { customName: string; customRegion: string }
+): Promise<{ success: boolean; marketId: string }> {
+  return apiFetch("/api/v1/merchant/market", {
     method: "PUT",
     body: JSON.stringify(payload),
   });

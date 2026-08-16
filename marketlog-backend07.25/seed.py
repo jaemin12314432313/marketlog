@@ -54,6 +54,59 @@ MARKETS = [
     },
 ]
 
+# 지역마다 실제로 잘 알려진 전통시장을 3곳씩 채운 목록 — 상인 가입 후 마이 탭에서
+# "지역 선택 → 그 지역 시장 선택" 2단계로 고를 수 있게 한다. 도슨트 스크립트는 실제로
+# 없는 점포 이야기를 지어내면 안 되므로 비워두고(요청 시 실제 점포 데이터로 동적 생성),
+# 혼잡도/주차/화장실도 정확히 모르는 구체적 수치를 지어내지 않고 기본값으로 둔다.
+EXTRA_MARKETS = [
+    {"id": "daein", "name": "광주 대인시장", "city": "광주광역시 동구", "center_lat": 35.1476, "center_lng": 126.9241},
+    {"id": "malbawi", "name": "광주 말바우시장", "city": "광주광역시 북구", "center_lat": 35.1789, "center_lng": 126.9186},
+    {"id": "namdaemun", "name": "서울 남대문시장", "city": "서울특별시 중구", "center_lat": 37.5586, "center_lng": 126.9778},
+    {"id": "gyeongdong", "name": "서울 경동시장", "city": "서울특별시 동대문구", "center_lat": 37.5776, "center_lng": 127.0378},
+    {"id": "gukje", "name": "부산 국제시장", "city": "부산광역시 중구", "center_lat": 35.1004, "center_lng": 129.0293},
+    {"id": "kkangtong", "name": "부산 부평깡통시장", "city": "부산광역시 중구", "center_lat": 35.1015, "center_lng": 129.0289},
+    {"id": "seomun", "name": "대구 서문시장", "city": "대구광역시 중구", "center_lat": 35.8689, "center_lng": 128.5828},
+    {"id": "chilseong", "name": "대구 칠성시장", "city": "대구광역시 북구", "center_lat": 35.8797, "center_lng": 128.5975},
+    {"id": "gwanmun", "name": "대구 관문시장", "city": "대구광역시 북구", "center_lat": 35.8998, "center_lng": 128.5644},
+    {"id": "sinpo", "name": "인천 신포국제시장", "city": "인천광역시 중구", "center_lat": 37.4707, "center_lng": 126.6350},
+    {"id": "bupyeong", "name": "인천 부평시장", "city": "인천광역시 부평구", "center_lat": 37.4894, "center_lng": 126.7241},
+    {"id": "sorae", "name": "인천 소래포구전통어시장", "city": "인천광역시 남동구", "center_lat": 37.3993, "center_lng": 126.7361},
+    {"id": "daejeon-jungang", "name": "대전 중앙시장", "city": "대전광역시 동구", "center_lat": 36.3283, "center_lng": 127.4287},
+    {"id": "yeokjeon", "name": "대전 역전시장", "city": "대전광역시 동구", "center_lat": 36.3315, "center_lng": 127.4344},
+    {"id": "yuseong", "name": "대전 유성시장", "city": "대전광역시 유성구", "center_lat": 36.3622, "center_lng": 127.3435},
+    {"id": "ulsan-jungang", "name": "울산 중앙시장", "city": "울산광역시 중구", "center_lat": 35.5691, "center_lng": 129.3298},
+    {"id": "sinjeong", "name": "울산 신정시장", "city": "울산광역시 남구", "center_lat": 35.5462, "center_lng": 129.3168},
+    {"id": "eonyang-alps", "name": "울산 언양알프스시장", "city": "울산광역시 울주군", "center_lat": 35.5657, "center_lng": 129.1178},
+    {"id": "sejong-jochiwon", "name": "세종전통시장", "city": "세종특별자치시 조치원읍", "center_lat": 36.5975, "center_lng": 127.2967},
+    {"id": "bugang", "name": "세종 부강전통시장", "city": "세종특별자치시 부강면", "center_lat": 36.5209, "center_lng": 127.3444},
+    {"id": "jeonui", "name": "세종 전의전통시장", "city": "세종특별자치시 전의면", "center_lat": 36.6607, "center_lng": 127.2135},
+    {"id": "moran", "name": "성남 모란시장", "city": "경기도 성남시 중원구", "center_lat": 37.4297, "center_lng": 127.1289},
+    {"id": "suwon-nammun", "name": "수원 남문시장", "city": "경기도 수원시 팔달구", "center_lat": 37.2733, "center_lng": 127.0142},
+    {"id": "ilsan", "name": "고양 일산시장", "city": "경기도 고양시 일산동구", "center_lat": 37.6835, "center_lng": 126.7719},
+    {"id": "yukgeori", "name": "청주 육거리종합시장", "city": "충청북도 청주시 상당구", "center_lat": 36.6398, "center_lng": 127.4956},
+    {"id": "jecheon-jungang", "name": "제천 중앙시장", "city": "충청북도 제천시", "center_lat": 37.1326, "center_lng": 128.2101},
+    {"id": "chungju-muhak", "name": "충주 무학시장", "city": "충청북도 충주시", "center_lat": 36.9910, "center_lng": 127.9259},
+    {"id": "gongju-sanseong", "name": "공주 산성시장", "city": "충청남도 공주시", "center_lat": 36.4587, "center_lng": 127.1258},
+    {"id": "seocheon", "name": "서천 특화시장", "city": "충청남도 서천군", "center_lat": 36.0801, "center_lng": 126.6912},
+    {"id": "byeongcheon", "name": "천안 병천시장", "city": "충청남도 천안시 병천면", "center_lat": 36.7454, "center_lng": 127.2489},
+    {"id": "andong-gu", "name": "안동 구시장", "city": "경상북도 안동시", "center_lat": 36.5657, "center_lng": 128.7294},
+    {"id": "jukdo", "name": "포항 죽도시장", "city": "경상북도 포항시 북구", "center_lat": 36.0403, "center_lng": 129.3652},
+    {"id": "gyeongju-jungang", "name": "경주 중앙시장", "city": "경상북도 경주시", "center_lat": 35.8419, "center_lng": 129.2094},
+    {"id": "masan-eosi", "name": "창원 마산어시장", "city": "경상남도 창원시 마산합포구", "center_lat": 35.2059, "center_lng": 128.5709},
+    {"id": "jinju-jungang", "name": "진주 중앙시장", "city": "경상남도 진주시", "center_lat": 35.1900, "center_lng": 128.0850},
+    {"id": "tongyeong-jungang", "name": "통영 중앙시장", "city": "경상남도 통영시", "center_lat": 34.8459, "center_lng": 128.4341},
+    {"id": "jeongseon-arirang", "name": "정선 아리랑시장", "city": "강원특별자치도 정선군", "center_lat": 37.3805, "center_lng": 128.6608},
+    {"id": "sokcho", "name": "속초 관광수산시장", "city": "강원특별자치도 속초시", "center_lat": 38.2049, "center_lng": 128.5912},
+    {"id": "chuncheon-jungang", "name": "춘천 중앙시장", "city": "강원특별자치도 춘천시", "center_lat": 37.8747, "center_lng": 127.7345},
+    {"id": "jeonju-nambu", "name": "전주 남부시장", "city": "전북특별자치도 전주시 완산구", "center_lat": 35.8107, "center_lng": 127.1480},
+    {"id": "namwon", "name": "남원 공설시장", "city": "전북특별자치도 남원시", "center_lat": 35.4164, "center_lng": 127.3903},
+    {"id": "gunsan", "name": "군산 공설시장", "city": "전북특별자치도 군산시", "center_lat": 35.9676, "center_lng": 126.7368},
+    {"id": "jeju-dongmun", "name": "제주 동문시장", "city": "제주특별자치도 제주시", "center_lat": 33.5138, "center_lng": 126.5292},
+    {"id": "seogwipo-olle", "name": "서귀포 매일올레시장", "city": "제주특별자치도 서귀포시", "center_lat": 33.2496, "center_lng": 126.5622},
+    {"id": "seongsan", "name": "성산 일출시장", "city": "제주특별자치도 서귀포시 성산읍", "center_lat": 33.4587, "center_lng": 126.9273},
+]
+MARKETS = MARKETS + EXTRA_MARKETS
+
 # 양동시장 실 점포 데이터 (광주광역시 전통시장 점포 현황 공공데이터, 2021-11-19 기준)
 YANGDONG_STORES = load_yangdong_stores()
 
@@ -164,9 +217,16 @@ SEED_PRODUCTS = [
 
 
 def seed_if_empty(db: Session) -> None:
-    if db.query(Market).count() == 0:
-        for m in MARKETS:
+    # 시장 목록은 DB가 비어있을 때만 채우는 게 아니라, 매번 새로 추가된 시장이 있는지
+    # id 기준으로 확인해서 없는 것만 채운다 — 이미 운영 중인 DB에 나중에 시장을 더
+    # 추가해도(EXTRA_MARKETS) 재배포 한 번으로 반영되게 하기 위함.
+    existing_market_ids = {row[0] for row in db.query(Market.id).all()}
+    added_market = False
+    for m in MARKETS:
+        if m["id"] not in existing_market_ids:
             db.add(Market(**m))
+            added_market = True
+    if added_market:
         db.commit()
 
     if db.query(Store).count() == 0:

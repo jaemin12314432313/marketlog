@@ -45,10 +45,10 @@ export default function App() {
   const [userPhone, setUserPhone] = useState<string>("");
   // 마이 탭 프로필 사진 — 백엔드에 저장돼서 탭을 옮겼다 와도(MyWallet 언마운트) 유지된다.
   const [userProfileImage, setUserProfileImage] = useState<string>("");
-  // 상인이 가입 시 고른 소속 전통시장 — 지도 탭 검색으로 바뀌는 selectedMarket과는
-  // 별개다(그건 소비자가 지도를 둘러보는 상태). 상인 화면(내 정보/물건 등록)에는 항상
-  // 이 값을 써야, 지도에서 다른 시장을 검색해도 내 점포 화면이 안 바뀐다.
-  const [userMarketId, setUserMarketId] = useState<string>("yangdong");
+  // 상인이 로그인 후 마이 탭에서 고르는 소속 전통시장 — 지도 탭 검색으로 바뀌는
+  // selectedMarket과는 별개다(그건 소비자가 지도를 둘러보는 상태). 빈 문자열이면 아직
+  // 고르지 않은 것(가입 절차에서는 더 이상 받지 않는다).
+  const [userMarketId, setUserMarketId] = useState<string>("");
   // 앱은 항상 로그인 화면부터 시작한다. 저장된 토큰으로 세션이 복원되면(자동로그인)
   // 아래 useEffect에서 바로 false로 내려가고, 복원 실패/토큰 없음이면 true로 유지된다.
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
@@ -57,8 +57,9 @@ export default function App() {
   const [selectedRegion, setSelectedRegion] = useState<string>("전체");
   const [selectedMarket, setSelectedMarket] = useState<MarketInfo>(MARKETS_DATA[0]);
   // 상인 화면(내 정보/물건 등록)에 보여줄 시장 이름 — 지도 탭에서 검색으로 다른 시장을
-  // 봐도(selectedMarket) 이건 안 바뀌고, 항상 그 상인이 가입한 시장 그대로다.
-  const merchantMarket = MARKETS_DATA.find((m) => m.id === userMarketId) || MARKETS_DATA[0];
+  // 봐도(selectedMarket) 이건 안 바뀌고, 항상 그 상인이 고른 시장 그대로다. 아직 안
+  // 골랐으면(userMarketId가 빈 값) undefined로 둬서 마이 탭이 선택 카드를 보여주게 한다.
+  const merchantMarket = userMarketId ? MARKETS_DATA.find((m) => m.id === userMarketId) : undefined;
   // 상품 상세의 "상점 위치 지도에서 확인하기"에서 넘어왔을 때 지도가 바로 그 상점으로
   // 이동/포커스하도록 전달하는 값 — MapView가 처리하고 나면 다시 null로 비운다.
   const [mapFocusShopName, setMapFocusShopName] = useState<string | null>(null);
@@ -104,7 +105,7 @@ export default function App() {
         setUserRole(res.user.role);
         setUserDisplayName(res.user.displayName);
         setUserShopName(res.user.shopName || "");
-        setUserMarketId(res.user.marketId || "yangdong");
+        setUserMarketId(res.user.marketId || "");
         setUserUsername(res.user.username);
         setUserPhone(res.user.phone || "");
         setUserProfileImage(res.user.profileImage || "");
@@ -181,7 +182,7 @@ export default function App() {
     setUserRole(role);
     setUserDisplayName(displayName);
     setUserShopName(shopName || "");
-    setUserMarketId(marketId || "yangdong");
+    setUserMarketId(marketId || "");
     setUserUsername(username || "");
     setUserPhone(phone || "");
     setUserProfileImage(profileImage || "");
@@ -193,7 +194,7 @@ export default function App() {
     clearAuthToken();
     setUserDisplayName("");
     setUserShopName("");
-    setUserMarketId("yangdong");
+    setUserMarketId("");
     setUserRole("customer");
     setUserUsername("");
     setUserPhone("");
@@ -361,7 +362,7 @@ export default function App() {
             <MerchantView
               products={products}
               userDisplayName={userShopName || userDisplayName}
-              marketName={merchantMarket.name}
+              marketName={merchantMarket?.name || ""}
               onOpenAiScan={() => setIsAiScanOpen(true)}
               onAddProduct={handleProductRegistered}
               onUpdateProduct={handleProductUpdated}
@@ -422,7 +423,9 @@ export default function App() {
         {activeTab === "my" && (
           <MyWallet
             products={products}
-            marketName={merchantMarket.name}
+            marketName={merchantMarket?.name || ""}
+            userMarketId={userMarketId}
+            onMarketSelected={setUserMarketId}
             onNavigateToMap={() => setActiveTab("map")}
             userRole={userRole}
             userDisplayName={userDisplayName}

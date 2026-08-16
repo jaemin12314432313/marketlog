@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { UserRole } from "./LoginModal";
 import { ProductItem } from "../types";
-import { ApiError, getStoreProfile, updateProfile, updateStoreProfile } from "../lib/api";
+import { ApiError, getStoreProfile, setMerchantMarket, updateProfile, updateStoreProfile } from "../lib/api";
 import { StoreLocationPicker } from "./StoreLocationPicker";
 import { StoreLocationThumbnail } from "./StoreLocationThumbnail";
+import { MARKETS_DATA, REGIONS_DATA } from "../data/initialData";
+
+// "전체"는 상인 소속 시장 선택에는 의미가 없는 선택지라 뺀다.
+const MERCHANT_REGIONS = REGIONS_DATA.filter((r) => r !== "전체");
 
 // 소비자쪽 홈 피드 필터와 같은 5개 카테고리로 맞춰서, 상인이 "주요 품목"을 직접 타이핑하는 대신
 // 체크 버튼으로 고르게 한다 — 오탈자 걱정 없이 손가락으로 누르기만 하면 된다.
@@ -138,6 +142,10 @@ interface MyWalletProps {
   userUsername?: string;
   userPhone?: string;
   userProfileImage?: string;
+  // 상인이 가입 후 로그인해서 아직 소속 전통시장을 안 골랐으면 빈 문자열 — 이 경우
+  // 점포 위치 등록보다 먼저 시장 선택 카드를 보여준다.
+  userMarketId?: string;
+  onMarketSelected?: (marketId: string) => void;
   isLoggedIn?: boolean;
   onOpenLogin?: () => void;
   onLogout?: () => void;
@@ -155,6 +163,8 @@ export const MyWallet: React.FC<MyWalletProps> = ({
   userUsername = "",
   userPhone = "",
   userProfileImage = "",
+  userMarketId = "",
+  onMarketSelected,
   isLoggedIn = false,
   onOpenLogin,
   onLogout,
@@ -367,6 +377,38 @@ export const MyWallet: React.FC<MyWalletProps> = ({
     refreshStoreProfile();
   }, [userRole]);
 
+  // 상인이 로그인 후 아직 소속 전통시장을 안 골랐을 때 보여줄 선택 폼 — 가입 때는 더 이상
+  // 받지 않고, 여기서 처음 점포 정보를 채우려 할 때 고르게 한다. 지역(대분류)을 먼저
+  // 고르면 그 지역의 유명 시장 3곳만 추려서 보여주고, 목록에 없으면 직접 입력한다.
+  const [pendingRegion, setPendingRegion] = useState(MERCHANT_REGIONS[0]);
+  const marketsInPendingRegion = MARKETS_DATA.filter((m) => m.region === pendingRegion);
+  const [pendingMarketId, setPendingMarketId] = useState(
+    marketsInPendingRegion[0]?.id || "custom"
+  );
+  const [pendingCustomName, setPendingCustomName] = useState("");
+  const [isSavingMarket, setIsSavingMarket] = useState(false);
+
+  const handleConfirmMarket = async () => {
+    if (pendingMarketId === "custom" && !pendingCustomName.trim()) {
+      alert("소속 전통시장 이름을 입력해주세요.");
+      return;
+    }
+    setIsSavingMarket(true);
+    try {
+      const res = await setMerchantMarket(
+        pendingMarketId === "custom"
+          ? { customName: pendingCustomName.trim(), customRegion: pendingRegion }
+          : { marketId: pendingMarketId }
+      );
+      onMarketSelected?.(res.marketId);
+    } catch (err) {
+      console.error("소속 전통시장 저장 실패", err);
+      alert("소속 전통시장 저장에 실패했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setIsSavingMarket(false);
+    }
+  };
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
@@ -382,14 +424,14 @@ export const MyWallet: React.FC<MyWalletProps> = ({
       return;
     }
     setEditForm({ ...shopInfo });
+    // "매일 동일하게 영업"이 기본값이다 — 시장 상인은 거의 다 매일 같은 시간에 열기
+    // 때문에, 예전 데이터 형식을 추론해서 자유 텍스트 모드로 슬쩍 바뀌는 일이 없게
+    // 항상 이 모드로 연다. 정기휴무일도 정확히 아는 프리셋일 때만 그대로 보여주고,
+    // 그 외엔 "직접입력"으로 잘못 넘어가지 않게 기본값(연중무휴)으로 시작한다.
     const loadedHours = parseShopHoursValue(shopInfo.hours);
-    setIsHoursDailyMode(Boolean(loadedHours.start) || !shopInfo.hours);
+    setIsHoursDailyMode(true);
     setHoursClosedDayMode(
-      HOURS_CLOSED_DAY_PRESETS.includes(loadedHours.note)
-        ? loadedHours.note
-        : loadedHours.note
-          ? "직접입력"
-          : HOURS_CLOSED_DAY_PRESETS[0]
+      HOURS_CLOSED_DAY_PRESETS.includes(loadedHours.note) ? loadedHours.note : HOURS_CLOSED_DAY_PRESETS[0]
     );
     setIsEditingShopInfo(true);
   };
@@ -871,20 +913,86 @@ export const MyWallet: React.FC<MyWalletProps> = ({
             )}
           </div>
 
-          {/* 점포 위치 등록 — 지도의 실제 점포와 이름이 정확히 일치할 때만 상품이 지도에
-              뜨던 문제 때문에, 상인이 직접 자기 위치에 핀을 찍어 등록할 수 있게 한다.
-              전화번호/영업시간과 같은 곳에서 관리하도록 이 카드 안에 같이 둔다. 텍스트
-              박스 대신 실제 지도 썸네일로 보여줘서 글씨를 안 읽어도 바로 확인되게 한다. */}
-          <StoreLocationThumbnail onEdit={() => setIsLocationPickerOpen(true)} refreshKey={locationVersion} />
-
-          {hasStoreProfile === false && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
-              <span className="material-symbols-outlined text-amber-600 text-lg shrink-0">info</span>
-              <p className="text-[11px] text-amber-800 font-medium leading-relaxed">
-                점포 상세정보를 저장하려면 먼저 위쪽의 "점포 위치 등록"으로 지도에 점포를 등록해주세요.
-                위치가 등록돼야 이 정보도 저장할 수 있어요.
-              </p>
+          {/* 소속 전통시장 선택 — 예전엔 회원가입 때 받았는데, 가입 절차를 짧게 하려고
+              로그인 후 여기서 처음 점포 정보를 채우려 할 때 고르게 바꿨다. 시장을 알아야
+              지도 썸네일/위치 등록이 어느 시장 기준으로 뜰지 정해진다. */}
+          {/* hasStoreProfile === false로 명확히 확인된 뒤에만 선택 카드를 보여준다 — 이미
+              점포가 있는 예전 계정(시장 선택 기능이 생기기 전에 가입)은 market_id가 비어
+              있어도 여기 안 걸리게 해서, 실수로 다시 시장을 고르라고 하지 않는다. */}
+          {!userMarketId && hasStoreProfile === false ? (
+            <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-4 space-y-3">
+              <div className="flex items-start gap-2">
+                <span className="material-symbols-outlined text-emerald-600 text-lg shrink-0">storefront</span>
+                <p className="text-xs text-emerald-800 font-bold leading-relaxed">
+                  점포 위치와 상세정보를 등록하려면 먼저 소속 전통시장을 선택해주세요.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <select
+                  value={pendingRegion}
+                  onChange={(e) => {
+                    const region = e.target.value;
+                    setPendingRegion(region);
+                    const firstInRegion = MARKETS_DATA.find((m) => m.region === region);
+                    setPendingMarketId(firstInRegion?.id || "custom");
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl border border-emerald-300 bg-white text-xs font-semibold"
+                >
+                  {MERCHANT_REGIONS.map((region) => (
+                    <option key={region} value={region}>
+                      {region}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={pendingMarketId}
+                  onChange={(e) => setPendingMarketId(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-emerald-300 bg-white text-xs font-semibold"
+                >
+                  {marketsInPendingRegion.map((market) => (
+                    <option key={market.id} value={market.id}>
+                      {market.name}
+                    </option>
+                  ))}
+                  <option value="custom">목록에 없음 (직접 입력)</option>
+                </select>
+              </div>
+              {pendingMarketId === "custom" && (
+                <input
+                  type="text"
+                  value={pendingCustomName}
+                  onChange={(e) => setPendingCustomName(e.target.value)}
+                  placeholder="시장 이름을 입력해주세요 (예: OO전통시장)"
+                  className="w-full px-3 py-2.5 rounded-xl border border-emerald-300 bg-white text-xs font-semibold"
+                />
+              )}
+              <button
+                type="button"
+                onClick={handleConfirmMarket}
+                disabled={isSavingMarket}
+                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-bold shadow-md transition-all cursor-pointer"
+              >
+                {isSavingMarket ? "저장 중..." : "선택 완료"}
+              </button>
             </div>
+          ) : (
+            <>
+              {/* 점포 위치 등록 — 지도의 실제 점포와 이름이 정확히 일치할 때만 상품이 지도에
+                  뜨던 문제 때문에, 상인이 직접 자기 위치에 핀을 찍어 등록할 수 있게 한다.
+                  전화번호/영업시간과 같은 곳에서 관리하도록 이 카드 안에 같이 둔다. 텍스트
+                  박스 대신 실제 지도 썸네일로 보여줘서 글씨를 안 읽어도 바로 확인되게 한다. */}
+              <StoreLocationThumbnail onEdit={() => setIsLocationPickerOpen(true)} refreshKey={locationVersion} />
+
+              {hasStoreProfile === false && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
+                  <span className="material-symbols-outlined text-amber-600 text-lg shrink-0">info</span>
+                  <p className="text-[11px] text-amber-800 font-medium leading-relaxed">
+                    점포 상세정보를 저장하려면 먼저 위쪽의 "점포 위치 등록"으로 지도에 점포를 등록해주세요.
+                    위치가 등록돼야 이 정보도 저장할 수 있어요.
+                  </p>
+                </div>
+              )}
+            </>
           )}
 
           {!isEditingShopInfo ? (
@@ -897,7 +1005,7 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                 </div>
                 <div className="flex justify-between py-1.5">
                   <span className="text-[#64748B] font-medium">소속 전통시장</span>
-                  <span className="font-extrabold text-emerald-600">{shopInfo.marketName}</span>
+                  <span className="font-extrabold text-emerald-600">{shopInfo.marketName || "미선택"}</span>
                 </div>
                 <div className="flex justify-between py-1.5">
                   <span className="text-[#64748B] font-medium">주요 품목</span>
