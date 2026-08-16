@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import ssl
 import threading
 from datetime import date, datetime, timedelta
 
@@ -14,6 +15,13 @@ import httpx
 KAMIS_BASE_URL = "https://www.kamis.or.kr/service/price/xml.do"
 # KAMIS는 http/기본 User-Agent로는 연결을 리셋시키고 https + 브라우저 UA에서만 응답한다.
 KAMIS_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+
+# python:3.12-slim(Debian) 컨테이너의 OpenSSL 3.0 기본 보안 레벨(SECLEVEL=2)은
+# KAMIS 서버가 쓰는 구형 TLS 설정을 거부해 SSLV3_ALERT_HANDSHAKE_FAILURE로 매번
+# 핸드셰이크가 실패한다 — 로컬 Windows(다른 OpenSSL 빌드)에서는 재현되지 않았던
+# 이유이기도 하다. SECLEVEL=1로 낮춰서 KAMIS 호출에만 예외를 둔다.
+_KAMIS_SSL_CONTEXT = ssl.create_default_context()
+_KAMIS_SSL_CONTEXT.set_ciphers("DEFAULT@SECLEVEL=1")
 
 # 품목명 -> KAMIS 조회 설정.
 # kind_contains: kind_name 중 어떤 품종을 대표값으로 쓸지 (None이면 첫 매치 사용)
@@ -70,6 +78,7 @@ def _fetch_category(category: str, regday: str) -> "tuple[list, bool]":
         resp = httpx.get(
             KAMIS_BASE_URL, params=params, timeout=10,
             headers={"User-Agent": KAMIS_USER_AGENT},
+            verify=_KAMIS_SSL_CONTEXT,
         )
         data = resp.json().get("data")
         if isinstance(data, dict):
