@@ -25,12 +25,12 @@
         font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
       }
 
-      /* overscroll-behavior가 없으면, 지도처럼 화면을 꽉 채우고 상하좌우로 드래그하는
-         위젯에서 안드로이드 웹뷰가 페이지 자체를 옆으로 밀어내는(overscroll bounce)
-         효과를 보여준다 — 지도 탭에서만 유독 "옆으로 넘어간다"고 느껴지는 원인. */
+      /* overscroll-behavior: none을 앱 전체(html, body)에 걸었더니 실기기 안드로이드
+         웹뷰에서 스크롤 자체가 전부 안 되는 심각한 부작용이 있어서 되돌렸다 — 지도
+         드래그 시 옆으로 밀리는 문제는 지도 화면 자체의 컨테이너(MapView.tsx)에만
+         국소적으로 걸어둔 것으로 충분하다. */
       html, body {
         overflow-x: hidden;
-        overscroll-behavior: none;
       }
 
       body {
