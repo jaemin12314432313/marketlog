@@ -48,7 +48,9 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Right controls: Region Selector & Notifications */}
       <div className="flex items-center space-x-1 sm:space-x-2 shrink-0">
-        {/* Region Selector */}
+        {/* Region Selector — 소비자 홈피드 지역 필터용이라 상인 화면에서는 아무 기능도
+            안 하면서 자리만 차지한다. 상인 로그인일 땐 숨긴다. */}
+        {userRole !== "merchant" && (
         <div className="relative flex items-center shrink-0">
           {/* Region Selector Button */}
           <button
@@ -134,6 +136,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
         </div>
+        )}
 
         {/* High-visibility Reinstated Notification Alarm Button */}
         <button

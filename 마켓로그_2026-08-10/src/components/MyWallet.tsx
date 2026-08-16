@@ -116,6 +116,16 @@ const SHOP_CUSTOM_ITEM_PLACEHOLDER_DEFAULT = "예: 젓갈, 나물";
 // 정기휴무일은 자주 쓰는 패턴만 드롭다운으로 주고, 예외적인 경우만 직접 입력하게 한다.
 const HOURS_CLOSED_DAY_PRESETS = ["연중무휴", "매주 일요일", "첫째·셋째 주 일요일"];
 
+// 네이티브 time input은 시/분을 따로 휠로 돌려야 해서 어르신들껜 번거롭다는 피드백 — 시장
+// 영업시간은 거의 다 정시나 30분 단위(06:00, 07:30...)라, 목록에서 탭 한 번으로 고르는
+// 드롭다운이면 충분하다. 04:00~23:30 범위를 30분 단위로 채운다.
+const HOURS_TIME_PRESETS = Array.from({ length: 40 }, (_, i) => {
+  const totalMinutes = 4 * 60 + i * 30;
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+});
+
 interface MyWalletProps {
   onNavigateToMap?: () => void;
   marketName?: string;
@@ -1015,27 +1025,39 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                 {isHoursDailyMode ? (
                   <>
                     <div className="flex items-center gap-2">
-                      <input
-                        type="time"
+                      <select
                         value={parseShopHoursValue(editForm.hours).start}
                         onChange={(e) => {
                           const { end } = parseShopHoursValue(editForm.hours);
                           const note = hoursClosedDayMode === "직접입력" ? parseShopHoursValue(editForm.hours).note : hoursClosedDayMode;
                           setEditForm((prev) => ({ ...prev, hours: buildShopHoursValue(e.target.value, end, note) }));
                         }}
-                        className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
-                      />
+                        className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold bg-white"
+                      >
+                        <option value="">시작 시간</option>
+                        {HOURS_TIME_PRESETS.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
                       <span className="text-slate-400 font-bold shrink-0">~</span>
-                      <input
-                        type="time"
+                      <select
                         value={parseShopHoursValue(editForm.hours).end}
                         onChange={(e) => {
                           const { start } = parseShopHoursValue(editForm.hours);
                           const note = hoursClosedDayMode === "직접입력" ? parseShopHoursValue(editForm.hours).note : hoursClosedDayMode;
                           setEditForm((prev) => ({ ...prev, hours: buildShopHoursValue(start, e.target.value, note) }));
                         }}
-                        className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
-                      />
+                        className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold bg-white"
+                      >
+                        <option value="">종료 시간</option>
+                        {HOURS_TIME_PRESETS.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     <div className="space-y-1 pt-1">

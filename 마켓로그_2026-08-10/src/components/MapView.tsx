@@ -125,6 +125,8 @@ export const MapView: React.FC<MapViewProps> = ({
   const [naverLoaded, setNaverLoaded] = useState(false);
   const [stores, setStores] = useState<MapStorePin[]>([]);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
+  const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [geoAttempted, setGeoAttempted] = useState(false);
   const [currentZoom, setCurrentZoom] = useState(17);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -289,12 +291,36 @@ export const MapView: React.FC<MapViewProps> = ({
     };
   }, [selectedMarket.name]);
 
-  // Create the map once the SDK is loaded and we know where to center it.
+  // 지도 탭에 처음 들어오면 시장 중심이 아니라 내 실제 위치부터 곧장 떠야 한다는 피드백 —
+  // 지도를 만들기 전에 위치 조회부터 끝내서 "시장 중심으로 열렸다가 내 위치로 튀는" 게
+  // 안 보이게 한다. 실패/거부해도 조용히 시장 중심으로 대체한다(alert 없음). "확인하기"로
+  // 특정 점포를 보러 들어온 경우엔 점포 중심을 유지해야 하므로 시도하지 않는다.
   useEffect(() => {
-    if (!naverLoaded || !mapElement.current || mapRef.current || !mapCenter) return;
+    if (focusShopName || !navigator.geolocation) {
+      setGeoAttempted(true);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setMyLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
+        setGeoAttempted(true);
+      },
+      () => setGeoAttempted(true),
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Create the map once the SDK is loaded and we know where to center it — either my
+  // location (plain open, GPS resolved) or the market center (fallback / focusShopName).
+  useEffect(() => {
+    if (!naverLoaded || !mapElement.current || mapRef.current) return;
+    if (!focusShopName && !geoAttempted) return;
+    const initialCenter = !focusShopName && myLocation ? myLocation : mapCenter;
+    if (!initialCenter) return;
 
     const naver = (window as any).naver;
-    const center = new naver.maps.LatLng(mapCenter.lat, mapCenter.lng);
+    const center = new naver.maps.LatLng(initialCenter.lat, initialCenter.lng);
     mapRef.current = new naver.maps.Map(mapElement.current, {
       center,
       // 예전엔 17로 시작해서 점포 마커가 뜨는 최소 줌(MIN_ZOOM_FOR_MARKERS=19)보다
@@ -310,26 +336,33 @@ export const MapView: React.FC<MapViewProps> = ({
     naver.maps.Event.addListener(mapRef.current, "zoom_changed", (zoom: number) => {
       setCurrentZoom(zoom);
     });
-  }, [naverLoaded, mapCenter]);
 
-  // 지도 탭에 처음 들어오면 시장 중심이 아니라 내 실제 위치부터 보여주는 게 자연스럽다는
-  // 피드백 — 위치 권한이 없거나 실패해도 조용히 시장 중심에 그대로 머문다(수동 버튼과
-  // 달리 alert를 띄우지 않는다). 딱 한 번만 시도한다.
-  const hasAutoLocatedRef = useRef(false);
-  useEffect(() => {
-    if (hasAutoLocatedRef.current || !naverLoaded || !mapRef.current) return;
-    hasAutoLocatedRef.current = true;
-    goToCurrentLocation({ silent: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [naverLoaded, mapCenter]);
+    if (!focusShopName && myLocation) {
+      myLocationMarkerRef.current = new naver.maps.Marker({
+        position: center,
+        map: mapRef.current,
+        icon: {
+          content: `<div style="width:16px;height:16px;border-radius:50%;background:#2563EB;border:3px solid white;box-shadow:0 0 0 2px rgba(37,99,235,0.4);"></div>`,
+          anchor: new naver.maps.Point(8, 8),
+        },
+        zIndex: 200,
+      });
+    }
+  }, [naverLoaded, mapCenter, geoAttempted, myLocation, focusShopName]);
 
-  // 시장을 검색해서 바꾸면(위 useEffect가 stores/mapCenter를 새로 불러온다) 이미 만들어진
-  // 지도 인스턴스는 스스로 움직이지 않으므로, 새 중심으로 직접 옮겨준다.
+  // 시장을 검색해서 실제로 다른 시장으로 바꾼 경우에만 이미 만들어진 지도 인스턴스를
+  // 새 중심으로 옮긴다. appliedMarketIdRef가 null인 최초 1회(=지도 생성 시점)는 건드리지
+  // 않는다 — 그렇지 않으면 내 위치로 막 띄운 지도를 시장 데이터가 도착하자마자 다시
+  // 시장 중심으로 되돌려버리게 된다.
+  const appliedMarketIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!mapRef.current || !mapCenter) return;
+    const isMarketSwitch = appliedMarketIdRef.current !== null && appliedMarketIdRef.current !== selectedMarket.id;
+    appliedMarketIdRef.current = selectedMarket.id;
+    if (!isMarketSwitch) return;
     const naver = (window as any).naver;
     mapRef.current.setCenter(new naver.maps.LatLng(mapCenter.lat, mapCenter.lng));
-  }, [mapCenter]);
+  }, [mapCenter, selectedMarket.id]);
 
   // 양동시장 전체를 하나의 영역으로 보여주는 외곽선/음영 오버레이 — 실제 점포 좌표의
   // 컨벡스 헐을 계산해서 그린다. 줌 레벨과 무관하게 항상 표시(마커와 달리 시장

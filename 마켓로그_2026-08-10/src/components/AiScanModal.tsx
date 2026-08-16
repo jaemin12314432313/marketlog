@@ -2,7 +2,105 @@ import React, { useState, useRef, useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { ProductItem, InspectionResult } from "../types";
-import { analyzeProduct } from "../lib/api";
+import { analyzeProduct, fetchMapConfig } from "../lib/api";
+
+const NAVER_SCRIPT_ID = "naver-maps-sdk";
+
+// 저장 목록에 "몇 시에 어디서 스캔했는지" 보여주기 위해, 저장 시점에 딱 한 번 위치를
+// 조회해서 구/동 단위 라벨로 바꿔둔다(정확한 지번까지는 필요 없고, 오히려 노출 안 하는
+// 게 낫다). 위치 권한을 거부/실패해도 조용히 빈 값으로 남기고 저장 자체는 그대로
+// 진행한다 — 이 정보 하나 때문에 저장이 막히면 안 되므로 각 단계에 타임아웃을 둔다.
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    promise.then((value) => {
+      clearTimeout(timer);
+      resolve(value);
+    });
+  });
+}
+
+function loadNaverMapsSdk(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if ((window as any).naver?.maps?.Service) {
+      resolve(true);
+      return;
+    }
+    const existing = document.getElementById(NAVER_SCRIPT_ID) as HTMLScriptElement | null;
+    if (existing) {
+      existing.addEventListener("load", () => resolve(!!(window as any).naver?.maps));
+      return;
+    }
+    fetchMapConfig()
+      .then((config) => {
+        const script = document.createElement("script");
+        script.id = NAVER_SCRIPT_ID;
+        script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${config.naver_client_id}&submodules=geocoding`;
+        script.onload = () => resolve(true);
+        script.onerror = () => resolve(false);
+        document.head.appendChild(script);
+      })
+      .catch(() => resolve(false));
+  });
+}
+
+function getCurrentPositionOnce(timeoutMs: number): Promise<{ lat: number; lng: number } | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(null);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve({ lat: position.coords.latitude, lng: position.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: timeoutMs }
+    );
+  });
+}
+
+function reverseGeocodeToLabel(lat: number, lng: number): Promise<string | null> {
+  return new Promise((resolve) => {
+    const naver = (window as any).naver;
+    if (!naver?.maps?.Service) {
+      resolve(null);
+      return;
+    }
+    try {
+      naver.maps.Service.reverseGeocode(
+        {
+          coords: new naver.maps.LatLng(lat, lng),
+          orders: [naver.maps.Service.OrderType.ADDR].join(","),
+        },
+        (status: string, response: any) => {
+          if (status !== naver.maps.Service.Status.OK) {
+            resolve(null);
+            return;
+          }
+          try {
+            const region = response.v2.results[0].region;
+            const label = [region.area1?.name, region.area2?.name, region.area3?.name]
+              .filter(Boolean)
+              .join(" ");
+            resolve(label || null);
+          } catch {
+            resolve(null);
+          }
+        }
+      );
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function resolveScanLocationLabel(): Promise<string> {
+  const pos = await withTimeout(getCurrentPositionOnce(6000), 6500, null);
+  if (!pos) return "";
+  const sdkReady = await withTimeout(loadNaverMapsSdk(), 4000, false);
+  if (!sdkReady) return "";
+  const label = await withTimeout(reverseGeocodeToLabel(pos.lat, pos.lng), 4000, null);
+  return label || "";
+}
 
 function buildPriceTag(price: number, publicPrice: number): string {
   if (!price || !publicPrice) return "공공 시세 연동 검증";
@@ -115,6 +213,9 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
   // 가격을 사용자가 입력해야 "공공 시세 대비 N% 저렴" 비교가 의미를 가진다.
   const [sellingPriceInput, setSellingPriceInput] = useState("");
   const [saveSuccessToast, setSaveSuccessToast] = useState(false);
+  // 저장 시점에 위치 조회(최대 몇 초)를 기다리는 동안 버튼을 연타해서 중복 저장되는 것을
+  // 막는다 — saveSuccessToast는 그 조회가 끝난 뒤에야 true가 되므로 그 전 구간은 이걸로 막는다.
+  const [isSavingResult, setIsSavingResult] = useState(false);
   const [hasCameraStream, setHasCameraStream] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   // 백그라운드에서 돌아왔을 때 카메라를 다시 켜기 위한 트리거 — isOpen은 그대로라
@@ -213,6 +314,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
       setInspectionResult(null);
       setAnalyzeError(null);
       setSaveSuccessToast(false);
+      setIsSavingResult(false);
     }
   }, [isOpen]);
 
@@ -341,14 +443,17 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
     }
   };
 
-  const handleSaveResult = () => {
-    if (saveSuccessToast) return; // 저장 처리 중 버튼 연타로 중복 저장되는 것 방지
+  const handleSaveResult = async () => {
+    if (saveSuccessToast || isSavingResult) return; // 저장 처리 중 버튼 연타로 중복 저장되는 것 방지
     if (inspectionResult) {
       if (!sellingPriceInput.trim()) {
         alert("판매가를 입력해주세요.");
         return;
       }
       const price = parseInt(sellingPriceInput, 10) || 0;
+      setIsSavingResult(true);
+      // 위치 권한을 거부/실패하면 빈 문자열로 남는다 — 저장 자체는 막지 않는다.
+      const scanLocationLabel = await resolveScanLocationLabel();
       // 이건 특정 점포에 등록하는 게 아니라 사용자가 직접 촬영해서 개인 저장목록에
       // 남기는 기록이라, 실제로 없는 점포 정보를 지어내지 않는다(예전엔 카테고리별로
       // "양동수산"/"양동정육"/"싱싱청과"를 무작정 붙였는데, 실제로 그 점포에서 산 게
@@ -360,7 +465,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
         origin: "",
         tags: "",
         shopName: "",
-        distance: "촬영 장소",
+        distance: scanLocationLabel,
         timeAgo: "방금 스캔",
         price,
         publicPrice: inspectionResult.publicMarketPrice,
@@ -377,6 +482,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
       };
 
       onSaveToSavedList(newSavedItem);
+      setIsSavingResult(false);
       setSaveSuccessToast(true);
 
       setTimeout(() => {
@@ -656,19 +762,19 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
 
               <button
                 onClick={handleSaveResult}
-                disabled={saveSuccessToast}
+                disabled={saveSuccessToast || isSavingResult}
                 className="flex-1 py-3 bg-[#0052FF] hover:bg-[#0043D6] disabled:opacity-60 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
               >
                 <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>
                   bookmark
                 </span>
-                저장목록에 저장
+                {isSavingResult ? "저장 중..." : "저장목록에 저장"}
               </button>
 
               {userRole === "merchant" && (
                 <button
                   onClick={handleMerchantRegister}
-                  disabled={saveSuccessToast}
+                  disabled={saveSuccessToast || isSavingResult}
                   className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 disabled:opacity-60 text-white text-xs font-extrabold rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
                 >
                   <span className="material-symbols-outlined text-base">storefront</span>

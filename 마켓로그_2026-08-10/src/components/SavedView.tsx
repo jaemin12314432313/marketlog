@@ -189,6 +189,14 @@ export const SavedView: React.FC<SavedViewProps> = ({
                             {relativeTime && (
                               <p className="text-[11px] text-[#94A3B8] font-medium mt-0.5">{relativeTime}</p>
                             )}
+                            {/* 스캔 당시 위치 — 저장 시점에 위치 권한을 거부/실패했으면
+                                비어있으니 그때는 아무것도 표시하지 않는다. */}
+                            {product.distance && (
+                              <p className="flex items-center gap-0.5 text-[11px] text-[#94A3B8] font-medium mt-0.5">
+                                <span className="material-symbols-outlined text-[13px]">location_on</span>
+                                {product.distance}
+                              </p>
+                            )}
                           </div>
                           {onRemoveScannedProduct && (
                             <button

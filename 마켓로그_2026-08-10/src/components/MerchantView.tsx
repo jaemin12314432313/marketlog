@@ -60,18 +60,22 @@ function buildProductOrigin(type: string, detail: string): string {
 
 // 카테고리별로 AI가 골라줄 법한 짧은 키워드 태그 — getAiRecommendations(문장 3개)와는 별개로,
 // 상품 설명 아래에 다중 선택 칩으로 보여준다. 스캔 전엔 이 중 앞 3개를 회색 스켈레톤으로
-// 미리 보여주고, 스캔 후엔 카테고리에 맞는 실제 태그 세트가 활성화된다.
+// 미리 보여주고, 스캔 후엔 카테고리에 맞는 실제 태그 세트가 활성화된다. 풀을 넉넉히(8개)
+// 두고 "새로고침"을 누를 때마다 시작 위치를 옮겨서 다른 조합 5개가 보이게 한다 — AI 추천
+// 설명 카드의 새로고침과 같은 패턴.
 const AI_TAG_SUGGESTIONS: Record<string, string[]> = {
-  수산물: ["#싱싱한", "#당일조업", "#쫄깃한", "#손질완료", "#자연산"],
-  정육: ["#육즙가득", "#부드러운", "#당일정육", "#1등급", "#숙성"],
-  과일: ["#달콤한", "#아삭한", "#당도높은", "#산지직송", "#제철과일"],
-  야채: ["#아삭한", "#무농약", "#신선한", "#산지직송", "#유기농"],
-  건어물: ["#바삭한", "#감칠맛", "#자연건조", "#짭짤한", "#고소한"],
+  수산물: ["#싱싱한", "#당일조업", "#쫄깃한", "#손질완료", "#자연산", "#급냉", "#탱글탱글", "#고소한"],
+  정육: ["#육즙가득", "#부드러운", "#당일정육", "#1등급", "#숙성", "#마블링", "#국내산", "#야들야들"],
+  과일: ["#달콤한", "#아삭한", "#당도높은", "#산지직송", "#제철과일", "#새콤달콤", "#과즙가득", "#당일수확"],
+  야채: ["#아삭한", "#무농약", "#신선한", "#산지직송", "#유기농", "#아침수확", "#저온보관", "#싱그러운"],
+  건어물: ["#바삭한", "#감칠맛", "#자연건조", "#짭짤한", "#고소한", "#국내산", "#숙성건조", "#술안주"],
 };
-const AI_TAG_SUGGESTIONS_DEFAULT = ["#신선한", "#산지직송", "#인기상품", "#오늘특가"];
+const AI_TAG_SUGGESTIONS_DEFAULT = ["#신선한", "#산지직송", "#인기상품", "#오늘특가", "#추천상품", "#가성비", "#단골추천", "#품절임박"];
 
-function getAiRecommendedTags(rawCategory: string): string[] {
-  return AI_TAG_SUGGESTIONS[rawCategory] || AI_TAG_SUGGESTIONS_DEFAULT;
+function getAiRecommendedTags(rawCategory: string, index: number): string[] {
+  const pool = AI_TAG_SUGGESTIONS[rawCategory] || AI_TAG_SUGGESTIONS_DEFAULT;
+  const offset = (index * 3) % pool.length;
+  return [...pool.slice(offset), ...pool.slice(0, offset)].slice(0, 5);
 }
 
 interface MerchantViewProps {
@@ -161,6 +165,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
 
   // AI Recommendation for Description state
   const [recommendationSetIndex, setRecommendationSetIndex] = useState(0);
+  const [tagSetIndex, setTagSetIndex] = useState(0);
 
   const getAiRecommendations = (rawTitle: string, rawCategory: string, index: number) => {
     const name = rawTitle.trim() || `${rawCategory || "인기"} 상품`;
@@ -297,8 +302,17 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     reader.readAsDataURL(file);
   };
 
+  const MAX_SELECTED_TAGS = 5;
+
   const toggleTag = (tag: string) => {
-    setSelectedTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
+    setSelectedTags((prev) => {
+      if (prev.includes(tag)) return prev.filter((t) => t !== tag);
+      if (prev.length >= MAX_SELECTED_TAGS) {
+        showToast(`태그는 최대 ${MAX_SELECTED_TAGS}개까지 선택할 수 있어요.`);
+        return prev;
+      }
+      return [...prev, tag];
+    });
   };
 
   const handleSubmitManual = async (e: React.FormEvent) => {
@@ -447,7 +461,10 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         <button
           onClick={() => {
             if (isFormOpen && editingProductId) {
+              // 수정 중에 이 배너를 누르면 "새 상품 등록" 모드로 넘어가는 게 아니라,
+              // 폼을 접고 원래 목록 화면으로 돌아가야 한다.
               handleCancelEdit();
+              setIsFormOpen(false);
             } else {
               setIsFormOpen(!isFormOpen);
             }
@@ -677,30 +694,50 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
             />
           </div>
 
-          {/* Origin & Price — 카테고리는 AI가 골라주는 값을 화면에 굳이 또 보여줄 필요가
-              없어서 뺐고(내부적으로는 그대로 쓰임), 대신 원산지랑 가격을 한 줄에 같이 뒀다. */}
+          {/* Origin — 카테고리는 AI가 골라주는 값을 화면에 굳이 또 보여줄 필요가 없어서
+              뺐고(내부적으로는 그대로 쓰임), 원산지는 입력 항목이 둘(구분+상세)이라 한 줄을
+              온전히 준다. */}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-700">원산지 *</label>
+            <div className="flex items-center gap-1.5">
+              <select
+                value={originType}
+                onChange={(e) => setOriginType(e.target.value)}
+                className="w-20 shrink-0 px-2 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium bg-white"
+              >
+                {PRODUCT_ORIGIN_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                placeholder="완도"
+                value={originDetail}
+                onChange={(e) => setOriginDetail(e.target.value)}
+                className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+              />
+            </div>
+          </div>
+
+          {/* Unit / Weight & Price — 공공시세(kg 기준) 대비 할인율이 정확히 계산되도록
+              단위를 kg 하나로 고정한다. 무게와 가격은 서로 짝을 이루는 값이라 한 줄에 뒀다. */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">원산지 *</label>
-              <div className="flex items-center gap-1.5">
-                <select
-                  value={originType}
-                  onChange={(e) => setOriginType(e.target.value)}
-                  className="w-20 shrink-0 px-2 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium bg-white"
-                >
-                  {PRODUCT_ORIGIN_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
+              <label className="text-xs font-bold text-slate-700">단위/중량 * (kg 기준)</label>
+              <div className="flex items-center gap-2">
                 <input
                   type="text"
-                  placeholder="완도"
-                  value={originDetail}
-                  onChange={(e) => setOriginDetail(e.target.value)}
-                  className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                  inputMode="decimal"
+                  placeholder="1"
+                  value={unitAmount}
+                  onChange={(e) => setUnitAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+                  className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
                 />
+                <span className="w-12 shrink-0 text-center px-2 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-xs text-slate-600 font-bold">
+                  kg
+                </span>
               </div>
             </div>
 
@@ -718,26 +755,6 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
                 required
               />
-            </div>
-          </div>
-
-          {/* Unit / Weight — 공공시세(kg 기준) 대비 할인율이 정확히 계산되도록 단위를
-              kg 하나로 고정한다. 개/포기/마리처럼 상인마다 다른 단위를 쓰면 서로 다른
-              기준으로 가격을 비교하게 돼서 할인율이 의미 없어진다. */}
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-700">단위/중량 * (kg 기준)</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder="1"
-                value={unitAmount}
-                onChange={(e) => setUnitAmount(e.target.value.replace(/[^0-9.]/g, ""))}
-                className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
-              />
-              <span className="w-16 shrink-0 text-center px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-xs text-slate-600 font-bold">
-                kg
-              </span>
             </div>
           </div>
 
@@ -773,24 +790,45 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                 ))}
               </div>
             ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {getAiRecommendedTags(category).map((tag) => {
-                  const isSelected = selectedTags.includes(tag);
-                  return (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => toggleTag(tag)}
-                      className={`px-2.5 py-1 rounded-full border text-[11px] font-bold transition-all cursor-pointer active:scale-95 ${
-                        isSelected
-                          ? "bg-emerald-600 border-emerald-600 text-white"
-                          : "bg-white border-slate-200 text-slate-600 hover:border-emerald-300 hover:bg-emerald-50"
-                      }`}
-                    >
-                      {tag}
-                    </button>
-                  );
-                })}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-500">
+                    AI 추천 태그 (최대 {MAX_SELECTED_TAGS}개 선택, {selectedTags.length}/{MAX_SELECTED_TAGS})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setTagSetIndex((prev) => prev + 1)}
+                    className="text-[10px] font-bold text-slate-500 hover:text-emerald-700 flex items-center gap-0.5 cursor-pointer"
+                    title="다른 태그 보기"
+                  >
+                    <span className="material-symbols-outlined text-xs">refresh</span>
+                    <span>새로고침</span>
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {/* 이미 골라둔 태그는 새로고침으로 화면에서 밀려나도 계속 보이게, 이번에
+                      새로 뜬 추천 태그 앞에 고정으로 붙여준다 — 안 그러면 골라놓고 새로고침
+                      했을 때 "방금 고른 게 없어졌나?" 하고 헷갈리게 된다. */}
+                  {[...selectedTags, ...getAiRecommendedTags(category, tagSetIndex)]
+                    .filter((tag, idx, arr) => arr.indexOf(tag) === idx)
+                    .map((tag) => {
+                    const isSelected = selectedTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => toggleTag(tag)}
+                        className={`px-2.5 py-1 rounded-full border text-[11px] font-bold transition-all cursor-pointer active:scale-95 ${
+                          isSelected
+                            ? "bg-emerald-600 border-emerald-600 text-white"
+                            : "bg-white border-slate-200 text-slate-600 hover:border-emerald-300 hover:bg-emerald-50"
+                        }`}
+                      >
+                        {tag}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
@@ -939,19 +977,15 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                       {p.title}
                       {p.unit && <span className="text-slate-400 font-semibold"> ({p.unit})</span>}
                     </h4>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-base font-black text-slate-900">
+                    <div className="space-y-0.5">
+                      <span className="block text-base font-black text-slate-900">
                         {p.price.toLocaleString()}원
                       </span>
                       {p.createdAt && (
-                        <span className="text-[10px] font-bold text-slate-400">
+                        <span className="block text-[10px] font-bold text-slate-400">
                           {formatRegisteredDate(p.createdAt)} 등록
                         </span>
                       )}
-                    </div>
-                    <div className="text-[10px] font-medium text-slate-400 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-xs text-emerald-600">edit_note</span>
-                      <span>클릭하여 수동 등록 정보 수정</span>
                     </div>
                   </div>
 

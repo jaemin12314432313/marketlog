@@ -70,13 +70,18 @@ export default function App() {
 
   const [isFeedLoading, setIsFeedLoading] = useState(true);
 
-  // 상품 피드는 로그인 여부와 무관하게 백엔드에서 불러온다.
+  // 상품 피드는 로그인 여부와 무관하게 백엔드에서 불러온다. 처음 홈 탭에 들어올 때뿐
+  // 아니라, 다른 탭(지도/저장/내 정보)에 갔다가 다시 홈으로 돌아올 때마다도 새로
+  // 불러온다 — 그 사이 상인이 물건/가게 정보를 바꿨어도 화면을 나갔다 들어오면 바로
+  // 보이게 하기 위함. isFeedLoading은 최초 1회만 true였다가 false로 내려가므로, 재진입
+  // 때 다시 불러오는 동안 로딩 스켈레톤이 깜빡이며 다시 뜨지는 않는다.
   useEffect(() => {
+    if (activeTab !== "home") return;
     fetchFeed()
       .then(setProducts)
       .catch((err) => console.error("상품 피드를 불러오지 못했습니다.", err))
       .finally(() => setIsFeedLoading(false));
-  }, []);
+  }, [activeTab]);
 
   // 저장된 토큰이 있으면 앱을 새로 열 때마다 다시 로그인하지 않고 세션을 복원한다(자동로그인).
   // 토큰이 없거나 만료됐으면 로그인 화면을 강제로 띄운다(게스트 진입 불가).

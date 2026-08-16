@@ -127,7 +127,10 @@ export const StoreLocationThumbnail: React.FC<StoreLocationThumbnailProps> = ({
           <span className="text-[11px] text-slate-400 font-bold">위치 불러오는 중...</span>
         </div>
       )}
-      <span className="absolute bottom-2 right-2 px-2.5 py-1.5 rounded-full bg-white/95 shadow-md text-[11px] font-extrabold text-emerald-700 flex items-center gap-0.5 group-hover:bg-white transition-colors">
+      {/* 네이버 지도 필수 저작권 아이콘이 우하단에 뜨는데, 예전엔 이 배지도 같은 자리라
+          "지도 수정"을 누른다는 게 그 저작권 링크를 눌러 법적 고지 페이지로 튕기는 일이
+          있었다 — 겹치지 않게 우상단으로 옮긴다. */}
+      <span className="absolute top-2 right-2 px-2.5 py-1.5 rounded-full bg-white/95 shadow-md text-[11px] font-extrabold text-emerald-700 flex items-center gap-0.5 group-hover:bg-white transition-colors">
         지도 수정
         <span className="material-symbols-outlined text-sm">chevron_right</span>
       </span>
