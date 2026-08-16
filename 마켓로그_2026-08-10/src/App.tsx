@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import {
@@ -34,7 +34,7 @@ import { MyWallet } from "./components/MyWallet";
 import { SavedView } from "./components/SavedView";
 import { ProductDetailModal } from "./components/ProductDetailModal";
 import { BottomNav } from "./components/BottomNav";
-import { LoginModal, UserRole } from "./components/LoginModal";
+import { LoginModal, LoginModalHandle, UserRole } from "./components/LoginModal";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>("home");
@@ -52,6 +52,9 @@ export default function App() {
   // 앱은 항상 로그인 화면부터 시작한다. 저장된 토큰으로 세션이 복원되면(자동로그인)
   // 아래 useEffect에서 바로 false로 내려가고, 복원 실패/토큰 없음이면 true로 유지된다.
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
+  // 로그인 화면 안의 회원가입/아이디 찾기/비밀번호 찾기 화면 전환은 LoginModal 내부
+  // viewMode로만 관리돼서, 아래 하드웨어 뒤로가기 리스너가 그 상태를 알 방법이 ref뿐이다.
+  const loginModalRef = useRef<LoginModalHandle>(null);
   // 저장된 토큰으로 세션을 복원하는 동안 로그인 화면이 잠깐 번쩍였다 사라지는 걸 막기 위한 스플래시.
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [selectedRegion, setSelectedRegion] = useState<string>("전체");
@@ -146,7 +149,9 @@ export default function App() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const listener = CapacitorApp.addListener("backButton", () => {
-      if (isNotificationOpen) {
+      if (isLoginModalOpen && loginModalRef.current?.handleBackPress()) {
+        // 로그인 화면 안(회원가입/아이디 찾기/비밀번호 찾기)에서 처리됨 — 여기서 끝낸다.
+      } else if (isNotificationOpen) {
         setIsNotificationOpen(false);
       } else if (selectedProduct) {
         setSelectedProduct(null);
@@ -171,7 +176,7 @@ export default function App() {
     return () => {
       listener.then((l) => l.remove());
     };
-  }, [isNotificationOpen, selectedProduct, isAiScanOpen, activeTab, isMerchantFormDirty, mapReturnProduct, mapReturnTab]);
+  }, [isLoginModalOpen, isNotificationOpen, selectedProduct, isAiScanOpen, activeTab, isMerchantFormDirty, mapReturnProduct, mapReturnTab]);
 
   const handleLoginSuccess = (
     role: UserRole,
@@ -334,6 +339,7 @@ export default function App() {
   if (isLoginModalOpen) {
     return (
       <LoginModal
+        ref={loginModalRef}
         isOpen={isLoginModalOpen}
         onClose={() => setIsLoginModalOpen(false)}
         onLoginSuccess={handleLoginSuccess}

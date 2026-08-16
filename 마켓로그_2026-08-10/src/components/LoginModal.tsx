@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useImperativeHandle, useState } from "react";
 import {
   ApiError,
   findUsername,
@@ -36,12 +36,24 @@ interface LoginModalProps {
   isFullScreen?: boolean;
 }
 
-export const LoginModal: React.FC<LoginModalProps> = ({
+// 안드로이드 하드웨어 뒤로가기는 App.tsx의 전역 리스너 하나가 앱 상태를 보고 처리한다
+// (WebView 기본 히스토리 뒤로가기를 쓰면 갈 곳이 없어 바로 앱이 꺼져버리기 때문). 그런데
+// 회원가입/아이디 찾기/비밀번호 찾기 같은 화면 전환은 이 컴포넌트 안의 viewMode로만
+// 관리돼서, 전역 리스너가 그 존재를 몰라 뒤로가기를 누르면 로그인 화면이 아니라 곧장
+// 앱이 최소화돼버렸다. viewMode를 밖으로 끌어올리는 대신, 뒤로가기 처리 함수만 ref로
+// 노출해서 App.tsx가 "여기서 처리했는지"만 알 수 있게 한다.
+export interface LoginModalHandle {
+  // true를 반환하면 이 안에서 뒤로가기를 처리했다는 뜻(로그인 화면으로 돌아감) —
+  // App.tsx는 이때 자기 쪽 처리(앱 최소화 등)를 건너뛴다.
+  handleBackPress: () => boolean;
+}
+
+export const LoginModal = React.forwardRef<LoginModalHandle, LoginModalProps>(({
   isOpen,
   onClose,
   onLoginSuccess,
   isFullScreen = true,
-}) => {
+}, ref) => {
   const [viewMode, setViewMode] = useState<ViewMode>("login");
   const [selectedRole, setSelectedRole] = useState<UserRole>("customer");
 
@@ -236,6 +248,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     setFindPwName("");
     setFindPwPhone("");
   };
+
+  useImperativeHandle(ref, () => ({
+    handleBackPress: () => {
+      if (viewMode === "login") return false;
+      resetToLogin();
+      return true;
+    },
+  }));
 
   // Render Core Content per ViewMode
   const renderLoginBody = (isModal: boolean) => (
@@ -755,5 +775,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       </div>
     </div>
   );
-};
+});
+
+LoginModal.displayName = "LoginModal";
 
