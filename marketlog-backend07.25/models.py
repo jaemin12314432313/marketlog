@@ -21,6 +21,9 @@ class User(Base):
     display_name = Column(String, nullable=False)
     phone = Column(String, nullable=False, default="")
     shop_name = Column(String, nullable=True)
+    # 상인이 가입 시 고른 소속 전통시장(Market.id) — 상품/점포 등록이 전부 이 시장
+    # 기준으로 이뤄진다. null이면(기존 계정) "yangdong"으로 취급한다.
+    market_id = Column(String, nullable=True)
     # 마이 탭에서 고르는 프로필 아바타 — 아이콘/색상(주로 상인)과 실제 사진(주로 소비자)
     # 둘 다 저장 API가 없어서 화면을 나갔다 오면(탭 전환 시 MyWallet이 언마운트됨) 매번
     # 초기화되던 걸 고치기 위해 추가했다. profile_image는 data URL(base64)이라 Text로 둔다.

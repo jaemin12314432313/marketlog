@@ -169,11 +169,12 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
 
   const getAiRecommendations = (rawTitle: string, rawCategory: string, index: number) => {
     const name = rawTitle.trim() || `${rawCategory || "인기"} 상품`;
+    const market = marketName || "전통시장";
     const sets = [
       [
         `오늘 새벽 산지에서 직송되어 신선함이 남다른 ${name}입니다! 신선도와 맛이 최고예요 👍`,
-        `양동시장 단골 손님들이 가장 많이 찾으시는 인기 폭발 ${name}! 자신 있게 추천합니다 🔥`,
-        `가성비와 신선함 모두 잡았습니다. ${name} 오늘 특별 할인가로 양동시장에서 만나보세요 ✨`,
+        `${market} 단골 손님들이 가장 많이 찾으시는 인기 폭발 ${name}! 자신 있게 추천합니다 🔥`,
+        `가성비와 신선함 모두 잡았습니다. ${name} 오늘 특별 할인가로 ${market}에서 만나보세요 ✨`,
       ],
       [
         `산지 직송으로 밭/바다의 신선함을 그대로 담은 ${name}입니다. 선물용으로도 적극 추천합니다! 🎁`,
@@ -182,13 +183,13 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
       ],
       [
         `새벽 경매에서 최고의 품질로 낙찰받아 가져온 ${name}! 오늘 저녁 맛있는 식탁에 올려보세요 🍲`,
-        `믿고 먹는 양동시장 사장님 대표 상품! ${name} 제철이라 맛과 풍미가 더욱 풍부합니다 🌟`,
+        `믿고 먹는 ${market} 사장님 대표 상품! ${name} 제철이라 맛과 풍미가 더욱 풍부합니다 🌟`,
         `신선함은 기본, 푸짐한 양과 특가 혜택까지! ${name} 수량 소진 시 조기 마감됩니다 ⏳`,
       ],
       [
         `당도와 신선도 정밀 보장! ${name} 사장님이 품질만을 고집하여 정성껏 엄선하였습니다 👍`,
         `온 가족이 함께 안심하고 즐길 수 있는 산뜻한 ${name}, 맛과 신선도 모두 자신있게 추천드립니다 ❤️`,
-        `단골 고객들의 연이은 재구매 요청! ${name} 실물 보러 양동시장 매장으로 방문해 보세요 🛒`,
+        `단골 고객들의 연이은 재구매 요청! ${name} 실물 보러 ${market} 매장으로 방문해 보세요 🛒`,
       ],
     ];
     return sets[index % sets.length];
@@ -356,7 +357,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         origin,
         tags,
         shopName: shopName,
-        distance: existing?.distance || "양동전통시장 내 점포",
+        distance: existing?.distance || (marketName ? `${marketName} 내 점포` : ""),
         timeAgo: "방금 수정됨",
         price: numPrice,
         publicPrice: numPublicPrice,
@@ -389,7 +390,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         origin,
         tags,
         shopName: shopName,
-        distance: "양동전통시장 내 점포",
+        distance: marketName ? `${marketName} 내 점포` : "",
         timeAgo: "방금 전 등록",
         price: numPrice,
         publicPrice: numPublicPrice,

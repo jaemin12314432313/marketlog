@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from db import get_db
-from models import User
+from models import User, Market
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
@@ -59,6 +59,7 @@ def serialize_user(user: User) -> dict:
         "role": user.role,
         "displayName": user.display_name,
         "shopName": user.shop_name,
+        "marketId": user.market_id,
         "phone": user.phone,
         "avatarIcon": user.avatar_icon,
         "avatarColor": user.avatar_color,
@@ -73,6 +74,7 @@ class RegisterRequest(BaseModel):
     displayName: str
     phone: str
     shopName: Optional[str] = None
+    marketId: Optional[str] = None  # 상인 가입 시 고른 소속 전통시장(Market.id)
 
 
 class LoginRequest(BaseModel):
@@ -114,6 +116,10 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=409, detail="이미 사용 중인 아이디입니다.")
 
+    resolved_market_id = request.marketId or "yangdong"
+    if request.role == "merchant" and not db.query(Market).filter(Market.id == resolved_market_id).first():
+        raise HTTPException(status_code=400, detail="존재하지 않는 전통시장입니다.")
+
     user = User(
         username=request.username,
         password_hash=hash_password(request.password),
@@ -121,6 +127,7 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
         display_name=request.displayName,
         phone=request.phone,
         shop_name=request.shopName,
+        market_id=resolved_market_id if request.role == "merchant" else None,
     )
     db.add(user)
     db.commit()

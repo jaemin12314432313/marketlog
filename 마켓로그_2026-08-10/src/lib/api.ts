@@ -167,6 +167,7 @@ export interface AuthUser {
   role: "customer" | "merchant";
   displayName: string;
   shopName?: string | null;
+  marketId?: string | null;
   phone?: string | null;
   avatarIcon?: string | null;
   avatarColor?: string | null;
@@ -186,6 +187,7 @@ export function register(payload: {
   displayName: string;
   phone: string;
   shopName?: string;
+  marketId?: string;
 }): Promise<AuthResponse> {
   return apiFetch<AuthResponse>("/api/v1/auth/register", {
     method: "POST",

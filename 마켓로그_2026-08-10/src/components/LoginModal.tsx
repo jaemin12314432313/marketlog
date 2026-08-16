@@ -10,6 +10,7 @@ import {
   setStoreLocation,
 } from "../lib/api";
 import { StoreLocationPicker } from "./StoreLocationPicker";
+import { MARKETS_DATA } from "../data/initialData";
 
 function describeApiError(err: unknown, authFailMessage: string): string {
   if (err instanceof ApiError) {
@@ -33,7 +34,8 @@ interface LoginModalProps {
     shopName?: string,
     username?: string,
     phone?: string,
-    profileImage?: string
+    profileImage?: string,
+    marketId?: string
   ) => void;
   isFullScreen?: boolean;
 }
@@ -59,7 +61,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [signupPw, setSignupPw] = useState("");
   const [signupPwConfirm, setSignupPwConfirm] = useState("");
   const [signupPhone, setSignupPhone] = useState("");
-  const [signupShopName, setSignupShopName] = useState("");
+  const [signupMarketId, setSignupMarketId] = useState(MARKETS_DATA[0].id);
   const [agreeTerms, setAgreeTerms] = useState(true);
   const [signupSuccessMsg, setSignupSuccessMsg] = useState("");
   const [isSignupLocationPickerOpen, setIsSignupLocationPickerOpen] = useState(false);
@@ -111,7 +113,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         res.user.shopName ?? undefined,
         res.user.username,
         res.user.phone ?? undefined,
-        res.user.profileImage ?? undefined
+        res.user.profileImage ?? undefined,
+        res.user.marketId ?? undefined
       );
       onClose();
     } catch (err) {
@@ -152,11 +155,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       alert("서비스 이용약관에 동의해주세요.");
       return;
     }
-    if (selectedRole === "merchant" && !signupShopName.trim()) {
-      alert("점포 상호명을 입력해주세요.");
-      return;
-    }
-
     // 상인은 위치를 안 찍어두면 상품을 등록해도 지도에 안 뜨는 걸 나중에야 알게 되는
     // 경우가 많아서, 가입 절차 안에 위치 등록 단계를 넣는다(건너뛰기는 가능).
     if (selectedRole === "merchant") {
@@ -179,7 +177,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         role: selectedRole,
         displayName: signupName.trim(),
         phone: signupPhone.trim(),
-        shopName: selectedRole === "merchant" ? signupShopName.trim() : undefined,
+        marketId: selectedRole === "merchant" ? signupMarketId : undefined,
       });
 
       if (pin) {
@@ -297,7 +295,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         </h1>
 
         <p className="text-xs sm:text-sm font-bold text-[#0052FF]">
-          {viewMode === "login" && "신뢰 기반 AI 유통 전통시장 플랫폼"}
+          {viewMode === "login" && "전통시장의 경쟁력을 재생하는 상인·소비자 연결 플랫폼"}
           {viewMode === "signup" && "MarketLog 신규 회원가입"}
           {viewMode === "findId" && "아이디 찾기"}
           {viewMode === "findPw" && "비밀번호 찾기 / 재설정"}
@@ -551,17 +549,23 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 />
               </div>
 
-              {/* Shop Name if Merchant */}
+              {/* Market if Merchant — 이 상인의 상품/점포 등록이 전부 이 시장 기준으로
+                  이뤄진다. 실제 점포 데이터가 있는 곳은 광주 양동시장뿐이라 목록 맨
+                  앞에 둔다. */}
               {selectedRole === "merchant" && (
                 <div className="space-y-1 bg-blue-50/70 p-3 rounded-xl border border-blue-100">
-                  <label className="text-xs font-extrabold text-[#0052FF]">점포 상호명</label>
-                  <input
-                    type="text"
-                    value={signupShopName}
-                    onChange={(e) => setSignupShopName(e.target.value)}
-                    placeholder="예: 양동수산, 남도과일"
+                  <label className="text-xs font-extrabold text-[#0052FF]">소속 전통시장</label>
+                  <select
+                    value={signupMarketId}
+                    onChange={(e) => setSignupMarketId(e.target.value)}
                     className="w-full px-3 py-2 bg-white rounded-lg border border-slate-200 text-xs"
-                  />
+                  >
+                    {MARKETS_DATA.map((market) => (
+                      <option key={market.id} value={market.id}>
+                        {market.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
 
@@ -793,7 +797,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         setIsSignupLocationPickerOpen(false);
         completeRegistration();
       }}
-      marketName="광주 양동시장"
+      marketName={MARKETS_DATA.find((m) => m.id === signupMarketId)?.name || MARKETS_DATA[0].name}
       mode="pick"
       onPinPicked={(pin) => {
         setIsSignupLocationPickerOpen(false);

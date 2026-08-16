@@ -32,6 +32,7 @@ _pending_columns = {
         ("avatar_icon", "VARCHAR"),
         ("avatar_color", "VARCHAR"),
         ("profile_image", "TEXT"),
+        ("market_id", "VARCHAR"),
     ],
     "scanned_products": [("ai_summary", "VARCHAR")],
 }

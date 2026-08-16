@@ -86,16 +86,19 @@ function formatPhoneAsYouType(raw: string): string {
 // time input을 쓰면 형식이 항상 "HH:MM"으로 강제되므로, 나중에 "지금 영업 중" 필터를 붙일 때도
 // 이 값을 그대로 파싱해서 쓸 수 있다. 이 형식으로 못 쪼개는 기존 자유 입력 값은 통째로 비고로
 // 남겨서 데이터가 사라지지 않게 한다.
+// 시작/종료 시간을 둘 다 고르기 전(보통 시작 시간부터 먼저 고름)에도 방금 고른 값이
+// 사라지면 안 되므로, 시간 그룹을 둘 다 선택적으로 둬서 "06:00 - "나 " - 20:00"처럼
+// 한쪽만 채워진 상태도 그대로 저장/복원할 수 있게 한다.
 function parseShopHoursValue(value: string): { start: string; end: string; note: string } {
-  const match = value.trim().match(/^(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})\s*(?:\(([^)]*)\))?$/);
-  if (match) {
-    return { start: match[1], end: match[2], note: (match[3] || "").trim() };
+  const match = value.trim().match(/^(\d{1,2}:\d{2})?\s*-\s*(\d{1,2}:\d{2})?\s*(?:\(([^)]*)\))?$/);
+  if (match && (match[1] || match[2])) {
+    return { start: match[1] || "", end: match[2] || "", note: (match[3] || "").trim() };
   }
   return { start: "", end: "", note: value.trim() };
 }
 
 function buildShopHoursValue(start: string, end: string, note: string): string {
-  const range = start && end ? `${start} - ${end}` : "";
+  const range = start || end ? `${start} - ${end}` : "";
   const trimmedNote = note.trim();
   if (range && trimmedNote) return `${range} (${trimmedNote})`;
   return range || trimmedNote;
@@ -145,7 +148,7 @@ interface MyWalletProps {
 }
 
 export const MyWallet: React.FC<MyWalletProps> = ({
-  marketName = "광주 양동전통시장",
+  marketName = "",
   userRole = "customer",
   userDisplayName,
   userShopName = "",
@@ -172,7 +175,7 @@ export const MyWallet: React.FC<MyWalletProps> = ({
   const [locationVersion, setLocationVersion] = useState(0);
   const [shopInfo, setShopInfo] = useState({
     storeName: userShopName || initialShopName,
-    marketName: "광주 양동전통시장",
+    marketName,
     category: "",
     phone: "",
     hours: "",

@@ -5,7 +5,7 @@ import os
 import uuid
 
 from db import get_db
-from models import Product, Store, User, product_to_dict
+from models import Market, Product, Store, User, product_to_dict
 from api.auth import get_current_user
 
 router = APIRouter(tags=["Merchant"])
@@ -16,6 +16,17 @@ def require_merchant(current_user: User) -> str:
     if current_user.role != "merchant":
         raise HTTPException(status_code=403, detail="판매자 계정만 상품을 등록할 수 있습니다.")
     return current_user.shop_name or current_user.display_name
+
+
+def merchant_market_id(current_user: User) -> str:
+    """가입 시 고른 소속 전통시장 — 이 값 기준으로 점포/상품이 전부 그 시장에 묶인다.
+    market_id가 없는 기존 계정(이 필드가 생기기 전에 가입)은 "yangdong"으로 취급한다."""
+    return current_user.market_id or "yangdong"
+
+
+def market_region(db: Session, market_id: str) -> str:
+    market = db.query(Market).filter(Market.id == market_id).first()
+    return market.city if market else ""
 
 
 def resolve_store_id(db: Session, market_id: str, shop_name: str) -> "str | None":
@@ -63,7 +74,7 @@ class ProductIn(BaseModel):
     description: str = ""
     aiSummary: str | None = None
     isScannedProduct: bool = False
-    distance: str = "양동전통시장 내 점포"
+    distance: str = ""
     timeAgo: str = "방금 전 등록"
 
 
@@ -74,17 +85,19 @@ def create_product(
     db: Session = Depends(get_db),
 ):
     shop_name = require_merchant(current_user)
-    store = require_store_ready(db, "yangdong", shop_name)
+    market_id = merchant_market_id(current_user)
+    store = require_store_ready(db, market_id, shop_name)
+    market = db.query(Market).filter(Market.id == market_id).first()
     product = Product(
-        market_id="yangdong",
+        market_id=market_id,
         store_id=store.id,
-        region="광주광역시",
+        region=market.city if market else "",
         title=payload.title,
         unit=payload.unit,
         origin=payload.origin,
         tags=payload.tags,
         shop_name=shop_name,
-        distance=payload.distance,
+        distance=payload.distance or (f"{market.name} 내 점포" if market else ""),
         time_ago=payload.timeAgo,
         price=payload.price,
         public_price=payload.publicPrice,
@@ -175,9 +188,10 @@ def get_store_location(
     db: Session = Depends(get_db),
 ):
     shop_name = require_merchant(current_user)
+    market_id = merchant_market_id(current_user)
     store = (
         db.query(Store)
-        .filter(Store.market_id == "yangdong", Store.name == shop_name)
+        .filter(Store.market_id == market_id, Store.name == shop_name)
         .first()
     )
     if not store:
@@ -192,17 +206,19 @@ def set_store_location(
     db: Session = Depends(get_db),
 ):
     shop_name = require_merchant(current_user)
+    market_id = merchant_market_id(current_user)
     store = (
         db.query(Store)
-        .filter(Store.market_id == "yangdong", Store.name == shop_name)
+        .filter(Store.market_id == market_id, Store.name == shop_name)
         .first()
     )
     if store:
         store.lat = payload.lat
         store.lng = payload.lng
     else:
+        market = db.query(Market).filter(Market.id == market_id).first()
         store = Store(
-            market_id="yangdong",
+            market_id=market_id,
             name=shop_name,
             subtitle="상인 등록 점포",
             lat=payload.lat,
@@ -213,7 +229,7 @@ def set_store_location(
             grade="A",
             notice="",
             notice_time="",
-            alley="양동시장",
+            alley=market.name if market else "",
             story_text=f"{shop_name}은(는) 상인이 직접 지도에 등록한 점포입니다.",
         )
         db.add(store)
@@ -258,7 +274,7 @@ def get_store_profile(
     shop_name = require_merchant(current_user)
     store = (
         db.query(Store)
-        .filter(Store.market_id == "yangdong", Store.name == shop_name)
+        .filter(Store.market_id == merchant_market_id(current_user), Store.name == shop_name)
         .first()
     )
     if not store:
@@ -275,7 +291,7 @@ def update_store_profile(
     shop_name = require_merchant(current_user)
     store = (
         db.query(Store)
-        .filter(Store.market_id == "yangdong", Store.name == shop_name)
+        .filter(Store.market_id == merchant_market_id(current_user), Store.name == shop_name)
         .first()
     )
     if not store:
@@ -320,12 +336,13 @@ async def kakao_register(
     db: Session = Depends(get_db),
 ):
     shop_name = require_merchant(current_user)
+    market_id = merchant_market_id(current_user)
 
     # 나중에 Gemini API 연동할 자리
     product = Product(
-        market_id="yangdong",
-        store_id=resolve_store_id(db, "yangdong", shop_name),
-        region="광주광역시",
+        market_id=market_id,
+        store_id=resolve_store_id(db, market_id, shop_name),
+        region=market_region(db, market_id),
         title=request.chatText[:20] if request.chatText else "산지직송 싱싱한 제철 상품",
         shop_name=shop_name,
         distance="300m",
@@ -377,10 +394,11 @@ async def upload_product(
     with open(file_path, "wb") as buffer:
         buffer.write(contents)
 
+    market_id = merchant_market_id(current_user)
     product = Product(
-        market_id="yangdong",
-        store_id=resolve_store_id(db, "yangdong", shop_name),
-        region="광주광역시",
+        market_id=market_id,
+        store_id=resolve_store_id(db, market_id, shop_name),
+        region=market_region(db, market_id),
         title="AI 분석 상품",
         shop_name=shop_name,
         distance="300m",
