@@ -21,7 +21,6 @@ interface MapViewProps {
   // 있으면 이 시장의 실제 점포/등록 상품과 매칭해서 체크리스트 + 마커 강조 +
   // 내 위치에서 출발하는 최단 동선(직선거리 기준)을 보여준다.
   recipeIngredients?: string[] | null;
-  onClearRecipeIngredients?: () => void;
 }
 
 const NAVER_SCRIPT_ID = "naver-maps-sdk";
@@ -168,7 +167,6 @@ export const MapView: React.FC<MapViewProps> = ({
   onFocusHandled,
   onBack,
   recipeIngredients,
-  onClearRecipeIngredients,
 }) => {
   const [isPlayingDocent, setIsPlayingDocent] = useState(false);
   const [docentElapsedSec, setDocentElapsedSec] = useState(0);
@@ -182,6 +180,13 @@ export const MapView: React.FC<MapViewProps> = ({
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [activePin, setActivePin] = useState<string | null>(null);
   const [naverLoaded, setNaverLoaded] = useState(false);
+  // 체크리스트 X를 누르면 완전히 사라지는 대신 오른쪽에 작은 탭으로 접혀 있다가 다시
+  // 눌러서 펼칠 수 있게 한다 — 새로 다른 레시피로 들어오면(재료 목록이 바뀌면) 이전에
+  // 접어뒀던 상태가 남아있지 않게 펼친 상태로 초기화한다.
+  const [isRecipeChecklistMinimized, setIsRecipeChecklistMinimized] = useState(false);
+  useEffect(() => {
+    setIsRecipeChecklistMinimized(false);
+  }, [recipeIngredients]);
   const [stores, setStores] = useState<MapStorePin[]>([]);
   // 레시피 재료 매칭은 stores가 실제로 로드된 뒤에야 의미가 있다 — 로드되기 전에
   // "이 시장엔 없음"을 보여주면, 아직 확인도 안 했으면서 마치 없는 것처럼 단정하는
@@ -931,6 +936,18 @@ export const MapView: React.FC<MapViewProps> = ({
           위치 확인"으로 넘어왔을 때만 뜬다. 재료마다 이 시장에 실제로 파는 점포를 찾아
           체크로 보여주고, 매칭된 점포들을 잇는 도보 동선(직선거리 최근접 이웃)을 안내한다. */}
       {recipeIngredients && recipeIngredients.length > 0 && (
+        isRecipeChecklistMinimized ? (
+          /* 접힌 상태 — 완전히 닫아버리면(재료 목록을 아예 지워버리면) 다시 보고 싶을 때
+             레시피 상세로 되돌아가야만 해서, 오른쪽에 작은 탭으로만 접어두고 눌러서
+             다시 펼칠 수 있게 한다. */
+          <button
+            onClick={() => setIsRecipeChecklistMinimized(false)}
+            className="absolute top-[calc(6.5rem+env(safe-area-inset-top))] right-4 z-30 w-11 h-11 rounded-full bg-white shadow-xl border border-emerald-200 flex items-center justify-center text-emerald-600 active:scale-95 transition-transform"
+            title="레시피 장보기 체크리스트 펼치기"
+          >
+            <span className="material-symbols-outlined text-xl">checklist</span>
+          </button>
+        ) : (
         <div className="absolute top-[calc(6.5rem+env(safe-area-inset-top))] right-4 z-30 w-64 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-xl border border-[#E2E8F0] overflow-hidden">
           <div className="flex items-center justify-between px-3.5 py-2.5 bg-emerald-50 border-b border-emerald-100">
             <div className="flex items-center gap-1.5 min-w-0">
@@ -938,9 +955,9 @@ export const MapView: React.FC<MapViewProps> = ({
               <span className="text-xs font-extrabold text-emerald-800 truncate">레시피 장보기 체크리스트</span>
             </div>
             <button
-              onClick={onClearRecipeIngredients}
+              onClick={() => setIsRecipeChecklistMinimized(true)}
               className="text-emerald-700 hover:text-emerald-900 shrink-0"
-              title="체크리스트 닫기"
+              title="체크리스트 접기"
             >
               <span className="material-symbols-outlined text-lg">close</span>
             </button>
@@ -989,6 +1006,7 @@ export const MapView: React.FC<MapViewProps> = ({
             </div>
           )}
         </div>
+        )
       )}
 
       {/* Floating Action Map Controls (Left Middle) */}

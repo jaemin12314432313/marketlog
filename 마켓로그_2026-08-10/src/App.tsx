@@ -404,7 +404,6 @@ export default function App() {
             focusShopName={mapFocusShopName}
             onFocusHandled={() => setMapFocusShopName(null)}
             recipeIngredients={recipeIngredients}
-            onClearRecipeIngredients={() => setRecipeIngredients(null)}
             onBack={
               mapReturnProduct
                 ? () => {
@@ -412,6 +411,11 @@ export default function App() {
                     setMapReturnProduct(null);
                     setActiveTab(mapReturnTab ?? "home");
                     setMapReturnTab(null);
+                    // 레시피 재료 목록으로 온 게 아니었으면 이미 null이라 상관없고,
+                    // 레시피로 왔었다면 상품 상세로 돌아가는 순간 이 지도 방문은 끝난
+                    // 것이므로 같이 지운다 — 남겨두면 이후 무관한 경로로 다시 지도에
+                    // 들어왔을 때도 체크리스트가 계속 떠 있게 된다.
+                    setRecipeIngredients(null);
                   }
                 : undefined
             }
@@ -423,7 +427,10 @@ export default function App() {
             scannedProducts={scannedProducts}
             bookmarkedProducts={bookmarkedProducts}
             onSelectProduct={(p) => setSelectedProduct(p)}
-            onNavigateToMap={() => setActiveTab("map")}
+            onNavigateToMap={() => {
+              setRecipeIngredients(null);
+              setActiveTab("map");
+            }}
             onRemoveScannedProduct={handleRemoveScannedProduct}
             onRemoveBookmarkedProduct={handleRemoveBookmarkedProduct}
             isLoggedIn={Boolean(userUsername)}
@@ -437,7 +444,10 @@ export default function App() {
             marketName={merchantMarket?.name || ""}
             userMarketId={userMarketId}
             onMarketSelected={setUserMarketId}
-            onNavigateToMap={() => setActiveTab("map")}
+            onNavigateToMap={() => {
+              setRecipeIngredients(null);
+              setActiveTab("map");
+            }}
             userRole={userRole}
             userDisplayName={userDisplayName}
             userShopName={userShopName}
@@ -468,6 +478,9 @@ export default function App() {
             setMapReturnProduct(null);
             setMapReturnTab(null);
           }
+          // 하단 탭바로 지도 탭에 들어오는 건 레시피 추천 경로가 아니므로, 이전
+          // 레시피 체크리스트가 남아있었다면 여기서도 지운다.
+          setRecipeIngredients(null);
           setActiveTab(tab);
         }}
         onOpenAiScan={() => setIsAiScanOpen((prev) => !prev)}
@@ -502,6 +515,9 @@ export default function App() {
             setMapReturnTab(activeTab);
             setSelectedProduct(null);
             setActiveTab("map");
+            // 레시피 경로가 아닌 일반 "지도에서 위치 확인"이므로, 이전에 레시피로
+            // 들어왔을 때 남아있던 체크리스트가 여기서도 계속 뜨지 않게 지운다.
+            setRecipeIngredients(null);
           }}
           onNavigateToRecipeMap={(ingredients) => {
             setRecipeIngredients(ingredients);
