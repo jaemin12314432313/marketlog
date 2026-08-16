@@ -43,10 +43,7 @@ export default function App() {
   const [userShopName, setUserShopName] = useState<string>("");
   const [userUsername, setUserUsername] = useState<string>("");
   const [userPhone, setUserPhone] = useState<string>("");
-  // 마이 탭 프로필 아바타(아이콘/색상/사진) — 백엔드에 저장돼서 탭을 옮겼다 와도(MyWallet
-  // 언마운트) 유지된다.
-  const [userAvatarIcon, setUserAvatarIcon] = useState<string>("");
-  const [userAvatarColor, setUserAvatarColor] = useState<string>("");
+  // 마이 탭 프로필 사진 — 백엔드에 저장돼서 탭을 옮겼다 와도(MyWallet 언마운트) 유지된다.
   const [userProfileImage, setUserProfileImage] = useState<string>("");
   // 앱은 항상 로그인 화면부터 시작한다. 저장된 토큰으로 세션이 복원되면(자동로그인)
   // 아래 useEffect에서 바로 false로 내려가고, 복원 실패/토큰 없음이면 true로 유지된다.
@@ -97,8 +94,6 @@ export default function App() {
         setUserShopName(res.user.shopName || "");
         setUserUsername(res.user.username);
         setUserPhone(res.user.phone || "");
-        setUserAvatarIcon(res.user.avatarIcon || "");
-        setUserAvatarColor(res.user.avatarColor || "");
         setUserProfileImage(res.user.profileImage || "");
       })
       .catch(() => {
@@ -167,8 +162,6 @@ export default function App() {
     shopName?: string,
     username?: string,
     phone?: string,
-    avatarIcon?: string,
-    avatarColor?: string,
     profileImage?: string
   ) => {
     setUserRole(role);
@@ -176,8 +169,6 @@ export default function App() {
     setUserShopName(shopName || "");
     setUserUsername(username || "");
     setUserPhone(phone || "");
-    setUserAvatarIcon(avatarIcon || "");
-    setUserAvatarColor(avatarColor || "");
     setUserProfileImage(profileImage || "");
     setIsLoginModalOpen(false);
     setActiveTab("home");
@@ -190,8 +181,6 @@ export default function App() {
     setUserRole("customer");
     setUserUsername("");
     setUserPhone("");
-    setUserAvatarIcon("");
-    setUserAvatarColor("");
     setUserProfileImage("");
     setBookmarkedProducts([]);
     setScannedProducts([]);
@@ -424,8 +413,6 @@ export default function App() {
             userShopName={userShopName}
             userUsername={userUsername}
             userPhone={userPhone}
-            userAvatarIcon={userAvatarIcon}
-            userAvatarColor={userAvatarColor}
             userProfileImage={userProfileImage}
             isLoggedIn={Boolean(userUsername)}
             onOpenLogin={() => setIsLoginModalOpen(true)}
@@ -434,10 +421,6 @@ export default function App() {
             onProfileUpdated={(displayName, phone) => {
               setUserDisplayName(displayName);
               setUserPhone(phone);
-            }}
-            onAvatarStyleUpdated={(icon, color) => {
-              setUserAvatarIcon(icon);
-              setUserAvatarColor(color);
             }}
             onProfileImageUpdated={(image) => setUserProfileImage(image)}
           />

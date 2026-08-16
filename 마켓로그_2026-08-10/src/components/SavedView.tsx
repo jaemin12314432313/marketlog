@@ -29,6 +29,15 @@ function discountPercent(product: ProductItem): number | null {
   return percent > 0 ? percent : null;
 }
 
+// 원산지/단위를 따로따로 흩어놓는 대신, "[국내산 해남] 알배기 배추 1포기"처럼 하나의
+// 자연스러운 문장으로 합쳐서 보여준다 (HomeFeed와 동일 규칙).
+function formatProductDisplayTitle(product: ProductItem): string {
+  const originLabel = product.origin ? product.origin.replace(" · ", " ") : "";
+  const originPart = originLabel ? `[${originLabel}] ` : "";
+  const unitPart = product.unit ? ` ${product.unit}` : "";
+  return `${originPart}${product.title}${unitPart}`;
+}
+
 interface SavedViewProps {
   scannedProducts: ProductItem[];
   bookmarkedProducts: ProductItem[];
@@ -175,8 +184,7 @@ export const SavedView: React.FC<SavedViewProps> = ({
                                 가게명 대신, 실제로 있는 데이터인 카테고리를 라벨로 보여준다. */}
                             <p className="text-xs font-black text-[#0052FF] truncate">{product.category}</p>
                             <h3 className="text-sm sm:text-base font-extrabold text-[#0F172A] leading-snug line-clamp-2 group-hover:text-[#0052FF] transition-colors mt-0.5">
-                              {product.title}
-                              {product.unit && <span className="text-[#64748B] font-bold"> ({product.unit})</span>}
+                              {formatProductDisplayTitle(product)}
                             </h3>
                             {relativeTime && (
                               <p className="text-[11px] text-[#94A3B8] font-medium mt-0.5">{relativeTime}</p>
@@ -278,8 +286,7 @@ export const SavedView: React.FC<SavedViewProps> = ({
                               <p className="text-xs font-black text-[#0052FF] truncate">{product.shopName}</p>
                             )}
                             <h3 className="text-sm sm:text-base font-extrabold text-[#0F172A] leading-snug line-clamp-2 group-hover:text-[#0052FF] transition-colors mt-0.5">
-                              {product.title}
-                              {product.unit && <span className="text-[#64748B] font-bold"> ({product.unit})</span>}
+                              {formatProductDisplayTitle(product)}
                             </h3>
                             {relativeTime && (
                               <p className="text-[11px] text-[#94A3B8] font-medium mt-0.5">{relativeTime}</p>

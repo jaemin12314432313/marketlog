@@ -123,6 +123,8 @@ class Product(Base):
 
     title = Column(String, nullable=False)
     unit = Column(String, nullable=False, default="")  # 예: "1kg", "3개" — 상품명과 분리해서 저장
+    origin = Column(String, nullable=False, default="")  # 예: "국내산 · 완도" — "완도산 전복"처럼 상품명에 섞어 쓰지 않는다
+    tags = Column(String, nullable=False, default="")  # 쉼표로 이어붙인 해시태그, 예: "#달콤한,#산지직송"
     shop_name = Column(String, nullable=False)
     distance = Column(String, nullable=False, default="")
     time_ago = Column(String, nullable=False, default="")
@@ -149,6 +151,8 @@ def product_to_dict(product: Product) -> dict:
         "id": product.id,
         "title": product.title,
         "unit": product.unit,
+        "origin": product.origin,
+        "tags": product.tags,
         "shopName": product.shop_name,
         "distance": product.distance,
         "timeAgo": product.time_ago,

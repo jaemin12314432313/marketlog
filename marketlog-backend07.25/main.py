@@ -23,7 +23,11 @@ Base.metadata.create_all(bind=engine)
 # 파일에 없을 수 있는 컬럼은 여기서 직접 추가한다.
 _inspector = inspect(engine)
 _pending_columns = {
-    "products": [("unit", "VARCHAR NOT NULL DEFAULT ''")],
+    "products": [
+        ("unit", "VARCHAR NOT NULL DEFAULT ''"),
+        ("origin", "VARCHAR NOT NULL DEFAULT ''"),
+        ("tags", "VARCHAR NOT NULL DEFAULT ''"),
+    ],
     "users": [
         ("avatar_icon", "VARCHAR"),
         ("avatar_color", "VARCHAR"),

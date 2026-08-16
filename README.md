@@ -39,6 +39,25 @@ python -m uvicorn main:app --reload --port 8000
 - Swagger 문서: http://localhost:8000/docs
 - `DATABASE_URL`을 설정하면 Postgres(Neon 등)를, 안 하면 로컬 SQLite 파일(`marketlog.db`)을 자동으로 쓴다.
 
+### 백엔드 배포하기 (Cloud Run)
+
+**`git push`만으로는 배포되지 않는다** — 이 저장소엔 GitHub→Cloud Run 자동배포 트리거가 연결돼 있지 않다. 코드를 실제 운영 서버에 반영하려면 로컬에서 아래 명령을 직접 실행해야 한다.
+
+```bash
+cd marketlog-backend07.25
+
+# Windows에서 gcloud가 기본 python3.13과 안 맞아 깨지는 경우, Cloud SDK와 호환되는
+# 버전(3.12 등)을 먼저 지정해준다. macOS/Linux나 이미 맞는 버전이면 생략 가능.
+export CLOUDSDK_PYTHON="/path/to/python3.12"
+
+gcloud run deploy marketlog-backend --source . --region asia-northeast3
+```
+
+- 프로젝트: `marketlog-505311` / 서비스: `marketlog-backend` / 리전: `asia-northeast3`
+- Cloud Build가 `Dockerfile`로 이미지를 새로 빌드해서 Cloud Run에 새 리비전을 만들고, 자동으로 트래픽 100%를 그쪽으로 넘긴다. 배포는 보통 몇 분 걸린다.
+- 스키마(모델 컬럼)를 바꿨다면 별도 마이그레이션 명령 없이 이 배포만으로 충분하다 — 아래 "스키마 변경사항 반영" 참고.
+- 배포가 실제로 반영됐는지 확인하려면 `https://<서비스 URL>/api/health`가 아니라, 바뀐 필드가 실제 API 응답에 들어있는지(예: `/api/v1/auth/register` 응답에 새 필드가 있는지)로 확인하는 게 정확하다 — health 체크는 코드가 안 바뀌어도 항상 200을 반환한다.
+
 ## 프론트엔드 시작하기 (웹 미리보기)
 
 ```bash
@@ -70,12 +89,21 @@ JAVA_HOME="<JDK 21 경로>" ANDROID_HOME="<Android SDK 경로>" ./gradlew bundle
 
 | 모델 | 설명 |
 |---|---|
-| `User` | 아이디(`username`) + bcrypt 해시 비밀번호, `role`(customer/merchant), `phone`, `shop_name` |
+| `User` | 아이디(`username`) + bcrypt 해시 비밀번호, `role`(customer/merchant), `phone`, `shop_name`. `avatar_icon`/`avatar_color`/`profile_image`(마이 탭 프로필 사진, base64) |
 | `Market` | 시장 (양동/망원/자갈치). `id`가 프론트의 `marketId` 슬러그와 동일. 실데이터가 있는 곳은 양동시장뿐 |
 | `Store` | 시장 소속 점포. 광주광역시 공공데이터(463개 실점포) 기반 + 상인이 직접 지도에 핀을 찍어 등록한 점포. `phone`/`hours`/`story_text`가 채워져 있어야 그 점포 명의로 신규 상품 등록이 가능하다 |
-| `Product` | 상품 피드. `store_id`(FK)로 `Store`와 연결 — 등록 시 상인의 `shop_name`과 같은 이름의 `Store`를 자동 매칭 |
+| `Product` | 상품 피드. `store_id`(FK)로 `Store`와 연결 — 등록 시 상인의 `shop_name`과 같은 이름의 `Store`를 자동 매칭. `unit`(예: "1.5kg", 상품명과 분리), `origin`(예: "국내산 · 완도"), `tags`(쉼표로 이어붙인 해시태그) |
 | `Bookmark` | 유저별 찜한 `Product` 참조 |
-| `ScannedProduct` | 유저별 AI 스캔 저장목록 (상품 스냅샷 전체 저장) |
+| `ScannedProduct` | 유저별 AI 스캔 저장목록 (상품 스냅샷 전체 저장 + `ai_summary`) |
+
+### 스키마 변경사항 반영 (자동 마이그레이션)
+
+별도 마이그레이션 도구(Alembic 등)는 안 쓴다. `main.py`가 시작할 때마다:
+
+1. `Base.metadata.create_all()` — 아예 없는 테이블만 새로 만든다(기존 테이블은 안 건드림).
+2. `main.py`의 `_pending_columns` 딕셔너리를 보고, 거기 적힌 컬럼이 실제 테이블에 없으면 `ALTER TABLE ... ADD COLUMN`을 직접 실행한다.
+
+그래서 `models.py`에 컬럼을 추가했다면, `_pending_columns`에도 같은 컬럼을 등록해야 로컬 SQLite든 운영 Neon Postgres든 다음 시작(=다음 배포) 때 자동으로 반영된다. 배포 전에 DB에 수동으로 `ALTER TABLE`을 미리 돌려둘 필요는 없다 — 오히려 순서를 반대로 하면 안 된다(새 컬럼을 참조하는 코드가 먼저 배포되고 컬럼이 없으면 그 즉시 크래시).
 
 ## API 엔드포인트
 

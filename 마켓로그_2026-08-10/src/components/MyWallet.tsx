@@ -124,8 +124,6 @@ interface MyWalletProps {
   userShopName?: string;
   userUsername?: string;
   userPhone?: string;
-  userAvatarIcon?: string;
-  userAvatarColor?: string;
   userProfileImage?: string;
   isLoggedIn?: boolean;
   onOpenLogin?: () => void;
@@ -133,7 +131,6 @@ interface MyWalletProps {
   products?: ProductItem[];
   onUpdateShopName?: (newName: string) => void;
   onProfileUpdated?: (displayName: string, phone: string) => void;
-  onAvatarStyleUpdated?: (icon: string, color: string) => void;
   onProfileImageUpdated?: (image: string) => void;
 }
 
@@ -144,8 +141,6 @@ export const MyWallet: React.FC<MyWalletProps> = ({
   userShopName = "",
   userUsername = "",
   userPhone = "",
-  userAvatarIcon = "",
-  userAvatarColor = "",
   userProfileImage = "",
   isLoggedIn = false,
   onOpenLogin,
@@ -153,7 +148,6 @@ export const MyWallet: React.FC<MyWalletProps> = ({
   products = [],
   onUpdateShopName,
   onProfileUpdated,
-  onAvatarStyleUpdated,
   onProfileImageUpdated,
 }) => {
   // 상단 헤더에 쓰는 건 계정 표시 이름이다 — 점포 상세정보의 "상호명"과는 별개 값이라
@@ -186,13 +180,15 @@ export const MyWallet: React.FC<MyWalletProps> = ({
   );
   const [isEditingCustomerNickname, setIsEditingCustomerNickname] = useState(false);
   const [customerNicknameInput, setCustomerNicknameInput] = useState(customerNickname);
-  const [customerProfileImage, setCustomerProfileImage] = useState<string | null>(userProfileImage || null);
-  const customerFileInputRef = React.useRef<HTMLInputElement>(null);
+  // 사진 업로드는 상인/소비자 둘 다 같은 방식으로 쓰므로(마이 탭 아바타를 통일), 역할과
+  // 무관한 이름으로 둔다.
+  const [profileImage, setProfileImage] = useState<string | null>(userProfileImage || null);
+  const profileFileInputRef = React.useRef<HTMLInputElement>(null);
 
   // 로그인 직후엔 아직 fetchMe()가 안 끝나 프로필 아바타 props가 빈 값으로 들어왔다가 뒤늦게
   // 채워질 수 있어서, 값이 도착하면 화면에도 반영되게 동기화해준다.
   useEffect(() => {
-    if (userProfileImage) setCustomerProfileImage(userProfileImage);
+    if (userProfileImage) setProfileImage(userProfileImage);
   }, [userProfileImage]);
 
   // Personal Information Editing State — 실제 로그인한 유저의 진짜 정보를 사용한다.
@@ -272,13 +268,13 @@ export const MyWallet: React.FC<MyWalletProps> = ({
     }
   };
 
-  const handleCustomerImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProfileImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onloadend = async () => {
       const dataUrl = reader.result as string;
-      setCustomerProfileImage(dataUrl);
+      setProfileImage(dataUrl);
       try {
         await updateProfile({ profileImage: dataUrl });
         onProfileImageUpdated?.(dataUrl);
@@ -289,6 +285,24 @@ export const MyWallet: React.FC<MyWalletProps> = ({
       }
     };
     reader.readAsDataURL(file);
+    // 같은 파일을 다시 골라도 onChange가 또 발생하도록 값을 비워둔다.
+    e.target.value = "";
+  };
+
+  // 지금까지는 사진을 한 번 올리면 다른 사진으로 바꿀 수만 있고 아예 없앨 방법이
+  // 없었다 — 빈 문자열로 저장해서 "사진 없음(아이콘으로 표시)" 상태로 되돌린다.
+  const handleRemoveProfileImage = async () => {
+    const previous = profileImage;
+    setProfileImage(null);
+    try {
+      await updateProfile({ profileImage: "" });
+      onProfileImageUpdated?.("");
+      showToast("프로필 사진을 삭제했습니다.");
+    } catch (err) {
+      console.error(err);
+      setProfileImage(previous);
+      alert("프로필 사진 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.");
+    }
   };
 
   const handleSaveCustomerNickname = (e?: React.FormEvent) => {
@@ -304,45 +318,6 @@ export const MyWallet: React.FC<MyWalletProps> = ({
     }
     setIsEditingCustomerNickname(false);
   };
-
-  // User Profile Icon State — 저장된 값(userAvatarIcon/Color)이 있으면 그걸 쓰고,
-  // 한 번도 고른 적 없는 계정은 예전처럼 역할별 기본값을 보여준다.
-  const [selectedIcon, setSelectedIcon] = useState<string>(
-    userAvatarIcon || (userRole === "merchant" ? "storefront" : "person")
-  );
-  const [selectedBgGradient, setSelectedBgGradient] = useState<string>(
-    userAvatarColor || (userRole === "merchant" ? "from-emerald-500 to-teal-700" : "from-blue-600 to-indigo-700")
-  );
-  const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
-  const [isSavingAvatar, setIsSavingAvatar] = useState(false);
-
-  useEffect(() => {
-    if (userAvatarIcon) setSelectedIcon(userAvatarIcon);
-    if (userAvatarColor) setSelectedBgGradient(userAvatarColor);
-  }, [userAvatarIcon, userAvatarColor]);
-
-  // Available Icon & Color Options
-  const iconOptions = [
-    { id: "person", label: "사용자", icon: "person" },
-    { id: "storefront", label: "점포/매장", icon: "storefront" },
-    { id: "account_circle", label: "프로필", icon: "account_circle" },
-    { id: "badge", label: "신분증", icon: "badge" },
-    { id: "shopping_bag", label: "장보기", icon: "shopping_bag" },
-    { id: "phishing", label: "수산물", icon: "phishing" },
-    { id: "nutrition", label: "야채/식자재", icon: "nutrition" },
-    { id: "verified_user", label: "인증회원", icon: "verified_user" },
-    { id: "workspace_premium", label: "프리미엄", icon: "workspace_premium" },
-    { id: "eco", label: "친환경", icon: "eco" },
-  ];
-
-  const colorOptions = [
-    { id: "emerald", label: "에메랄드", gradient: "from-emerald-500 to-teal-700", border: "border-emerald-200" },
-    { id: "blue", label: "블루", gradient: "from-blue-600 to-indigo-700", border: "border-blue-200" },
-    { id: "amber", label: "엠버/오렌지", gradient: "from-amber-500 to-orange-600", border: "border-amber-200" },
-    { id: "purple", label: "퍼플", gradient: "from-purple-600 to-indigo-700", border: "border-purple-200" },
-    { id: "rose", label: "로즈", gradient: "from-rose-500 to-pink-600", border: "border-rose-200" },
-    { id: "slate", label: "다크 슬레이트", gradient: "from-slate-700 to-slate-900", border: "border-slate-300" },
-  ];
 
   // Edit form buffer
   const [editForm, setEditForm] = useState({ ...shopInfo });
@@ -525,26 +500,59 @@ export const MyWallet: React.FC<MyWalletProps> = ({
         </div>
       )}
 
+      {/* 상인/소비자 둘 다 같은 사진 업로드 입력을 공유한다 — 역할별 헤더 카드에서 ref로 연다. */}
+      <input
+        type="file"
+        ref={profileFileInputRef}
+        accept="image/*"
+        onChange={handleProfileImageUpload}
+        className="hidden"
+      />
+
       {/* Profile & Store Management Header Card */}
       {userRole === "merchant" ? (
         <section className="bg-white rounded-2xl p-5 border border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.05)] text-[#0F172A] relative overflow-hidden space-y-4">
           <div className="flex items-center justify-between gap-3.5">
             <div className="flex items-center gap-3.5 min-w-0">
-              <div
-                className="relative group cursor-pointer shrink-0"
-                onClick={() => setIsIconPickerOpen(true)}
-                title="프로필 아이콘 설정"
-              >
-                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${selectedBgGradient} text-white flex items-center justify-center shadow-md relative overflow-hidden transition-transform group-hover:scale-105`}>
-                  <span className="material-symbols-outlined text-3xl">{selectedIcon}</span>
+              {/* 소비자 쪽과 같은 방식(사진 직접 업로드)으로 맞췄다 — 사진이 없을 때만
+                  기존 아이콘/색상 커스터마이즈가 자리를 대신 채운다. */}
+              <div className="relative group shrink-0">
+                <div
+                  className="w-14 h-14 rounded-2xl overflow-hidden shadow-md relative cursor-pointer transition-transform group-hover:scale-105"
+                  onClick={() => profileFileInputRef.current?.click()}
+                  title="클릭하여 프로필 사진 선택"
+                >
+                  {profileImage ? (
+                    <img src={profileImage} alt="프로필 사진" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-400">
+                      <span className="material-symbols-outlined text-3xl">storefront</span>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                    <span className="material-symbols-outlined text-lg">add_a_photo</span>
+                  </div>
                 </div>
+
                 <button
                   type="button"
-                  className="absolute -bottom-1 -right-1 w-5 h-5 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-700 shadow-xs text-[10px]"
-                  title="아이콘 변경"
+                  onClick={() => profileFileInputRef.current?.click()}
+                  className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#0052FF] text-white border-2 border-white rounded-full flex items-center justify-center shadow-xs cursor-pointer hover:bg-blue-700 transition-colors"
+                  title="사진 추가"
                 >
-                  <span className="material-symbols-outlined text-[12px]">settings</span>
+                  <span className="material-symbols-outlined text-[11px]">add_a_photo</span>
                 </button>
+
+                {profileImage && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveProfileImage}
+                    className="absolute -bottom-1 -left-1 w-5 h-5 bg-white border border-rose-200 rounded-full flex items-center justify-center text-rose-500 shadow-xs cursor-pointer hover:bg-rose-50"
+                    title="사진 삭제"
+                  >
+                    <span className="material-symbols-outlined text-[11px]">close</span>
+                  </button>
+                )}
               </div>
               {/* 계정 표시 이름만 보여준다 — 상호명은 아래 "점포 상세 정보" 카드에서 따로 관리한다 */}
               <div className="min-w-0 flex-1">
@@ -567,25 +575,16 @@ export const MyWallet: React.FC<MyWalletProps> = ({
         </section>
       ) : (
         <section className="bg-surface-white rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-[#E2E8F0] p-4 flex items-center gap-4">
-          {/* File Input for Customer Image Upload */}
-          <input
-            type="file"
-            ref={customerFileInputRef}
-            accept="image/*"
-            onChange={handleCustomerImageUpload}
-            className="hidden"
-          />
-
           {/* User Profile Avatar with Direct Photo Selection */}
           <div className="relative group shrink-0">
             <div
               className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-slate-200 shadow-xs bg-slate-100 relative cursor-pointer group-hover:border-[#0052FF] transition-all flex items-center justify-center"
-              onClick={() => customerFileInputRef.current?.click()}
+              onClick={() => profileFileInputRef.current?.click()}
               title="클릭하여 원하는 프로필 사진 선택"
             >
-              {customerProfileImage ? (
+              {profileImage ? (
                 <img
-                  src={customerProfileImage}
+                  src={profileImage}
                   alt="프로필 사진"
                   className="w-full h-full object-cover"
                 />
@@ -601,12 +600,23 @@ export const MyWallet: React.FC<MyWalletProps> = ({
 
             <button
               type="button"
-              onClick={() => customerFileInputRef.current?.click()}
+              onClick={() => profileFileInputRef.current?.click()}
               className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#0052FF] text-white border-2 border-white rounded-full flex items-center justify-center shadow-xs cursor-pointer hover:bg-blue-700 transition-colors"
               title="원하는 사진 추가"
             >
               <span className="material-symbols-outlined text-[13px]">add_a_photo</span>
             </button>
+
+            {profileImage && (
+              <button
+                type="button"
+                onClick={handleRemoveProfileImage}
+                className="absolute -bottom-1 -left-1 w-6 h-6 bg-white border border-rose-200 rounded-full flex items-center justify-center text-rose-500 shadow-xs cursor-pointer hover:bg-rose-50"
+                title="사진 삭제"
+              >
+                <span className="material-symbols-outlined text-[13px]">close</span>
+              </button>
+            )}
           </div>
 
           {/* Profile Name & Editable Nickname */}
@@ -1121,112 +1131,6 @@ export const MyWallet: React.FC<MyWalletProps> = ({
             </form>
           )}
         </section>
-      )}
-
-      {/* Icon Picker Modal */}
-      {isIconPickerOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200">
-            {/* Modal Header */}
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-emerald-600">badge</span>
-                <h3 className="font-extrabold text-slate-900 text-base">프로필 아이콘 설정</h3>
-              </div>
-              <button
-                onClick={() => setIsIconPickerOpen(false)}
-                className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors"
-              >
-                <span className="material-symbols-outlined text-lg">close</span>
-              </button>
-            </div>
-
-            <div className="p-5 space-y-5">
-              {/* Preview Box */}
-              <div className="flex flex-col items-center justify-center space-y-2 py-3 bg-slate-50 rounded-2xl border border-slate-100">
-                <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${selectedBgGradient} text-white flex items-center justify-center shadow-lg`}>
-                  <span className="material-symbols-outlined text-4xl">{selectedIcon}</span>
-                </div>
-                <span className="text-xs font-bold text-slate-600">미리보기</span>
-              </div>
-
-              {/* Icon Choice Grid */}
-              <div className="space-y-2">
-                <label className="text-xs font-extrabold text-slate-700 block">아이콘 선택</label>
-                <div className="grid grid-cols-5 gap-2">
-                  {iconOptions.map((opt) => {
-                    const isSelected = selectedIcon === opt.icon;
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => setSelectedIcon(opt.icon)}
-                        className={`p-2 rounded-xl flex flex-col items-center justify-center gap-1 border transition-all cursor-pointer ${
-                          isSelected
-                            ? "border-emerald-500 bg-emerald-50/80 text-emerald-700 ring-2 ring-emerald-500/20 shadow-xs"
-                            : "border-slate-200 hover:bg-slate-50 text-slate-600"
-                        }`}
-                        title={opt.label}
-                      >
-                        <span className="material-symbols-outlined text-2xl">{opt.icon}</span>
-                        <span className="text-[9px] font-bold truncate max-w-full">{opt.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Color Gradient Choice Grid */}
-              <div className="space-y-2">
-                <label className="text-xs font-extrabold text-slate-700 block">배경 색상 선택</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {colorOptions.map((color) => {
-                    const isSelected = selectedBgGradient === color.gradient;
-                    return (
-                      <button
-                        key={color.id}
-                        type="button"
-                        onClick={() => setSelectedBgGradient(color.gradient)}
-                        className={`p-2 rounded-xl border flex items-center gap-2 cursor-pointer transition-all ${
-                          isSelected
-                            ? "border-emerald-500 ring-2 ring-emerald-500/20 bg-slate-50 font-extrabold text-slate-900"
-                            : "border-slate-200 text-slate-600 hover:bg-slate-50 font-bold"
-                        }`}
-                      >
-                        <span className={`w-5 h-5 rounded-full bg-gradient-to-br ${color.gradient} shrink-0 shadow-xs`}></span>
-                        <span className="text-[11px] truncate">{color.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <button
-                type="button"
-                disabled={isSavingAvatar}
-                onClick={async () => {
-                  setIsSavingAvatar(true);
-                  try {
-                    await updateProfile({ avatarIcon: selectedIcon, avatarColor: selectedBgGradient });
-                    onAvatarStyleUpdated?.(selectedIcon, selectedBgGradient);
-                    setIsIconPickerOpen(false);
-                    showToast("프로필 아이콘이 성공적으로 변경되었습니다.");
-                  } catch (err) {
-                    console.error(err);
-                    alert("프로필 아이콘 저장에 실패했습니다. 잠시 후 다시 시도해주세요.");
-                  } finally {
-                    setIsSavingAvatar(false);
-                  }
-                }}
-                className="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-extrabold text-xs shadow-md transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <span className="material-symbols-outlined text-base">check_circle</span>
-                <span>{isSavingAvatar ? "저장 중..." : "아이콘 변경 완료"}</span>
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Store Location Picker Modal */}

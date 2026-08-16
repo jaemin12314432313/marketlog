@@ -32,6 +32,15 @@ function discountPercent(product: ProductItem): number | null {
   return percent > 0 ? percent : null;
 }
 
+// 원산지/단위를 따로따로 뱃지로 흩어놓는 대신, "[국내산 해남] 알배기 배추 1포기"처럼
+// 하나의 자연스러운 문장으로 합쳐서 보여준다 (HomeFeed와 동일 규칙).
+function formatProductDisplayTitle(product: ProductItem): string {
+  const originLabel = product.origin ? product.origin.replace(" · ", " ") : "";
+  const originPart = originLabel ? `[${originLabel}] ` : "";
+  const unitPart = product.unit ? ` ${product.unit}` : "";
+  return `${originPart}${product.title}${unitPart}`;
+}
+
 interface ProductDetailModalProps {
   product: ProductItem | null;
   marketInfo: MarketInfo;
@@ -550,14 +559,26 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 </div>
 
                 <h2 className="text-xl sm:text-2xl font-black text-[#0F172A] leading-snug">
-                  {product.title}
-                  {product.unit && <span className="text-[#94A3B8] font-bold"> ({product.unit})</span>}
+                  {formatProductDisplayTitle(product)}
                 </h2>
 
                 {formatRelativeTime(product.createdAt) && (
                   <p className="text-[11px] text-[#94A3B8] font-medium">
                     {formatRelativeTime(product.createdAt)} 등록
                   </p>
+                )}
+
+                {product.tags && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {product.tags.split(",").filter(Boolean).map((tag) => (
+                      <span
+                        key={tag}
+                        className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
                 )}
 
                 {/* Price Display: 실제 판매가 & 공공 판매가 */}

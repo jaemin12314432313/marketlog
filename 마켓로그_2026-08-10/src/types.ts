@@ -8,6 +8,8 @@ export interface ProductItem {
   id: string;
   title: string;
   unit: string; // 예: "1kg", "3개" — 상품명과 분리해서 저장
+  origin: string; // 예: "국내산 · 완도" — "완도산 전복"처럼 상품명에 섞어 쓰지 않는다
+  tags: string; // 쉼표로 이어붙인 해시태그, 예: "#달콤한,#산지직송"
   shopName: string;
   distance: string;
   timeAgo: string;

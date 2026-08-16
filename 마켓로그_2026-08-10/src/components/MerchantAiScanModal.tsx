@@ -156,6 +156,8 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
         id: `merchant-ai-${Date.now()}`,
         title: data.productName,
         unit: "",
+        origin: "",
+        tags: "",
         category: data.category as any,
         price: data.sellingPrice || 0,
         publicPrice: data.publicMarketPrice,

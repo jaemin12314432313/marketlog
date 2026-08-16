@@ -49,6 +49,8 @@ def require_store_ready(db: Session, market_id: str, shop_name: str) -> Store:
 class ProductIn(BaseModel):
     title: str
     unit: str = ""  # 예: "1kg", "3개" — 상품명과 분리해서 저장
+    origin: str = ""  # 예: "국내산 · 완도" — "완도산 전복"처럼 상품명에 섞어 쓰지 않는다
+    tags: str = ""  # 쉼표로 이어붙인 해시태그, 예: "#달콤한,#산지직송"
     category: str = "AI 추천상품"
     price: int = Field(gt=0)
     publicPrice: int = Field(0, ge=0)
@@ -79,6 +81,8 @@ def create_product(
         region="광주광역시",
         title=payload.title,
         unit=payload.unit,
+        origin=payload.origin,
+        tags=payload.tags,
         shop_name=shop_name,
         distance=payload.distance,
         time_ago=payload.timeAgo,
@@ -118,6 +122,8 @@ def update_product(
 
     product.title = payload.title
     product.unit = payload.unit
+    product.origin = payload.origin
+    product.tags = payload.tags
     product.distance = payload.distance
     product.time_ago = payload.timeAgo
     product.price = payload.price

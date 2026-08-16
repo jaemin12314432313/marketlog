@@ -17,16 +17,15 @@ function displayGrade(grade: string): string {
 
 // 상품명에 "완도산 전복 (1kg)"처럼 무게/수량을 같이 적어버리면 공공시세 비교 같은 걸 짤 때
 // 텍스트를 파싱해야 해서 애를 먹는다 — 그래서 단위를 상품명과 분리된 필드로 따로 받는다.
-const PRODUCT_UNIT_OPTIONS = ["kg", "g", "개", "마리", "단", "봉지", "박스", "근"];
+// 단위는 항상 kg로 고정한다 — 상인마다 개/포기/마리 등 다른 단위를 쓰면 공공시세(kg 기준)
+// 대비 할인율 비교가 서로 다른 기준으로 뒤섞여서 의미가 없어진다.
+const PRODUCT_UNIT = "kg";
 
-// 상품 목록에 저장된 "1kg" 같은 값을 다시 [수량 입력칸]/[단위 드롭다운]으로 풀어서 보여준다.
-// 이 UI로 만들어진 게 아닌(과거) 값은 단위를 못 알아볼 수 있어 그때는 기본값으로 되돌린다.
-function parseProductUnit(unit: string): { amount: string; label: string } {
-  const match = unit.trim().match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
-  if (match && PRODUCT_UNIT_OPTIONS.includes(match[2].trim())) {
-    return { amount: match[1], label: match[2].trim() };
-  }
-  return { amount: "1", label: PRODUCT_UNIT_OPTIONS[0] };
+// 상품 목록에 저장된 "1.5kg" 같은 값에서 수량만 다시 뽑아 입력칸에 채워준다. 예전에
+// 다른 단위(개/포기 등)로 저장된 값이어도 앞의 숫자만 취하고 단위는 kg로 맞춘다.
+function parseProductUnitAmount(unit: string): string {
+  const match = unit.trim().match(/^(\d+(?:\.\d+)?)/);
+  return match ? match[1] : "1";
 }
 
 // 가격 입력창에 숫자를 치면 바로 천 단위 콤마가 붙게 한다 — 0을 잘못 눌러도 자릿수가
@@ -35,6 +34,44 @@ function formatPriceInput(raw: string): string {
   const digits = raw.replace(/[^0-9]/g, "");
   if (!digits) return "";
   return Number(digits).toLocaleString();
+}
+
+// 원산지도 상품명에 "완도산"처럼 수식어로 섞어 쓰지 않고 별도 필드로 받는다 —
+// 대분류(국내산/수입산) + 상세 지역(선택)을 "국내산 · 완도" 형태 문자열로 합쳐 저장한다.
+const PRODUCT_ORIGIN_OPTIONS = ["국내산", "수입산"];
+
+function parseProductOrigin(origin: string): { type: string; detail: string } {
+  const trimmed = origin.trim();
+  if (!trimmed) return { type: PRODUCT_ORIGIN_OPTIONS[0], detail: "" };
+  const match = trimmed.match(/^(.+?)\s*·\s*(.+)$/);
+  if (match && PRODUCT_ORIGIN_OPTIONS.includes(match[1].trim())) {
+    return { type: match[1].trim(), detail: match[2].trim() };
+  }
+  if (PRODUCT_ORIGIN_OPTIONS.includes(trimmed)) {
+    return { type: trimmed, detail: "" };
+  }
+  return { type: PRODUCT_ORIGIN_OPTIONS[0], detail: trimmed };
+}
+
+function buildProductOrigin(type: string, detail: string): string {
+  const trimmedDetail = detail.trim();
+  return trimmedDetail ? `${type} · ${trimmedDetail}` : type;
+}
+
+// 카테고리별로 AI가 골라줄 법한 짧은 키워드 태그 — getAiRecommendations(문장 3개)와는 별개로,
+// 상품 설명 아래에 다중 선택 칩으로 보여준다. 스캔 전엔 이 중 앞 3개를 회색 스켈레톤으로
+// 미리 보여주고, 스캔 후엔 카테고리에 맞는 실제 태그 세트가 활성화된다.
+const AI_TAG_SUGGESTIONS: Record<string, string[]> = {
+  수산물: ["#싱싱한", "#당일조업", "#쫄깃한", "#손질완료", "#자연산"],
+  정육: ["#육즙가득", "#부드러운", "#당일정육", "#1등급", "#숙성"],
+  과일: ["#달콤한", "#아삭한", "#당도높은", "#산지직송", "#제철과일"],
+  야채: ["#아삭한", "#무농약", "#신선한", "#산지직송", "#유기농"],
+  건어물: ["#바삭한", "#감칠맛", "#자연건조", "#짭짤한", "#고소한"],
+};
+const AI_TAG_SUGGESTIONS_DEFAULT = ["#신선한", "#산지직송", "#인기상품", "#오늘특가"];
+
+function getAiRecommendedTags(rawCategory: string): string[] {
+  return AI_TAG_SUGGESTIONS[rawCategory] || AI_TAG_SUGGESTIONS_DEFAULT;
 }
 
 interface MerchantViewProps {
@@ -88,18 +125,25 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     refreshStoreReadiness();
   }, []);
 
-  // Form states for manual registration
-  const [isFormOpen, setIsFormOpen] = useState(true);
+  // Form states for manual registration — 기본은 접힌 상태로 시작해서, 앱을 열자마자
+  // 등록 폼이 화면을 다 채우는 대신 아래 "등록된 상품 리스트"부터 스크롤 없이 보이게 한다.
+  // 새 상품을 등록할 때만 눌러서 펼치면 된다.
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  // 등록 상품 리스트도 아코디언으로 접었다 펼 수 있게 한다 — 기본은 펼쳐둬서(등록 폼과
+  // 반대) 굳이 눌러야만 상품 목록이 보이는 일은 없게 한다.
+  const [isProductListOpen, setIsProductListOpen] = useState(true);
   const [isMerchantScanOpen, setIsMerchantScanOpen] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<ProductItem | null>(null);
   const [title, setTitle] = useState("");
   const [unitAmount, setUnitAmount] = useState("1");
-  const [unitLabel, setUnitLabel] = useState(PRODUCT_UNIT_OPTIONS[0]);
+  const [originType, setOriginType] = useState(PRODUCT_ORIGIN_OPTIONS[0]);
+  const [originDetail, setOriginDetail] = useState("");
   const [category, setCategory] = useState<ProductItem["category"]>("수산물");
   const [price, setPrice] = useState<number | "">("");
   const [publicPrice, setPublicPrice] = useState<number | "">("");
   const [description, setDescription] = useState("");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [grade, setGrade] = useState<ProductItem["grade"]>("A+");
   const [freshnessScore, setFreshnessScore] = useState<number>(95);
   const [defectScore, setDefectScore] = useState<number>(2);
@@ -157,13 +201,15 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
   const handleEditProduct = (p: ProductItem) => {
     setEditingProductId(p.id);
     setTitle(p.title);
-    const parsedUnit = parseProductUnit(p.unit || "");
-    setUnitAmount(parsedUnit.amount);
-    setUnitLabel(parsedUnit.label);
+    setUnitAmount(parseProductUnitAmount(p.unit || ""));
+    const parsedOrigin = parseProductOrigin(p.origin || "");
+    setOriginType(parsedOrigin.type);
+    setOriginDetail(parsedOrigin.detail);
     setCategory(p.category);
     setPrice(p.price);
     setPublicPrice(p.publicPrice || "");
     setDescription(p.description || "");
+    setSelectedTags(p.tags ? p.tags.split(",").filter(Boolean) : []);
     setGrade(p.grade || "A+");
     setFreshnessScore(p.freshnessScore || 95);
     setDefectScore(p.defectScore ?? 2);
@@ -192,11 +238,13 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     setEditingProductId(null);
     setTitle("");
     setUnitAmount("1");
-    setUnitLabel(PRODUCT_UNIT_OPTIONS[0]);
+    setOriginType(PRODUCT_ORIGIN_OPTIONS[0]);
+    setOriginDetail("");
     setCategory("수산물");
     setPrice("");
     setPublicPrice("");
     setDescription("");
+    setSelectedTags([]);
     setGrade("A+");
     setFreshnessScore(95);
     setDefectScore(2);
@@ -224,7 +272,8 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         setImageUrl(base64);
         setTitle(data.productName);
         setUnitAmount("1");
-        setUnitLabel(PRODUCT_UNIT_OPTIONS[0]);
+        setOriginType(PRODUCT_ORIGIN_OPTIONS[0]);
+        setOriginDetail("");
         setCategory(data.category as ProductItem["category"]);
         setPrice(data.sellingPrice || 0);
         setPublicPrice(data.publicMarketPrice);
@@ -233,7 +282,11 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         setDefectScore(data.defectScore);
         setUniformityScore(data.uniformityScore);
         setAiSummary(data.aiAnalysisSummary);
-        setDescription("");
+        // 스캔이 끝나면 추천 문구 중 하나를 바로 채워서 상인이 굳이 카드를 눌러
+        // 고르지 않아도 되게 한다 — 마음에 안 들면 아래 카드에서 다른 걸 고르거나
+        // 텍스트를 직접 고쳐도 된다.
+        setDescription(getAiRecommendations(data.productName, data.category, 0)[0]);
+        setSelectedTags([]);
       } catch (err) {
         console.error(err);
         alert("AI 분석에 실패했습니다. 잠시 후 다시 시도해주세요.");
@@ -242,6 +295,10 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  const toggleTag = (tag: string) => {
+    setSelectedTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
   };
 
   const handleSubmitManual = async (e: React.FormEvent) => {
@@ -268,7 +325,9 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     const numPublicPrice = publicPrice ? Number(publicPrice) : Math.round(numPrice * 1.2);
     const diffPercent = Math.round(((numPublicPrice - numPrice) / numPublicPrice) * 100);
     const priceTag = diffPercent > 0 ? `공공 시세 대비 ${diffPercent}% 저렴` : "시세 적정가";
-    const unit = unitAmount.trim() ? `${unitAmount.trim()}${unitLabel}` : "";
+    const unit = unitAmount.trim() ? `${unitAmount.trim()}${PRODUCT_UNIT}` : "";
+    const origin = buildProductOrigin(originType, originDetail);
+    const tags = selectedTags.join(",");
 
     const finalImage =
       imageUrl.trim() ||
@@ -280,6 +339,8 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         id: editingProductId,
         title: title.trim(),
         unit,
+        origin,
+        tags,
         shopName: shopName,
         distance: existing?.distance || "양동전통시장 내 점포",
         timeAgo: "방금 수정됨",
@@ -311,6 +372,8 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         id: `merchant-prod-${Date.now()}`,
         title: title.trim(),
         unit,
+        origin,
+        tags,
         shopName: shopName,
         distance: "양동전통시장 내 점포",
         timeAgo: "방금 전 등록",
@@ -448,80 +511,6 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
             ) : (
               <span className="text-[11px] font-medium text-slate-400">* 필수항목</span>
             )}
-          </div>
-
-          {/* Product Name — 무게/수량은 아래 "단위" 필드로 따로 받는다. 상품명에 섞어 쓰면
-              나중에 공공시세 비교 같은 걸 짤 때 텍스트를 파싱해야 해서 애를 먹는다. */}
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-700">상품명 *</label>
-            <input
-              type="text"
-              placeholder="예: 완도산 전복"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
-              required
-            />
-          </div>
-
-          {/* Unit / Weight */}
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-700">단위/중량</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder="1"
-                value={unitAmount}
-                onChange={(e) => setUnitAmount(e.target.value.replace(/[^0-9.]/g, ""))}
-                className="w-20 shrink-0 px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
-              />
-              <select
-                value={unitLabel}
-                onChange={(e) => setUnitLabel(e.target.value)}
-                className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium bg-white"
-              >
-                {PRODUCT_UNIT_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Category & Price */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">카테고리</label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value as ProductItem["category"])}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium bg-white"
-              >
-                <option value="수산물">수산물</option>
-                <option value="과일">과일</option>
-                <option value="야채">야채</option>
-                <option value="정육">정육</option>
-                <option value="건어물">건어물</option>
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">판매 가격 (원) *</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                placeholder="예: 15,000"
-                value={price === "" ? "" : price.toLocaleString()}
-                onChange={(e) => {
-                  const digits = e.target.value.replace(/[^0-9]/g, "");
-                  setPrice(digits === "" ? "" : Number(digits));
-                }}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
-                required
-              />
-            </div>
           </div>
 
           {/* Integrated AI Scan & Representative Photo Preview */}
@@ -673,20 +662,140 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
             )}
           </div>
 
+          {/* Product Name — AI 스캔이 사진에서 직접 읽어 채워주는 값이라 직접 타이핑은 막는다.
+              상인이 다르게 적어버리면 실제 사진과 등록 정보가 어긋날 수 있어서다. 무게/수량,
+              원산지는 각각 아래 별도 필드로 받는다. */}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-700">상품명 *</label>
+            <input
+              type="text"
+              placeholder="AI 스캔을 하면 자동으로 채워집니다"
+              value={title}
+              disabled
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-xs text-slate-500 font-medium cursor-not-allowed"
+              required
+            />
+          </div>
+
+          {/* Origin & Price — 카테고리는 AI가 골라주는 값을 화면에 굳이 또 보여줄 필요가
+              없어서 뺐고(내부적으로는 그대로 쓰임), 대신 원산지랑 가격을 한 줄에 같이 뒀다. */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700">원산지 *</label>
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={originType}
+                  onChange={(e) => setOriginType(e.target.value)}
+                  className="w-20 shrink-0 px-2 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium bg-white"
+                >
+                  {PRODUCT_ORIGIN_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  placeholder="완도"
+                  value={originDetail}
+                  onChange={(e) => setOriginDetail(e.target.value)}
+                  className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700">판매 가격 (원) *</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="예: 15,000"
+                value={price === "" ? "" : price.toLocaleString()}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/[^0-9]/g, "");
+                  setPrice(digits === "" ? "" : Number(digits));
+                }}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                required
+              />
+            </div>
+          </div>
+
+          {/* Unit / Weight — 공공시세(kg 기준) 대비 할인율이 정확히 계산되도록 단위를
+              kg 하나로 고정한다. 개/포기/마리처럼 상인마다 다른 단위를 쓰면 서로 다른
+              기준으로 가격을 비교하게 돼서 할인율이 의미 없어진다. */}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-slate-700">단위/중량 * (kg 기준)</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="1"
+                value={unitAmount}
+                onChange={(e) => setUnitAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+                className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+              />
+              <span className="w-16 shrink-0 text-center px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-xs text-slate-600 font-bold">
+                kg
+              </span>
+            </div>
+          </div>
+
           {/* Description */}
           <div className="space-y-2">
             <label className="text-xs font-bold text-slate-700 block">상품 설명 / 특이사항</label>
 
             <textarea
               rows={2}
-              placeholder="직접 입력하거나 아래 AI 추천 설명을 클릭하여 빠르게 선택하세요..."
+              placeholder={
+                aiSummary
+                  ? "직접 입력하거나 아래 AI 추천 설명을 클릭하여 빠르게 선택하세요..."
+                  : "AI 스캔을 완료하면 알맞은 설명을 추천해 드립니다."
+              }
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium resize-none"
             />
 
-            {/* AI Recommendation Cards Section - Only show when image is registered or scanned */}
-            {Boolean(imageUrl) && (
+            {/* 스캔 전엔 눌러도 아무 반응 없는 회색 스켈레톤 태그로 "스캔하면 이런 게
+                생긴다"는 걸 미리 보여주고, 스캔이 끝나면 카테고리에 맞는 실제 태그
+                4~5개가 다중 선택 가능한 칩으로 바뀐다 — 갑자기 나타나는 것보다 자리가
+                미리 있는 게 덜 낯설다. */}
+            {!aiSummary ? (
+              <div className="flex flex-wrap gap-1.5">
+                {["#달콤한", "#산지직송", "#오늘아침수확"].map((tag) => (
+                  <span
+                    key={tag}
+                    className="px-2.5 py-1 rounded-full border border-slate-200 bg-slate-100 text-slate-400 text-[11px] font-bold cursor-not-allowed select-none"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {getAiRecommendedTags(category).map((tag) => {
+                  const isSelected = selectedTags.includes(tag);
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => toggleTag(tag)}
+                      className={`px-2.5 py-1 rounded-full border text-[11px] font-bold transition-all cursor-pointer active:scale-95 ${
+                        isSelected
+                          ? "bg-emerald-600 border-emerald-600 text-white"
+                          : "bg-white border-slate-200 text-slate-600 hover:border-emerald-300 hover:bg-emerald-50"
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* AI Recommendation Cards Section - 실제 스캔이 끝나야(aiSummary) 뜬다 */}
+            {Boolean(aiSummary) && (
               <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3 space-y-2.5 animate-in fade-in duration-200">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-extrabold text-emerald-900 flex items-center gap-1">
@@ -761,15 +870,24 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
 
       {/* Registered Products Section */}
       <section className="space-y-3">
-        <div className="flex justify-between items-center">
+        <button
+          type="button"
+          onClick={() => setIsProductListOpen((v) => !v)}
+          className="w-full flex justify-between items-center cursor-pointer"
+        >
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
             <span className="material-symbols-outlined text-base text-slate-700">inventory_2</span>
             사장님 등록 상품 ({merchantProducts.length})
           </h3>
-          <span className="text-[11px] text-slate-400 font-medium">클릭 시 상세정보 수정</span>
-        </div>
+          <span className="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
+            {isProductListOpen && "클릭 시 상세정보 수정"}
+            <span className="material-symbols-outlined text-lg text-slate-500">
+              {isProductListOpen ? "keyboard_arrow_up" : "keyboard_arrow_down"}
+            </span>
+          </span>
+        </button>
 
-        {merchantProducts.length === 0 ? (
+        {isProductListOpen && (merchantProducts.length === 0 ? (
           <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-8 text-center space-y-3">
             <div className="w-12 h-12 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto text-2xl">
               <span className="material-symbols-outlined">storefront</span>
@@ -868,7 +986,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
               );
             })}
           </div>
-        )}
+        ))}
       </section>
 
       {/* Delete Confirmation Modal */}
@@ -926,11 +1044,18 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
           setImageUrl(scannedProduct.imageUrl);
           setTitle(scannedProduct.title);
           setUnitAmount("1");
-          setUnitLabel(PRODUCT_UNIT_OPTIONS[0]);
+          setOriginType(PRODUCT_ORIGIN_OPTIONS[0]);
+          setOriginDetail("");
           setCategory(scannedProduct.category);
           setPrice(scannedProduct.price || "");
           setPublicPrice(scannedProduct.publicPrice || "");
-          setDescription(scannedProduct.description || "");
+          // 스캔이 끝나면 추천 문구 중 하나를 바로 채워서 상인이 굳이 카드를 눌러
+          // 고르지 않아도 되게 한다 — 마음에 안 들면 아래 카드에서 다른 걸 고르거나
+          // 텍스트를 직접 고쳐도 된다.
+          setDescription(
+            scannedProduct.description || getAiRecommendations(scannedProduct.title, scannedProduct.category, 0)[0]
+          );
+          setSelectedTags([]);
           setGrade(scannedProduct.grade || "A+");
           setFreshnessScore(scannedProduct.freshnessScore || 95);
           setDefectScore(scannedProduct.defectScore ?? 2);
