@@ -133,6 +133,13 @@ export const StoreLocationPicker: React.FC<StoreLocationPickerProps> = ({
           markerRef.current = new naver.maps.Marker({ position: e.coord, map: mapRef.current });
         }
       });
+
+      // 모달이 화면에 완전히 자리잡기 전에 지도 컨테이너 크기를 재버리면 지도가 실제
+      // 칸보다 넓게(또는 좁게) 그려진 채로 굳어버릴 수 있다 — 한 프레임 뒤에 강제로
+      // 다시 계산시켜서 실제 컨테이너 크기에 맞춘다.
+      requestAnimationFrame(() => {
+        if (mapRef.current) naver.maps.Event.trigger(mapRef.current, "resize");
+      });
     };
 
     if (pin) {
@@ -229,7 +236,7 @@ export const StoreLocationPicker: React.FC<StoreLocationPickerProps> = ({
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]" style={{ maxWidth: "min(28rem, calc(100vw - 2rem))" }}>
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
           <div>
             <h3 className="font-extrabold text-slate-900 text-base">점포 위치 등록</h3>
