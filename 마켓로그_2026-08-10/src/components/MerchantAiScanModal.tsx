@@ -21,12 +21,10 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
   const [isFlashOn, setIsFlashOn] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [hasCameraStream, setHasCameraStream] = useState(false);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [cameraRestartTick, setCameraRestartTick] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // Start / Stop Camera
   useEffect(() => {
@@ -42,7 +40,6 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
 
     if (isOpen) {
       setIsAnalyzing(false);
-      setCapturedImage(null);
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         navigator.mediaDevices
           .getUserMedia({
@@ -103,11 +100,9 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
 
   if (!isOpen) return null;
 
-  const currentViewImage = capturedImage || "";
-
   // Capture current camera video frame as base64 image
   const captureFrame = (): string => {
-    if (videoRef.current && hasCameraStream && !capturedImage) {
+    if (videoRef.current && hasCameraStream) {
       const video = videoRef.current;
       if (video.videoWidth > 0 && video.videoHeight > 0) {
         const canvas = document.createElement("canvas");
@@ -120,20 +115,7 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
         }
       }
     }
-    return currentViewImage;
-  };
-
-  // Handle Gallery file select
-  const handleCameraFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
-        setCapturedImage(base64);
-      };
-      reader.readAsDataURL(file);
-    }
+    return "";
   };
 
   // Handle Capture & AI Analysis (real backend vision inference, not a canned preset)
@@ -142,7 +124,7 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
 
     const capturedImg = captureFrame();
     if (!capturedImg) {
-      alert("먼저 카메라로 촬영하거나 갤러리에서 사진을 선택해주세요.");
+      alert("카메라를 사용할 수 없어 촬영할 수 없습니다. 카메라 권한을 확인해주세요.");
       return;
     }
 
@@ -201,16 +183,16 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
           playsInline
           muted
           className={`w-full h-full object-cover transition-opacity duration-300 ${
-            hasCameraStream && !capturedImage ? "opacity-100" : "opacity-0 pointer-events-none"
+            hasCameraStream ? "opacity-100" : "opacity-0 pointer-events-none"
           }`}
         />
 
-        {/* Fallback Image or Captured Snapshot */}
-        {(!hasCameraStream || capturedImage) && (
-          <div
-            className="absolute inset-0 bg-cover bg-center transition-all duration-300"
-            style={{ backgroundImage: `url('${currentViewImage}')` }}
-          />
+        {/* 카메라를 못 쓰면 가짜 샘플 사진 대신 정직하게 "카메라 사용 불가" 상태를 보여준다. */}
+        {!hasCameraStream && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white/40">
+            <span className="material-symbols-outlined text-5xl">videocam_off</span>
+            <p className="text-xs font-medium">카메라를 사용할 수 없습니다</p>
+          </div>
         )}
 
         {/* Flash Screen Overlay */}
@@ -277,35 +259,9 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
       </div>
 
       {/* Hidden Native File Input for Gallery Selection */}
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={handleCameraFileChange}
-        className="hidden"
-      />
-
       {/* Bottom Shutter & Controls Container */}
       <div className="relative z-30 w-full px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] max-w-md mx-auto space-y-3">
-        <div className="flex items-center justify-center gap-8 px-6 pt-2">
-          {/* Left Gallery Thumbnail Button */}
-          <button
-            onClick={() => cameraInputRef.current?.click()}
-            className="w-12 h-12 rounded-full border-2 border-white/90 overflow-hidden bg-black/60 flex items-center justify-center p-0.5 shadow-lg active:scale-90 transition-transform group"
-            title="갤러리 사진 선택"
-          >
-            {currentViewImage ? (
-              <img
-                src={currentViewImage}
-                alt="Gallery preview"
-                className="w-full h-full object-cover rounded-full group-hover:scale-110 transition-transform"
-              />
-            ) : (
-              <span className="material-symbols-outlined text-white/80 text-lg">photo_library</span>
-            )}
-          </button>
-
+        <div className="flex items-center justify-center px-6 pt-2">
           {/* Main Center Camera Shutter Button */}
           <button
             onClick={handleCaptureAndAnalyze}
