@@ -857,7 +857,7 @@ export const MapView: React.FC<MapViewProps> = ({
               }}
               onFocus={() => setShowSearchResults(true)}
               onBlur={() => setShowSearchResults(false)}
-              placeholder="점포, 편의시설, 다른 전통시장 검색"
+              placeholder="점포, 다른 전통시장 검색"
               className="flex-1 bg-transparent border-none focus:outline-none text-sm text-on-surface placeholder-outline"
             />
             {searchQuery && (
