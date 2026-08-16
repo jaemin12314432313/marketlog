@@ -107,6 +107,20 @@ export function fetchMapConfig(): Promise<MapConfig> {
   return apiFetch<MapConfig>("/api/v1/map/config");
 }
 
+export interface GeocodeAddress {
+  roadAddress: string;
+  jibunAddress: string;
+  lat: number;
+  lng: number;
+}
+
+// 주소 → 좌표 검색. naver.maps.Service.geocode()를 브라우저에서 직접 부르면 이 계정에서는
+// naver.maps.Service 자체가 안 붙는 문제가 있어서(콘솔에 API가 등록돼 있어도 발생), 비밀키가
+// 있어야 하는 서버사이드 REST 지오코딩을 백엔드가 대신 호출해준다.
+export function geocodeAddress(query: string): Promise<{ status: string; addresses: GeocodeAddress[] }> {
+  return apiFetch(`/api/v1/map/geocode?query=${encodeURIComponent(query)}`);
+}
+
 export interface StoreInfo {
   name: string;
   subtitle: string;

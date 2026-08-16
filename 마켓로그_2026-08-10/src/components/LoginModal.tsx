@@ -543,11 +543,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 disabled={isSubmitting}
                 className="w-full bg-[#0052FF] hover:bg-[#0046E0] text-white py-3 rounded-xl font-extrabold text-xs sm:text-sm shadow-md transition-all cursor-pointer mt-2"
               >
-                {isSubmitting
-                  ? "가입 처리 중..."
-                  : selectedRole === "merchant"
-                  ? "다음: 점포 위치 등록"
-                  : "회원가입 완료"}
+                {isSubmitting ? "가입 처리 중..." : "회원가입 완료"}
               </button>
 
               <button

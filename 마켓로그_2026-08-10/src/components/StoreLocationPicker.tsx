@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { fetchMapConfig, fetchMapStores, getStoreLocation, setStoreLocation } from "../lib/api";
+import { fetchMapConfig, fetchMapStores, geocodeAddress, getStoreLocation, setStoreLocation } from "../lib/api";
 
 const NAVER_SCRIPT_ID = "naver-maps-sdk";
 
@@ -153,31 +153,28 @@ export const StoreLocationPicker: React.FC<StoreLocationPickerProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, naverLoaded, isLoadingInitial]);
 
-  const handleAddressSearch = () => {
+  // naver.maps.Service.geocode()를 브라우저에서 직접 부르면 이 계정에서는
+  // naver.maps.Service 자체가 끝내 안 붙는 걸 확인했다(콘솔에 Geocoding API가 등록돼
+  // 있어도 발생 — 비밀키 없는 클라이언트 인증으로는 막히는 것으로 보임). 비밀키가 있어야
+  // 하는 서버사이드 REST 지오코딩을 백엔드가 대신 호출해주는 방식으로 바꿨다.
+  const handleAddressSearch = async () => {
     const query = addressQuery.trim();
     if (!query) return;
-    const naver = (window as any).naver;
-    if (!naver?.maps?.Service) {
-      alert("지도 검색 기능을 아직 불러오는 중이에요. 잠시 후 다시 시도해주세요.");
-      return;
-    }
     setIsSearchingAddress(true);
     setAddressResults([]);
-    naver.maps.Service.geocode({ query }, (status: string, response: any) => {
-      setIsSearchingAddress(false);
-      if (status !== naver.maps.Service.Status.OK || !response?.v2?.addresses?.length) {
+    try {
+      const res = await geocodeAddress(query);
+      if (!res.addresses.length) {
         alert("검색 결과가 없어요. 도로명 주소나 지번 주소로 다시 시도해보세요.");
         return;
       }
-      setAddressResults(
-        response.v2.addresses.slice(0, 5).map((a: any) => ({
-          roadAddress: a.roadAddress,
-          jibunAddress: a.jibunAddress,
-          lat: parseFloat(a.y),
-          lng: parseFloat(a.x),
-        }))
-      );
-    });
+      setAddressResults(res.addresses.slice(0, 5));
+    } catch (err) {
+      console.error("주소 검색 실패", err);
+      alert("주소 검색에 실패했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setIsSearchingAddress(false);
+    }
   };
 
   const handleSelectAddressResult = (result: { lat: number; lng: number }) => {

@@ -1,11 +1,14 @@
 import os
-from fastapi import APIRouter, Depends
+import httpx
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from db import get_db
 from models import Market, Product, Store
 
 router = APIRouter(prefix="/api/v1/map", tags=["map"])
+
+GEOCODE_URL = "https://maps.apigw.ntruss.com/map-geocode/v2/geocode"
 
 DEFAULT_MARKET_ID = "yangdong"
 
@@ -19,6 +22,49 @@ def get_map_config():
     return {
         "status": "success",
         "naver_client_id": os.getenv("NAVER_CLIENT_ID", "ye958r8a36")
+    }
+
+
+# 1.5. 주소 → 좌표 검색 (지오코딩) — 프론트에서 naver.maps.Service.geocode()를 직접
+# 쓰면 브라우저 쪽 Client ID(비밀키 없음) 인증으로는 이 계정에서 동작하지 않아서
+# (naver.maps.Service 자체가 안 붙음, 콘솔엔 API가 등록돼 있어도 발생 가능), 비밀키가
+# 필요한 서버사이드 REST 지오코딩을 백엔드에서 대신 호출해 프록시한다.
+@router.get("/geocode")
+def geocode_address(query: str):
+    client_id = os.getenv("NAVER_CLIENT_ID")
+    client_secret = os.getenv("NAVER_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=500, detail="네이버 지도 인증 정보가 서버에 설정되어 있지 않습니다.")
+
+    try:
+        resp = httpx.get(
+            GEOCODE_URL,
+            params={"query": query},
+            headers={
+                "x-ncp-apigw-api-key-id": client_id,
+                "x-ncp-apigw-api-key": client_secret,
+            },
+            timeout=10,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"네이버 지오코딩 서버 호출에 실패했습니다: {e}")
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"네이버 지오코딩 API 오류 (status={resp.status_code}): {resp.text[:200]}")
+
+    data = resp.json()
+    addresses = data.get("addresses", [])
+    return {
+        "status": "success",
+        "addresses": [
+            {
+                "roadAddress": a.get("roadAddress", ""),
+                "jibunAddress": a.get("jibunAddress", ""),
+                "lat": float(a["y"]),
+                "lng": float(a["x"]),
+            }
+            for a in addresses
+        ],
     }
 
 

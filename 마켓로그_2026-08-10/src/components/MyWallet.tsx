@@ -995,7 +995,10 @@ export const MyWallet: React.FC<MyWalletProps> = ({
             </>
           )}
 
-          {!isEditingShopInfo ? (
+          {/* 소속 전통시장을 고르기 전엔 상호명/전화번호/영업시간 등 요약도, 수정 폼도
+              전부 "미등록"만 잔뜩 보여줘서 지저분하고 헷갈린다 — 시장을 고른 뒤에만
+              보여준다. */}
+          {userMarketId && (!isEditingShopInfo ? (
             /* View Mode */
             <div className="space-y-3">
               <div className="space-y-2 text-xs divide-y divide-[#F1F5F9]">
@@ -1262,7 +1265,7 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                 </button>
               </div>
             </form>
-          )}
+          ))}
         </section>
       )}
 
