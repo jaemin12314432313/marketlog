@@ -264,7 +264,7 @@ export const StoreLocationPicker: React.FC<StoreLocationPickerProps> = ({
                     handleAddressSearch();
                   }
                 }}
-                placeholder="도로명/지번 주소로 검색 (예: 광주 동구 대인동 12)"
+                placeholder="도로명/지번 주소로 검색"
                 className="flex-1 bg-transparent border-none focus:outline-none text-sm text-slate-800 placeholder-slate-400"
               />
             </div>
