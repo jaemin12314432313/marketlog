@@ -399,7 +399,7 @@ export const MapView: React.FC<MapViewProps> = ({
       map: mapRef.current,
       position: new naver.maps.LatLng(centroid.lat, centroid.lng),
       icon: {
-        content: `<div class="px-2.5 py-1 rounded-full bg-[#0052FF]/90 text-white text-[11px] font-extrabold shadow-md pointer-events-none whitespace-nowrap">양동시장</div>`,
+        content: `<div class="px-2.5 py-1 rounded-full bg-[#0052FF]/90 text-white text-[11px] font-extrabold shadow-md pointer-events-none whitespace-nowrap">${selectedMarket.name}</div>`,
         anchor: new naver.maps.Point(30, 12),
       },
       zIndex: 1,
@@ -648,8 +648,8 @@ export const MapView: React.FC<MapViewProps> = ({
   }, [focusShopName, stores, naverLoaded]);
 
   return (
-    <div className="relative w-full h-screen overflow-hidden bg-[#F0F3F4] text-on-surface">
-      <div ref={mapElement} className="absolute inset-0 w-full h-full z-0" />
+    <div className="relative w-full h-screen overflow-hidden bg-[#F0F3F4] text-on-surface" style={{ overscrollBehavior: "none" }}>
+      <div ref={mapElement} className="absolute inset-0 w-full h-full z-0" style={{ overscrollBehavior: "contain" }} />
 
       {currentZoom < MIN_ZOOM_FOR_MARKERS && stores.length > 0 && (
         <div className="absolute top-[calc(5rem+env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-20 bg-white/95 text-[#334155] text-xs font-semibold px-3 py-1.5 rounded-full shadow-md border border-[#E2E8F0] pointer-events-none">

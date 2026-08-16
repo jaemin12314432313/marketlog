@@ -25,8 +25,12 @@
         font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
       }
 
+      /* overscroll-behavior가 없으면, 지도처럼 화면을 꽉 채우고 상하좌우로 드래그하는
+         위젯에서 안드로이드 웹뷰가 페이지 자체를 옆으로 밀어내는(overscroll bounce)
+         효과를 보여준다 — 지도 탭에서만 유독 "옆으로 넘어간다"고 느껴지는 원인. */
       html, body {
         overflow-x: hidden;
+        overscroll-behavior: none;
       }
 
       body {
