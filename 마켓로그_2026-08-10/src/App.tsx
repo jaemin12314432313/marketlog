@@ -70,6 +70,9 @@ export default function App() {
   // 상품 상세로 돌아간 뒤 그걸 닫았을 때도, 원래 있던 탭(보통 홈 피드)이 아니라 "map"
   // 탭이 그대로 남아있으면 안 되므로 지도로 넘어가기 직전의 탭을 같이 기억해둔다.
   const [mapReturnTab, setMapReturnTab] = useState<TabType | null>(null);
+  // 상품 상세의 레시피 탭에서 "지도에서 재료 위치 확인"을 누르면 그 레시피 재료 목록을
+  // 담아 지도 탭으로 넘어간다 — MapView가 실제 등록 상품/점포와 매칭해 마커를 표시한다.
+  const [recipeIngredients, setRecipeIngredients] = useState<string[] | null>(null);
 
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [scannedProducts, setScannedProducts] = useState<ProductItem[]>([]);
@@ -394,6 +397,8 @@ export default function App() {
             onOpenAiScan={() => setIsAiScanOpen(true)}
             focusShopName={mapFocusShopName}
             onFocusHandled={() => setMapFocusShopName(null)}
+            recipeIngredients={recipeIngredients}
+            onClearRecipeIngredients={() => setRecipeIngredients(null)}
             onBack={
               mapReturnProduct
                 ? () => {
@@ -487,6 +492,13 @@ export default function App() {
           onToggleBookmark={handleToggleBookmarkProduct}
           onNavigateToMap={() => {
             setMapFocusShopName(selectedProduct.shopName);
+            setMapReturnProduct(selectedProduct);
+            setMapReturnTab(activeTab);
+            setSelectedProduct(null);
+            setActiveTab("map");
+          }}
+          onNavigateToRecipeMap={(ingredients) => {
+            setRecipeIngredients(ingredients);
             setMapReturnProduct(selectedProduct);
             setMapReturnTab(activeTab);
             setSelectedProduct(null);

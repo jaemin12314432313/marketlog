@@ -48,6 +48,9 @@ interface ProductDetailModalProps {
   isBookmarked: boolean;
   onToggleBookmark: (product: ProductItem) => void;
   onNavigateToMap: () => void;
+  // 레시피 탭에서 "지도에서 재료 위치 확인"을 누르면, 그 레시피 재료 목록을 들고 지도
+  // 탭으로 넘어간다 — 없으면(아직 부모가 안 만들었으면) 버튼 자체를 숨긴다.
+  onNavigateToRecipeMap?: (ingredients: string[]) => void;
   initialTab?: "description" | "shop" | "recipe";
 }
 
@@ -71,8 +74,9 @@ interface RecipeRecommendation {
 // 고구마 분기에 같이 묶여 "감자맛탕"으로 추천되는 것도 부자연스러운 매칭이었음).
 // 영상 썸네일은 검증되지 않은 스톡사진 대신 상품 자체 사진을 그대로 써서 이미지 불일치
 // 위험이 없게 했고, 유튜브는 실제로 그 영상으로 가는 게 아니라 검색 결과로 연결되므로
-// "조회수/채널명"처럼 특정 영상인 척하는 정보는 보여주지 않는다.
-function getRecipeRecommendation(product: ProductItem): RecipeRecommendation {
+// "조회수/채널명"처럼 특정 영상인 척하는 정보는 보여주지 않는다. 품목마다 요리를 2가지씩
+// 준비해서, "이거 말고 다른 요리는?" 하고 골라볼 수 있게 한다.
+function getRecipeRecommendations(product: ProductItem): RecipeRecommendation[] {
   const title = product.title;
   const category = product.category;
 
@@ -94,190 +98,379 @@ function getRecipeRecommendation(product: ProductItem): RecipeRecommendation {
   });
 
   if (title.includes("갈치") || title.includes("생선") || title.includes("조기") || category === "수산물") {
-    return base(
-      "칼칼한 갈치조림",
-      "25분",
-      "보통",
-      "통통한 갈치에 무와 칼칼한 양념장을 넣어 자작하게 조려내는 전통시장 대표 별미 요리입니다.",
-      "갈치조림 레시피",
-      [
-        { name: `${title} (본 상품)`, amount: "1마리", isMain: true },
-        { name: "무", amount: "1/3개 (200g)", isMain: true },
-        { name: "대파 & 청양고추", amount: "각 1개", isMain: false },
-        { name: "고춧가루, 간장, 마늘", amount: "양념장 재료", isMain: false },
-      ]
-    );
+    return [
+      base(
+        "칼칼한 갈치조림",
+        "25분",
+        "보통",
+        "통통한 갈치에 무와 칼칼한 양념장을 넣어 자작하게 조려내는 전통시장 대표 별미 요리입니다.",
+        "갈치조림 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "1마리", isMain: true },
+          { name: "무", amount: "1/3개 (200g)", isMain: true },
+          { name: "대파", amount: "1개", isMain: false },
+          { name: "청양고추", amount: "1개", isMain: false },
+          { name: "고춧가루", amount: "양념장 재료", isMain: false },
+          { name: "마늘", amount: "양념장 재료", isMain: false },
+        ]
+      ),
+      base(
+        "든든한 갈치 매운탕",
+        "30분",
+        "보통",
+        "갈치와 채소를 큼직하게 썰어 얼큰하게 끓여내는 국물 요리로, 밥 한 공기와 잘 어울립니다.",
+        "생선 매운탕 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "1마리", isMain: true },
+          { name: "무", amount: "1/4개", isMain: true },
+          { name: "쑥갓", amount: "1줌", isMain: false },
+          { name: "고추장", amount: "2큰술", isMain: false },
+          { name: "청양고추", amount: "2개", isMain: false },
+        ]
+      ),
+    ];
   }
 
   if (title.includes("무")) {
-    return base(
-      "시원한 소고기 뭇국",
-      "20분",
-      "쉬움",
-      "단단하고 매끈한 무를 나박하게 썰어 소고기와 함께 맑게 끓여내는 자극없이 시원한 국물 요리입니다.",
-      "소고기 뭇국 레시피",
-      [
-        { name: `${title} (본 상품)`, amount: "1/4개", isMain: true },
-        { name: "국거리 소고기", amount: "150g", isMain: true },
-        { name: "대파 & 다진마늘", amount: "약간", isMain: false },
-        { name: "국간장 & 참기름", amount: "2큰술", isMain: false },
-      ]
-    );
+    return [
+      base(
+        "시원한 소고기 뭇국",
+        "20분",
+        "쉬움",
+        "단단하고 매끈한 무를 나박하게 썰어 소고기와 함께 맑게 끓여내는 자극없이 시원한 국물 요리입니다.",
+        "소고기 뭇국 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "1/4개", isMain: true },
+          { name: "국거리 소고기", amount: "150g", isMain: true },
+          { name: "대파", amount: "약간", isMain: false },
+          { name: "다진마늘", amount: "약간", isMain: false },
+          { name: "국간장", amount: "2큰술", isMain: false },
+        ]
+      ),
+      base(
+        "새콤달콤 무생채",
+        "10분",
+        "쉬움",
+        "채썬 무를 고춧가루와 식초로 무쳐내는 밑반찬으로, 다른 요리에 곁들이기 좋습니다.",
+        "무생채 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "1/3개", isMain: true },
+          { name: "고춧가루", amount: "2큰술", isMain: true },
+          { name: "식초", amount: "1큰술", isMain: false },
+          { name: "설탕", amount: "1큰술", isMain: false },
+          { name: "쪽파", amount: "약간", isMain: false },
+        ]
+      ),
+    ];
   }
 
   // "양배추"는 "배추"를 부분 문자열로 포함하므로, 더 구체적인 양배추 분기를 먼저 검사한다.
   if (title.includes("양배추")) {
-    return base(
-      "아삭한 양배추 쌈밥",
-      "15분",
-      "쉬움",
-      "부드럽게 찐 양배추 잎에 밥과 쌈장을 올려 싸먹는 담백하고 건강한 한끼 요리입니다.",
-      "양배추 쌈밥 레시피",
-      [
-        { name: `${title} (본 상품)`, amount: "1/4통", isMain: true },
-        { name: "쌈장", amount: "2큰술", isMain: true },
-        { name: "밥", amount: "2공기", isMain: false },
-      ]
-    );
+    return [
+      base(
+        "아삭한 양배추 쌈밥",
+        "15분",
+        "쉬움",
+        "부드럽게 찐 양배추 잎에 밥과 쌈장을 올려 싸먹는 담백하고 건강한 한끼 요리입니다.",
+        "양배추 쌈밥 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "1/4통", isMain: true },
+          { name: "쌈장", amount: "2큰술", isMain: true },
+          { name: "밥", amount: "2공기", isMain: false },
+        ]
+      ),
+      base(
+        "고소한 양배추전",
+        "15분",
+        "쉬움",
+        "채썬 양배추를 부침가루 반죽에 섞어 부쳐내는 간단한 별미 반찬입니다.",
+        "양배추전 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "1/4통", isMain: true },
+          { name: "부침가루", amount: "1컵", isMain: true },
+          { name: "당근", amount: "약간", isMain: false },
+          { name: "식용유", amount: "적당량", isMain: false },
+        ]
+      ),
+    ];
   }
 
   if (title.includes("배추")) {
-    return base(
-      "아삭한 배추 겉절이",
-      "15분",
-      "쉬움",
-      "속이 꽉 찬 배추를 한입 크기로 썰어 매콤달콤한 양념에 바로 무쳐 먹는 자리에서 만드는 겉절이입니다.",
-      "배추 겉절이 레시피",
-      [
-        { name: `${title} (본 상품)`, amount: "1/2포기", isMain: true },
-        { name: "고춧가루", amount: "3큰술", isMain: true },
-        { name: "액젓 & 다진마늘", amount: "각 1큰술", isMain: false },
-        { name: "쪽파 & 통깨", amount: "약간", isMain: false },
-      ]
-    );
+    return [
+      base(
+        "아삭한 배추 겉절이",
+        "15분",
+        "쉬움",
+        "속이 꽉 찬 배추를 한입 크기로 썰어 매콤달콤한 양념에 바로 무쳐 먹는 자리에서 만드는 겉절이입니다.",
+        "배추 겉절이 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "1/2포기", isMain: true },
+          { name: "고춧가루", amount: "3큰술", isMain: true },
+          { name: "액젓", amount: "1큰술", isMain: false },
+          { name: "다진마늘", amount: "1큰술", isMain: false },
+          { name: "쪽파", amount: "약간", isMain: false },
+        ]
+      ),
+      base(
+        "구수한 배추 된장국",
+        "15분",
+        "쉬움",
+        "부드러운 배추를 된장 육수에 넣어 구수하게 끓여내는 기본 국물 요리입니다.",
+        "배추 된장국 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "4~5장", isMain: true },
+          { name: "된장", amount: "2큰술", isMain: true },
+          { name: "두부", amount: "1/2모", isMain: false },
+          { name: "대파", amount: "약간", isMain: false },
+        ]
+      ),
+    ];
   }
 
   if (title.includes("양파")) {
-    return base(
-      "새콤달콤 양파장아찌",
-      "10분 (숙성 1일)",
-      "쉬움",
-      "아삭한 양파를 간장물에 절여 만드는 밑반찬으로, 고기 요리와 특히 잘 어울립니다.",
-      "양파장아찌 레시피",
-      [
-        { name: `${title} (본 상품)`, amount: "3개", isMain: true },
-        { name: "간장 & 식초 & 설탕", amount: "1:1:1 비율", isMain: false },
-      ]
-    );
+    return [
+      base(
+        "새콤달콤 양파장아찌",
+        "10분 (숙성 1일)",
+        "쉬움",
+        "아삭한 양파를 간장물에 절여 만드는 밑반찬으로, 고기 요리와 특히 잘 어울립니다.",
+        "양파장아찌 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "3개", isMain: true },
+          { name: "간장", amount: "1컵", isMain: false },
+          { name: "식초", amount: "1컵", isMain: false },
+          { name: "설탕", amount: "1컵", isMain: false },
+        ]
+      ),
+      base(
+        "새콤 양파피클",
+        "10분 (숙성 반나절)",
+        "쉬움",
+        "얇게 썬 양파를 새콤달콤한 피클물에 절여내는 간단한 곁들임 반찬입니다.",
+        "양파피클 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "2개", isMain: true },
+          { name: "식초", amount: "1컵", isMain: true },
+          { name: "설탕", amount: "1/2컵", isMain: false },
+          { name: "월계수잎", amount: "1장", isMain: false },
+        ]
+      ),
+    ];
   }
 
   if (title.includes("마늘")) {
-    return base(
-      "알싸한 통마늘 장아찌",
-      "15분 (숙성 2주)",
-      "보통",
-      "알이 굵은 통마늘을 식초 간장물에 절여 알싸한 맛을 오래 즐길 수 있는 대표 밑반찬입니다.",
-      "마늘장아찌 레시피",
-      [
-        { name: `${title} (본 상품)`, amount: "20알", isMain: true },
-        { name: "식초 & 간장 & 설탕", amount: "1:1:1 비율", isMain: false },
-      ]
-    );
+    return [
+      base(
+        "알싸한 통마늘 장아찌",
+        "15분 (숙성 2주)",
+        "보통",
+        "알이 굵은 통마늘을 식초 간장물에 절여 알싸한 맛을 오래 즐길 수 있는 대표 밑반찬입니다.",
+        "마늘장아찌 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "20알", isMain: true },
+          { name: "식초", amount: "1컵", isMain: false },
+          { name: "간장", amount: "1컵", isMain: false },
+          { name: "설탕", amount: "1컵", isMain: false },
+        ]
+      ),
+      base(
+        "짭짤한 마늘 간장조림",
+        "20분",
+        "보통",
+        "마늘을 간장 양념에 조려내는 밥도둑 밑반찬으로, 오래 두고 먹기 좋습니다.",
+        "마늘 간장조림 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "20알", isMain: true },
+          { name: "간장", amount: "1/2컵", isMain: true },
+          { name: "물엿", amount: "3큰술", isMain: false },
+          { name: "청양고추", amount: "1개", isMain: false },
+        ]
+      ),
+    ];
   }
 
   if (title.includes("감귤") || title.includes("귤")) {
-    return base(
-      "상큼한 감귤청",
-      "20분",
-      "쉬움",
-      "제철 감귤을 얇게 썰어 설탕에 재워두면 차로도, 탄산수에 타서도 즐길 수 있는 상큼한 청이 됩니다.",
-      "감귤청 만들기 레시피",
-      [
-        { name: `${title} (본 상품)`, amount: "1kg", isMain: true },
-        { name: "설탕", amount: "동량(1kg)", isMain: true },
-      ]
-    );
+    return [
+      base(
+        "상큼한 감귤청",
+        "20분",
+        "쉬움",
+        "제철 감귤을 얇게 썰어 설탕에 재워두면 차로도, 탄산수에 타서도 즐길 수 있는 상큼한 청이 됩니다.",
+        "감귤청 만들기 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "1kg", isMain: true },
+          { name: "설탕", amount: "동량(1kg)", isMain: true },
+        ]
+      ),
+      base(
+        "달콤 쌉싸름한 감귤 마멀레이드",
+        "40분",
+        "보통",
+        "껍질까지 함께 졸여내는 감귤 마멀레이드로, 빵에 발라 먹기 좋은 잼입니다.",
+        "감귤 마멀레이드 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "1kg", isMain: true },
+          { name: "설탕", amount: "700g", isMain: true },
+          { name: "레몬즙", amount: "2큰술", isMain: false },
+        ]
+      ),
+    ];
   }
 
   if (title.includes("감") && !title.includes("감자") && !title.includes("감귤")) {
-    return base(
-      "쫀득한 감말랭이",
-      "30분 (건조 1주)",
-      "보통",
-      "단단한 감을 얇게 썰어 말리면 쫀득하고 달콤한 국민 간식 감말랭이가 됩니다.",
-      "감말랭이 만들기 레시피",
-      [{ name: `${title} (본 상품)`, amount: "5개", isMain: true }]
-    );
+    return [
+      base(
+        "쫀득한 감말랭이",
+        "30분 (건조 1주)",
+        "보통",
+        "단단한 감을 얇게 썰어 말리면 쫀득하고 달콤한 국민 간식 감말랭이가 됩니다.",
+        "감말랭이 만들기 레시피",
+        [{ name: `${title} (본 상품)`, amount: "5개", isMain: true }]
+      ),
+      base(
+        "고소한 곶감 견과류말이",
+        "20분",
+        "쉬움",
+        "말랑한 곶감을 펼쳐 견과류를 넣고 돌돌 말아내는 손이 많이 안 가는 명절 디저트입니다.",
+        "곶감 견과류말이 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "5개", isMain: true },
+          { name: "호두", amount: "1줌", isMain: false },
+          { name: "크림치즈", amount: "3큰술", isMain: false },
+        ]
+      ),
+    ];
   }
 
   if (title.includes("사과") || title.includes("배") || title.includes("샤인") || category === "과일") {
-    return base(
-      "아삭한 생과일 샐러드",
-      "10분",
-      "쉬움",
-      "당도 높은 생과일을 슬라이스하여 견과류와 요거트를 곁들인 상큼 건강 디저트입니다.",
-      `${title} 샐러드 레시피`,
-      [
-        { name: `${title} (본 상품)`, amount: "2개", isMain: true },
-        { name: "견과류", amount: "1주먹 (50g)", isMain: false },
-        { name: "플레인 요거트 / 꿀", amount: "3큰술", isMain: false },
-      ]
-    );
+    return [
+      base(
+        "아삭한 생과일 샐러드",
+        "10분",
+        "쉬움",
+        "당도 높은 생과일을 슬라이스하여 견과류와 요거트를 곁들인 상큼 건강 디저트입니다.",
+        `${title} 샐러드 레시피`,
+        [
+          { name: `${title} (본 상품)`, amount: "2개", isMain: true },
+          { name: "견과류", amount: "1주먹 (50g)", isMain: false },
+          { name: "플레인 요거트", amount: "3큰술", isMain: false },
+        ]
+      ),
+      base(
+        "향긋한 과일청",
+        "20분 (숙성 1주)",
+        "쉬움",
+        "제철 과일을 설탕에 재워두면 차로도, 탄산수에 타서도 즐길 수 있는 향긋한 청이 됩니다.",
+        `${title}청 만들기 레시피`,
+        [
+          { name: `${title} (본 상품)`, amount: "1kg", isMain: true },
+          { name: "설탕", amount: "동량(1kg)", isMain: true },
+        ]
+      ),
+    ];
   }
 
   if (title.includes("감자")) {
-    return base(
-      "고소한 감자채전",
-      "20분",
-      "쉬움",
-      "감자를 채썰어 부쳐내는 고소하고 바삭한 전으로, 간단한 간식이나 반찬으로 좋습니다.",
-      "감자채전 레시피",
-      [
-        { name: `${title} (본 상품)`, amount: "3개", isMain: true },
-        { name: "부침가루", amount: "2큰술", isMain: false },
-        { name: "식용유", amount: "적당량", isMain: false },
-      ]
-    );
+    return [
+      base(
+        "고소한 감자채전",
+        "20분",
+        "쉬움",
+        "감자를 채썰어 부쳐내는 고소하고 바삭한 전으로, 간단한 간식이나 반찬으로 좋습니다.",
+        "감자채전 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "3개", isMain: true },
+          { name: "부침가루", amount: "2큰술", isMain: false },
+          { name: "식용유", amount: "적당량", isMain: false },
+        ]
+      ),
+      base(
+        "담백한 감자샐러드",
+        "20분",
+        "쉬움",
+        "삶아 으깬 감자에 채소와 마요네즈를 버무려내는 담백한 밑반찬 겸 샐러드입니다.",
+        "감자샐러드 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "3개", isMain: true },
+          { name: "마요네즈", amount: "3큰술", isMain: true },
+          { name: "오이", amount: "1/2개", isMain: false },
+          { name: "당근", amount: "약간", isMain: false },
+        ]
+      ),
+    ];
   }
 
   if (title.includes("고구마")) {
-    return base(
-      "달콤 바삭 꿀고구마 맛탕",
-      "15분",
-      "쉬움",
-      "신선한 고구마를 바삭하게 튀겨 조청으로 코팅한 인기 간식 레시피입니다.",
-      "고구마맛탕 만들기 레시피",
-      [
-        { name: `${title} (본 상품)`, amount: "3개", isMain: true },
-        { name: "조청 or 물엿", amount: "4큰술", isMain: true },
-        { name: "식용유 & 검은깨", amount: "적당량", isMain: false },
-      ]
-    );
+    return [
+      base(
+        "달콤 바삭 꿀고구마 맛탕",
+        "15분",
+        "쉬움",
+        "신선한 고구마를 바삭하게 튀겨 조청으로 코팅한 인기 간식 레시피입니다.",
+        "고구마맛탕 만들기 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "3개", isMain: true },
+          { name: "조청", amount: "4큰술", isMain: true },
+          { name: "식용유", amount: "적당량", isMain: false },
+          { name: "검은깨", amount: "약간", isMain: false },
+        ]
+      ),
+      base(
+        "포근한 고구마 맛탕조림",
+        "25분",
+        "쉬움",
+        "큼직하게 썬 고구마를 간장 양념에 조려내는 포근한 밑반찬입니다.",
+        "고구마조림 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "3개", isMain: true },
+          { name: "간장", amount: "3큰술", isMain: true },
+          { name: "물엿", amount: "2큰술", isMain: false },
+        ]
+      ),
+    ];
   }
 
   if (category === "정육" || title.includes("한우") || title.includes("돼지") || title.includes("삼겹살")) {
-    return base(
-      "육즙 가득 단짠 소불고기",
-      "20분",
-      "쉬움",
-      "고소하고 질 좋은 정육에 달콤 짭조름한 양념을 재워 쌈채소와 함께 즐기는 대표 요리입니다.",
-      "소불고기 양념 레시피",
-      [
-        { name: `${title} (본 상품)`, amount: "600g", isMain: true },
-        { name: "쌈채소 모둠", amount: "1팩", isMain: true },
-        { name: "마늘 & 양파", amount: "각 1개", isMain: false },
-      ]
-    );
+    return [
+      base(
+        "육즙 가득 단짠 소불고기",
+        "20분",
+        "쉬움",
+        "고소하고 질 좋은 정육에 달콤 짭조름한 양념을 재워 쌈채소와 함께 즐기는 대표 요리입니다.",
+        "소불고기 양념 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "600g", isMain: true },
+          { name: "쌈채소 모둠", amount: "1팩", isMain: true },
+          { name: "마늘", amount: "1개", isMain: false },
+          { name: "양파", amount: "1개", isMain: false },
+        ]
+      ),
+      base(
+        "매콤한 제육볶음",
+        "20분",
+        "쉬움",
+        "고추장 양념에 재운 고기를 채소와 함께 볶아내는 든든한 한 끼 요리입니다.",
+        "제육볶음 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "600g", isMain: true },
+          { name: "고추장", amount: "3큰술", isMain: true },
+          { name: "양파", amount: "1개", isMain: false },
+          { name: "대파", amount: "1개", isMain: false },
+        ]
+      ),
+    ];
   }
 
-  return base(
-    `${title} 활용 레시피`,
-    "15분",
-    "쉬움",
-    `${title}를 활용한 전통시장 신선 식재료 홈메이드 레시피입니다.`,
-    `${title} 레시피`,
-    [{ name: `${title} (본 상품)`, amount: "1팩", isMain: true }]
-  );
+  return [
+    base(
+      `${title} 활용 레시피`,
+      "15분",
+      "쉬움",
+      `${title}를 활용한 전통시장 신선 식재료 홈메이드 레시피입니다.`,
+      `${title} 레시피`,
+      [{ name: `${title} (본 상품)`, amount: "1팩", isMain: true }]
+    ),
+  ];
 }
 
 interface QualityMetric {
@@ -376,11 +569,13 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   isBookmarked,
   onToggleBookmark,
   onNavigateToMap,
+  onNavigateToRecipeMap,
   initialTab = "description",
 }) => {
   if (!product) return null;
 
   const [activeTab, setActiveTab] = useState<"description" | "shop" | "recipe">(initialTab);
+  const [selectedRecipeIndex, setSelectedRecipeIndex] = useState(0);
   const [storeInfo, setStoreInfo] = useState<StoreInfo | null>(null);
   const [isStoreInfoLoaded, setIsStoreInfoLoaded] = useState(false);
   // 모바일에선 hover 툴팁이 안 먹히니, 탭으로 여닫는 방식으로 공공 시세 출처를 보여준다.
@@ -388,6 +583,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
   React.useEffect(() => {
     setActiveTab(initialTab);
+    setSelectedRecipeIndex(0);
   }, [product, initialTab]);
 
   // 매장 정보 탭에 실제 점포 데이터(주요품목/전화/영업시간/소개)를 채운다. 아직 지도에
@@ -410,7 +606,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     onToggleBookmark(product);
   };
 
-  const recipe = getRecipeRecommendation(product);
+  const recipes = getRecipeRecommendations(product);
+  const recipe = recipes[Math.min(selectedRecipeIndex, recipes.length - 1)];
   const qualityMetrics = getQualityMetrics(product);
 
   return (
@@ -803,6 +1000,26 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </div>
                 </div>
 
+                {/* 요리를 2가지씩 준비해뒀으니, 마음에 드는 쪽으로 골라볼 수 있게 한다. */}
+                {recipes.length > 1 && (
+                  <div className="flex gap-1.5">
+                    {recipes.map((r, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setSelectedRecipeIndex(idx)}
+                        className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                          idx === selectedRecipeIndex
+                            ? "bg-red-600 border-red-600 text-white"
+                            : "bg-white border-[#E2E8F0] text-[#64748B] hover:bg-slate-50"
+                        }`}
+                      >
+                        {r.dishTitle}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {/* Video Banner Card */}
                 <div className="relative w-full rounded-2xl overflow-hidden border border-slate-200 bg-slate-900 group shadow-sm">
                   {recipe.youtubeThumbnailUrl ? (
@@ -883,6 +1100,21 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     ))}
                   </div>
                 </div>
+
+                {/* 재료 목록이 그냥 정보용 텍스트로 끝나지 않게, 지금 이 시장에 실제로
+                    등록된 상품/점포와 매칭해서 지도에서 바로 보여준다. */}
+                {onNavigateToRecipeMap && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onNavigateToRecipeMap(recipe.ingredientsList.map((ing) => ing.name))
+                    }
+                    className="w-full bg-[#0052FF] hover:bg-[#0046E0] text-white py-3 px-4 rounded-xl font-extrabold text-xs shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-lg">map</span>
+                    <span>지도에서 재료 위치 확인</span>
+                  </button>
+                )}
               </div>
             </div>
           )}

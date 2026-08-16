@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { TextToSpeech } from "@capacitor-community/text-to-speech";
 import { MarketInfo } from "../types";
 import { MARKETS_DATA } from "../data/initialData";
@@ -17,6 +17,11 @@ interface MapViewProps {
   // 누르면 원래 보던 상품 상세로 돌아간다. 하단 탭에서 지도 탭을 직접 눌러 들어온
   // 경우엔 없으므로 버튼도 안 뜬다.
   onBack?: () => void;
+  // 상품 상세의 레시피 탭 "지도에서 재료 위치 확인"에서 넘어온 재료 이름 목록.
+  // 있으면 이 시장의 실제 점포/등록 상품과 매칭해서 체크리스트 + 마커 강조 +
+  // 내 위치에서 출발하는 최단 동선(직선거리 기준)을 보여준다.
+  recipeIngredients?: string[] | null;
+  onClearRecipeIngredients?: () => void;
 }
 
 const NAVER_SCRIPT_ID = "naver-maps-sdk";
@@ -38,6 +43,51 @@ function formatSeconds(totalSeconds: number): string {
   const minutes = Math.floor(clamped / 60);
   const seconds = clamped % 60;
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+// 네이버 Direction API는 자동차 경로만 지원해서(도보 경로 없음) 새 API 연동 없이,
+// 직선거리(하버사인 공식) 기준 최근접 이웃으로 방문 순서를 정한다. 시장 안 점포들은
+// 서로 몇십~몇백 미터 안에 다닥다닥 붙어있어서, 실제 골목길과 직선거리 차이가 크지
+// 않다 — 정확한 턴바이턴 안내보다 "대충 이 순서로 돌면 된다" 정도로 충분하다.
+function haversineMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371000;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+// 평균 도보 속도 약 4km/h(분당 67m) 기준 — 시장 안에서는 사람이 많아 이보다 느릴 수 있지만
+// 대략적인 소요시간 감으로 충분하다.
+const WALK_METERS_PER_MIN = 67;
+
+function buildNearestNeighborRoute<T extends { lat: number; lng: number }>(
+  start: { lat: number; lng: number },
+  points: T[]
+): { order: T[]; totalMeters: number } {
+  const remaining = [...points];
+  const order: T[] = [];
+  let cursor = start;
+  let totalMeters = 0;
+  while (remaining.length > 0) {
+    let nearestIdx = 0;
+    let nearestDist = Infinity;
+    remaining.forEach((p, idx) => {
+      const d = haversineMeters(cursor, p);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearestIdx = idx;
+      }
+    });
+    const [next] = remaining.splice(nearestIdx, 1);
+    order.push(next);
+    totalMeters += nearestDist;
+    cursor = next;
+  }
+  return { order, totalMeters };
 }
 
 // 양동시장 전체 범위를 지도 위에 하나의 영역으로 보여주기 위해, 463개 실제 점포
@@ -82,21 +132,28 @@ function computeConvexHull(points: { lat: number; lng: number }[]): { lat: numbe
 // 크기를 키우고 강렬한 빨간색으로 바꾸고 통통 튀는 애니메이션(animate-bounce)을 준다.
 // 카테고리 기본색을 전부 브랜드 블루로 통일해서(gwangju_market_data.py), 빨강은 이제
 // 강조 마커에만 쓰는 색이라 충돌이 없다.
-function buildMarkerContent(store: MapStorePin, isFocused: boolean): string {
+// routeOrder: 레시피 재료 장보기 동선에 포함된 점포면 방문 순서(1, 2, 3...) 뱃지를 초록색
+// 링과 함께 보여준다 — isFocused(빨강)와는 다른 강조라 서로 안 겹치게 색을 분리했다.
+function buildMarkerContent(store: MapStorePin, isFocused: boolean, routeOrder?: number): string {
   const productBadge = store.products.length
     ? `<span class="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-[#EF4444] text-white text-[10px] font-bold flex items-center justify-center border border-white">${store.products.length}</span>`
+    : "";
+  const routeBadge = routeOrder
+    ? `<span class="absolute -bottom-1 -left-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#10B981] text-white text-[10px] font-extrabold flex items-center justify-center border-2 border-white shadow-sm">${routeOrder}</span>`
     : "";
   const pinColor = isFocused ? "#EF4444" : store.badge_color;
   const pinSizeClass = isFocused ? "w-12 h-12" : "w-9 h-9";
   const iconSizeClass = isFocused ? "text-2xl" : "text-lg";
   const bounceClass = isFocused ? "animate-bounce" : "";
+  const ringStyle = routeOrder ? "box-shadow:0 0 0 4px rgba(16,185,129,0.5);" : "";
   return `
     <div class="flex flex-col items-center cursor-pointer group ${bounceClass}">
-      <div class="relative ${pinSizeClass} text-white rounded-full flex items-center justify-center shadow-lg border-2 border-white group-hover:scale-110 transition-transform" style="background:${pinColor}">
+      <div class="relative ${pinSizeClass} text-white rounded-full flex items-center justify-center shadow-lg border-2 border-white group-hover:scale-110 transition-transform" style="background:${pinColor};${ringStyle}">
         <span class="material-symbols-outlined ${iconSizeClass}">${store.icon}</span>
         ${productBadge}
+        ${routeBadge}
       </div>
-      <span class="text-xs font-bold bg-white px-2 py-0.5 rounded-md mt-0.5 shadow-sm border ${isFocused ? "border-[#EF4444]" : "border-[#E2E8F0]"}" style="color:${pinColor}">
+      <span class="text-xs font-bold bg-white px-2 py-0.5 rounded-md mt-0.5 shadow-sm border ${isFocused ? "border-[#EF4444]" : routeOrder ? "border-[#10B981]" : "border-[#E2E8F0]"}" style="color:${pinColor}">
         ${store.name}
       </span>
     </div>
@@ -110,6 +167,8 @@ export const MapView: React.FC<MapViewProps> = ({
   focusShopName,
   onFocusHandled,
   onBack,
+  recipeIngredients,
+  onClearRecipeIngredients,
 }) => {
   const [isPlayingDocent, setIsPlayingDocent] = useState(false);
   const [docentElapsedSec, setDocentElapsedSec] = useState(0);
@@ -150,6 +209,59 @@ export const MapView: React.FC<MapViewProps> = ({
       )
     : [];
 
+  // 레시피 재료 목록을, 이 시장에 실제로 등록된 점포/상품과 이름으로 매칭한다. "액젓 &
+  // 다진마늘"처럼 묶여있는 재료는 "&"/","로 쪼개 각각 시도한다. 재료명이 짧은 일반명사가
+  // 많아서(예: "무", "마늘") 정확도는 완벽하지 않지만, 이 시장에 없는 재료는 정직하게
+  // "이 시장엔 없음"으로 보여준다 — 아무거나 억지로 매칭시키지 않는다.
+  const recipeMatches = useMemo(() => {
+    if (!recipeIngredients || recipeIngredients.length === 0) return [];
+    return recipeIngredients.map((rawName) => {
+      const cleaned = rawName.replace(/\s*\(본 상품\)\s*/g, "").trim();
+      const parts = cleaned.split(/[&,]/).map((p) => p.trim()).filter(Boolean);
+      let matchedStore: MapStorePin | null = null;
+      for (const part of parts) {
+        if (!part) continue;
+        const found = stores.find(
+          (s) =>
+            s.products.some((p) => p.title.includes(part) || part.includes(p.title)) ||
+            s.subtitle.includes(part) ||
+            s.notice.includes(part)
+        );
+        if (found) {
+          matchedStore = found;
+          break;
+        }
+      }
+      return { ingredient: cleaned, store: matchedStore };
+    });
+  }, [recipeIngredients, stores]);
+
+  const matchedRecipeStores = useMemo(() => {
+    const seen = new Set<string>();
+    const list: MapStorePin[] = [];
+    recipeMatches.forEach((m) => {
+      if (m.store && !seen.has(m.store.id)) {
+        seen.add(m.store.id);
+        list.push(m.store);
+      }
+    });
+    return list;
+  }, [recipeMatches]);
+
+  // 내 위치(없으면 시장 중심)에서 출발해 최근접 이웃 순으로 방문 순서를 정한다.
+  const recipeRoute = useMemo(() => {
+    if (matchedRecipeStores.length === 0) return null;
+    const start = myLocation || mapCenter;
+    if (!start) return null;
+    return buildNearestNeighborRoute(start, matchedRecipeStores);
+  }, [matchedRecipeStores, myLocation, mapCenter]);
+
+  const recipeRouteStoreOrder = useMemo(() => {
+    const map = new Map<string, number>();
+    recipeRoute?.order.forEach((s, idx) => map.set(s.id, idx + 1));
+    return map;
+  }, [recipeRoute]);
+
   const speechStartRef = useRef<number | null>(null);
   const speechTokenRef = useRef<number>(0);
   const dragOffsetYRef = useRef<number>(0);
@@ -161,6 +273,7 @@ export const MapView: React.FC<MapViewProps> = ({
   const myLocationMarkerRef = useRef<any>(null);
   const marketBoundaryRef = useRef<any>(null);
   const marketLabelRef = useRef<any>(null);
+  const recipeRouteLineRef = useRef<any>(null);
 
   useEffect(() => {
     isDocentExpandedRef.current = isDocentExpanded;
@@ -436,7 +549,7 @@ export const MapView: React.FC<MapViewProps> = ({
         position: new naver.maps.LatLng(store.lat, store.lng),
         map: mapRef.current,
         icon: {
-          content: buildMarkerContent(store, activePin === store.name),
+          content: buildMarkerContent(store, activePin === store.name, recipeRouteStoreOrder.get(store.id)),
           anchor: new naver.maps.Point(40, 18),
         },
       });
@@ -456,7 +569,52 @@ export const MapView: React.FC<MapViewProps> = ({
       markersRef.current = [];
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [naverLoaded, stores, currentZoom, activePin]);
+  }, [naverLoaded, stores, currentZoom, activePin, recipeRouteStoreOrder]);
+
+  // 레시피 장보기 동선 — 내 위치(또는 시장 중심)에서 매칭된 점포들을 최근접 순으로 잇는
+  // 점선을 그리고, 전부 한눈에 보이도록 지도 범위를 맞춘다.
+  useEffect(() => {
+    if (!naverLoaded || !mapRef.current) return;
+    const naver = (window as any).naver;
+
+    if (recipeRouteLineRef.current) {
+      recipeRouteLineRef.current.setMap(null);
+      recipeRouteLineRef.current = null;
+    }
+
+    if (!recipeRoute || recipeRoute.order.length === 0) return;
+
+    const start = myLocation || mapCenter;
+    if (!start) return;
+
+    const path = [start, ...recipeRoute.order].map((p) => new naver.maps.LatLng(p.lat, p.lng));
+    recipeRouteLineRef.current = new naver.maps.Polyline({
+      map: mapRef.current,
+      path,
+      strokeColor: "#10B981",
+      strokeWeight: 4,
+      strokeOpacity: 0.8,
+      strokeStyle: "shortdash",
+    });
+
+    const bounds = new naver.maps.LatLngBounds(path[0], path[0]);
+    path.forEach((p) => bounds.extend(p));
+    mapRef.current.fitBounds(bounds, { top: 160, right: 40, bottom: 200, left: 40 });
+    // fitBounds가 고른 줌이 MIN_ZOOM_FOR_MARKERS보다 낮으면 점포 마커 자체가 안 보이는
+    // 줌이라(위쪽 "더 확대하면 점포가 표시됩니다" 상태), 체크리스트를 보고 일부러 여기까지
+    // 온 상황이니 최소한 마커가 보이는 줌까지는 강제로 올려준다.
+    if (mapRef.current.getZoom() < MIN_ZOOM_FOR_MARKERS) {
+      mapRef.current.setZoom(MIN_ZOOM_FOR_MARKERS);
+    }
+
+    return () => {
+      if (recipeRouteLineRef.current) {
+        recipeRouteLineRef.current.setMap(null);
+        recipeRouteLineRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [naverLoaded, recipeRoute]);
 
   // Elapsed time is derived from a real wall-clock start time (speechStartRef), not a
   // fixed 1%/sec loop -- Web Speech API gives no true duration, so "seeking" below works
@@ -754,6 +912,63 @@ export const MapView: React.FC<MapViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Recipe Shopping Checklist (Top Right) — 상품 상세의 레시피 탭에서 "지도에서 재료
+          위치 확인"으로 넘어왔을 때만 뜬다. 재료마다 이 시장에 실제로 파는 점포를 찾아
+          체크로 보여주고, 매칭된 점포들을 잇는 도보 동선(직선거리 최근접 이웃)을 안내한다. */}
+      {recipeIngredients && recipeIngredients.length > 0 && (
+        <div className="absolute top-[calc(6.5rem+env(safe-area-inset-top))] right-4 z-30 w-64 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-xl border border-[#E2E8F0] overflow-hidden">
+          <div className="flex items-center justify-between px-3.5 py-2.5 bg-emerald-50 border-b border-emerald-100">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="material-symbols-outlined text-emerald-600 text-lg shrink-0">checklist</span>
+              <span className="text-xs font-extrabold text-emerald-800 truncate">레시피 장보기 체크리스트</span>
+            </div>
+            <button
+              onClick={onClearRecipeIngredients}
+              className="text-emerald-700 hover:text-emerald-900 shrink-0"
+              title="체크리스트 닫기"
+            >
+              <span className="material-symbols-outlined text-lg">close</span>
+            </button>
+          </div>
+          <div className="max-h-56 overflow-y-auto divide-y divide-[#F1F5F9]">
+            {recipeMatches.map((m, idx) => (
+              <div key={idx} className="flex items-center justify-between gap-2 px-3.5 py-2 text-xs">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span
+                    className={`material-symbols-outlined text-base shrink-0 ${
+                      m.store ? "text-emerald-600" : "text-slate-300"
+                    }`}
+                  >
+                    {m.store ? "check_circle" : "radio_button_unchecked"}
+                  </span>
+                  <span className={`truncate font-bold ${m.store ? "text-[#0F172A]" : "text-slate-400"}`}>
+                    {m.ingredient}
+                  </span>
+                </div>
+                {m.store ? (
+                  <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md shrink-0">
+                    {m.store.name}
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-slate-400 shrink-0">이 시장엔 없음</span>
+                )}
+              </div>
+            ))}
+          </div>
+          {recipeRoute && (
+            <div className="px-3.5 py-2.5 bg-slate-50 border-t border-[#E2E8F0] text-[11px] font-bold text-[#64748B] flex items-center justify-between">
+              <span className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm text-emerald-600">directions_walk</span>
+                예상 도보 동선
+              </span>
+              <span className="text-[#0F172A] font-extrabold">
+                약 {Math.round(recipeRoute.totalMeters)}m · {Math.max(1, Math.round(recipeRoute.totalMeters / WALK_METERS_PER_MIN))}분
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Floating Action Map Controls (Left Middle) */}
       <div className="absolute left-3 top-1/3 transform -translate-y-1/2 flex flex-col gap-2 z-30">
