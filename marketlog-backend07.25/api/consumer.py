@@ -276,7 +276,7 @@ async def analyze_product(request: ScanRequest):
                 confidence = result["item_conf"]
                 p_high = result["grade_p_high"]  # "특상"일 확률 — 라벨보다 이 확률이 더 정직하다
 
-                public_price = get_kamis_price(item_name, grade_kor)
+                public_price = await get_kamis_price(item_name, grade_kor)
                 is_kamis_verified = public_price is not None
                 if public_price is None:
                     public_price = next(
@@ -344,7 +344,7 @@ async def analyze_product(request: ScanRequest):
     data = dict(SCAN_MOCK.get(request.sampleId, SCAN_MOCK["apple"]))
     target_discount_percent = data["priceDiffPercent"]
     kamis_config = SAMPLE_TO_KAMIS_ITEM.get(request.sampleId)
-    kamis_unit_price = get_kamis_price(kamis_config["item"], data["grade"]) if kamis_config else None
+    kamis_unit_price = await get_kamis_price(kamis_config["item"], data["grade"]) if kamis_config else None
     if kamis_unit_price is not None:
         kamis_price = round(kamis_unit_price * kamis_config["pack_weight_kg"])
         data["publicMarketPrice"] = kamis_price

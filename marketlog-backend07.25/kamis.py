@@ -132,39 +132,56 @@ def _refresh_cache() -> None:
 
 async def auto_refresh_loop() -> None:
     """서버 기동 시 즉시 한 번 갱신하고, 이후 매일 자정마다 자동으로 다시 받아온다.
-    사용자 요청이 없어도 캐시가 그날 데이터로 미리 채워진다."""
+    Cloud Run은 기본적으로 요청을 처리하는 동안에만 CPU를 배정하므로(cpu-throttling),
+    이 루프가 asyncio.create_task로 떠서 백그라운드로만 도는 동안엔 사실상 멈춰있을 수
+    있다 — 그래서 실제로 캐시가 채워지는 걸 보장하는 건 이 루프가 아니라 아래
+    get_public_price()가 요청 처리 도중 직접 기다리는 ensure_fresh()다. 이 루프는 운
+    좋게 먼저 끝나면 캐시를 미리 데워두는 최선노력용이다."""
     while True:
         await asyncio.to_thread(_refresh_cache)
         tomorrow = datetime.combine(date.today() + timedelta(days=1), datetime.min.time())
         await asyncio.sleep((tomorrow - datetime.now()).total_seconds())
 
 
-def _trigger_background_refresh() -> None:
-    """캐시 갱신은 최대 5일치 x 3개 카테고리까지 KAMIS를 순차 호출할 수 있어 느릴 때는
-    수십 초까지 걸린다. get_public_price()가 이걸 그 자리에서 기다리면(특히
-    analyze_product 같은 async 핸들러 안에서 await 없이 호출되므로) 그 동안 이벤트 루프
-    전체가 멈춰 다른 모든 요청까지 같이 느려진다. 그래서 별도 스레드에서 갱신하고, 이번
-    요청은 갱신 중인 기존 캐시(비어 있으면 None → 호출부가 정적 가격으로 폴백)를 그대로 쓴다.
-    이미 갱신 중이면 새 스레드를 또 띄우지 않는다."""
-    if _refresh_lock.locked():
-        return
-
-    def _run() -> None:
-        with _refresh_lock:
-            _refresh_cache()
-
-    threading.Thread(target=_run, daemon=True).start()
+def _refresh_cache_locked() -> None:
+    with _refresh_lock:
+        _refresh_cache()
 
 
-def get_public_price(item_name: str, grade_kor: str) -> "int | None":
-    """오늘(없으면 최근 영업일) KAMIS 소매가격에서 등급에 맞는 가격을 원/kg 단위로 반환.
-    데이터가 없으면(휴장일, 비계절 품목, 인증키 미설정, API 실패, 갱신 진행 중 등) None —
-    호출부는 이 경우 기존 정적 PUBLIC_PRICE_MAP으로 폴백해야 한다.
+async def ensure_fresh(timeout: float = 25.0) -> None:
+    """캐시가 오늘 날짜로 갱신돼 있는지 확인하고, 아니면 실제로 끝날 때까지(제한 시간
+    안에서) 기다린다. 예전엔 별도 스레드를 "띄우기만" 하고 이번 요청은 기다리지 않고
+    바로 넘어갔는데 — Cloud Run이 요청 처리 중에만 CPU를 주는 환경이라, 응답이 나간
+    뒤에는 그 백그라운드 스레드가 사실상 멈춰버려서 캐시가 영영 안 채워지는 문제가
+    있었다(공공시세가 항상 "데이터 없음"으로만 나오던 원인). 지금 요청의 실행 시간
+    안에서 await로 직접 기다려야 실제로 CPU를 받아 끝까지 실행된다.
     """
     is_stale = _cache["date"] != date.today()
     cooldown_elapsed = _cache["retry_after"] is None or datetime.now() >= _cache["retry_after"]
-    if is_stale and cooldown_elapsed:
-        _trigger_background_refresh()
+    if not (is_stale and cooldown_elapsed):
+        return
+
+    if _refresh_lock.locked():
+        # 동시에 들어온 다른 요청이 이미 갱신 중 — 짧게만 같이 기다렸다가, 안 끝나도
+        # 지금 있는 캐시로 그냥 진행한다(이 요청까지 무한정 묶어두지 않는다).
+        waited = 0.0
+        while _refresh_lock.locked() and waited < timeout:
+            await asyncio.sleep(0.3)
+            waited += 0.3
+        return
+
+    try:
+        await asyncio.wait_for(asyncio.to_thread(_refresh_cache_locked), timeout=timeout)
+    except asyncio.TimeoutError:
+        pass  # 제한 시간 안에 못 끝나면 지금 있는 캐시(비어있으면 폴백 대상)로 그냥 진행
+
+
+async def get_public_price(item_name: str, grade_kor: str) -> "int | None":
+    """오늘(없으면 최근 영업일) KAMIS 소매가격에서 등급에 맞는 가격을 원/kg 단위로 반환.
+    데이터가 없으면(휴장일, 비계절 품목, 인증키 미설정, API 실패, 시간 안에 못 받아옴 등)
+    None — 호출부는 이 경우 기존 정적 PUBLIC_PRICE_MAP으로 폴백해야 한다.
+    """
+    await ensure_fresh()
 
     by_rank = _cache["prices"].get(item_name)
     if not by_rank:
