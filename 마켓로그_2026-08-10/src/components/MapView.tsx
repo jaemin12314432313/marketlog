@@ -183,6 +183,10 @@ export const MapView: React.FC<MapViewProps> = ({
   const [activePin, setActivePin] = useState<string | null>(null);
   const [naverLoaded, setNaverLoaded] = useState(false);
   const [stores, setStores] = useState<MapStorePin[]>([]);
+  // 레시피 재료 매칭은 stores가 실제로 로드된 뒤에야 의미가 있다 — 로드되기 전에
+  // "이 시장엔 없음"을 보여주면, 아직 확인도 안 했으면서 마치 없는 것처럼 단정하는
+  // 꼴이라 오해를 준다.
+  const [storesLoaded, setStoresLoaded] = useState(false);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [geoAttempted, setGeoAttempted] = useState(false);
@@ -249,12 +253,21 @@ export const MapView: React.FC<MapViewProps> = ({
   }, [recipeMatches]);
 
   // 내 위치(없으면 시장 중심)에서 출발해 최근접 이웃 순으로 방문 순서를 정한다.
+  // 내 위치가 이 시장에서 3km 넘게 떨어져 있으면(예: 집에서 그냥 레시피만 구경하는 중)
+  // "내 위치에서 걸어서 장보기 동선"은 의미가 없다 — 지도가 내 위치와 시장을 억지로
+  // 한 화면에 욱여넣으려다 잔뜩 축소돼서 아무것도 안 보이는 화면이 되던 원인이기도
+  // 했다. 이럴 땐 내 위치 대신 시장 중심을 출발점으로 써서, 시장 안에서의 동선만 보여준다.
+  const MAX_WALK_ROUTE_START_METERS = 3000;
+  const recipeRouteStart = useMemo(() => {
+    if (!mapCenter) return null;
+    const useMyLocation = myLocation && haversineMeters(myLocation, mapCenter) <= MAX_WALK_ROUTE_START_METERS;
+    return useMyLocation ? myLocation! : mapCenter;
+  }, [myLocation, mapCenter]);
+
   const recipeRoute = useMemo(() => {
-    if (matchedRecipeStores.length === 0) return null;
-    const start = myLocation || mapCenter;
-    if (!start) return null;
-    return buildNearestNeighborRoute(start, matchedRecipeStores);
-  }, [matchedRecipeStores, myLocation, mapCenter]);
+    if (matchedRecipeStores.length === 0 || !recipeRouteStart) return null;
+    return buildNearestNeighborRoute(recipeRouteStart, matchedRecipeStores);
+  }, [matchedRecipeStores, recipeRouteStart]);
 
   const recipeRouteStoreOrder = useMemo(() => {
     const map = new Map<string, number>();
@@ -392,13 +405,17 @@ export const MapView: React.FC<MapViewProps> = ({
   // Fetch store pins from the backend for the selected market.
   useEffect(() => {
     let cancelled = false;
+    setStoresLoaded(false);
     fetchMapStores(selectedMarket.name)
       .then((res) => {
         if (cancelled) return;
         setStores(res.stores);
         setMapCenter(res.center);
       })
-      .catch((err) => console.error("점포 지도 정보를 불러오지 못했습니다.", err));
+      .catch((err) => console.error("점포 지도 정보를 불러오지 못했습니다.", err))
+      .finally(() => {
+        if (!cancelled) setStoresLoaded(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -582,12 +599,9 @@ export const MapView: React.FC<MapViewProps> = ({
       recipeRouteLineRef.current = null;
     }
 
-    if (!recipeRoute || recipeRoute.order.length === 0) return;
+    if (!recipeRoute || recipeRoute.order.length === 0 || !recipeRouteStart) return;
 
-    const start = myLocation || mapCenter;
-    if (!start) return;
-
-    const path = [start, ...recipeRoute.order].map((p) => new naver.maps.LatLng(p.lat, p.lng));
+    const path = [recipeRouteStart, ...recipeRoute.order].map((p) => new naver.maps.LatLng(p.lat, p.lng));
     recipeRouteLineRef.current = new naver.maps.Polyline({
       map: mapRef.current,
       path,
@@ -614,7 +628,7 @@ export const MapView: React.FC<MapViewProps> = ({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [naverLoaded, recipeRoute]);
+  }, [naverLoaded, recipeRoute, recipeRouteStart]);
 
   // Elapsed time is derived from a real wall-clock start time (speechStartRef), not a
   // fixed 1%/sec loop -- Web Speech API gives no true duration, so "seeking" below works
@@ -932,29 +946,36 @@ export const MapView: React.FC<MapViewProps> = ({
             </button>
           </div>
           <div className="max-h-56 overflow-y-auto divide-y divide-[#F1F5F9]">
-            {recipeMatches.map((m, idx) => (
-              <div key={idx} className="flex items-center justify-between gap-2 px-3.5 py-2 text-xs">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span
-                    className={`material-symbols-outlined text-base shrink-0 ${
-                      m.store ? "text-emerald-600" : "text-slate-300"
-                    }`}
-                  >
-                    {m.store ? "check_circle" : "radio_button_unchecked"}
-                  </span>
-                  <span className={`truncate font-bold ${m.store ? "text-[#0F172A]" : "text-slate-400"}`}>
-                    {m.ingredient}
-                  </span>
-                </div>
-                {m.store ? (
-                  <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md shrink-0">
-                    {m.store.name}
-                  </span>
-                ) : (
-                  <span className="text-[10px] text-slate-400 shrink-0">이 시장엔 없음</span>
-                )}
+            {!storesLoaded ? (
+              <div className="flex items-center justify-center gap-2 px-3.5 py-4 text-xs text-slate-400">
+                <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                이 시장 점포 정보를 확인하는 중...
               </div>
-            ))}
+            ) : (
+              recipeMatches.map((m, idx) => (
+                <div key={idx} className="flex items-center justify-between gap-2 px-3.5 py-2 text-xs">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span
+                      className={`material-symbols-outlined text-base shrink-0 ${
+                        m.store ? "text-emerald-600" : "text-slate-300"
+                      }`}
+                    >
+                      {m.store ? "check_circle" : "radio_button_unchecked"}
+                    </span>
+                    <span className={`truncate font-bold ${m.store ? "text-[#0F172A]" : "text-slate-400"}`}>
+                      {m.ingredient}
+                    </span>
+                  </div>
+                  {m.store ? (
+                    <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md shrink-0">
+                      {m.store.name}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-slate-400 shrink-0">이 시장엔 없음</span>
+                  )}
+                </div>
+              ))
+            )}
           </div>
           {recipeRoute && (
             <div className="px-3.5 py-2.5 bg-slate-50 border-t border-[#E2E8F0] text-[11px] font-bold text-[#64748B] flex items-center justify-between">
