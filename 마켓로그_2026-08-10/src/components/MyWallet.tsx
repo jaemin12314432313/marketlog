@@ -798,8 +798,11 @@ export const MyWallet: React.FC<MyWalletProps> = ({
               <label className="text-xs font-extrabold text-slate-700 block">휴대폰 번호</label>
               <input
                 type="tel"
+                inputMode="numeric"
                 value={personalInfo.userPhone}
-                onChange={(e) => setPersonalInfo({ ...personalInfo, userPhone: e.target.value })}
+                onChange={(e) =>
+                  setPersonalInfo({ ...personalInfo, userPhone: formatPhoneAsYouType(e.target.value) })
+                }
                 placeholder="010-0000-0000"
                 className={`w-full px-3 py-2 text-xs font-bold bg-white border border-slate-300 rounded-xl focus:outline-none text-slate-900 ${
                   userRole === "merchant" ? "focus:border-emerald-500" : "focus:border-[#0052FF]"
@@ -995,10 +998,12 @@ export const MyWallet: React.FC<MyWalletProps> = ({
             </>
           )}
 
-          {/* 소속 전통시장을 고르기 전엔 상호명/전화번호/영업시간 등 요약도, 수정 폼도
-              전부 "미등록"만 잔뜩 보여줘서 지저분하고 헷갈린다 — 시장을 고른 뒤에만
-              보여준다. */}
-          {userMarketId && (!isEditingShopInfo ? (
+          {/* 소속 전통시장 선택 카드가 떠 있는 동안만(=userMarketId 없고 hasStoreProfile이
+              명확히 false) 이 요약/수정 폼을 숨긴다 — "미등록" 천지인 화면이 같이 뜨는 걸
+              막기 위함이었는데, 처음엔 이 조건을 userMarketId만으로 판단해서 이미 점포가
+              있는 예전 계정(market_id는 비어있지만 hasStoreProfile은 true)까지 같이 숨어
+              버리는 버그가 있었다 — 위 시장 선택 카드와 정확히 반대 조건으로 맞춘다. */}
+          {(userMarketId || hasStoreProfile !== false) && (!isEditingShopInfo ? (
             /* View Mode */
             <div className="space-y-3">
               <div className="space-y-2 text-xs divide-y divide-[#F1F5F9]">

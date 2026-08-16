@@ -930,7 +930,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       </div>
                       <div className="flex justify-between py-1.5">
                         <span className="text-[#64748B] font-medium">주요 품목</span>
-                        <span className="font-extrabold text-[#0F172A]">{storeInfo?.subtitle || product.category}</span>
+                        {/* 점포에 등록된 주요 품목이 없을 때 지금 보고 있는 상품의 카테고리로
+                            대신 채우면, 그 점포가 실제로는 다른 걸 팔면서도 마치 이 상품
+                            카테고리가 주력인 것처럼 보여서 오해를 준다 — 정직하게 미등록 표시. */}
+                        <span className="font-extrabold text-[#0F172A]">{storeInfo?.subtitle || "미등록"}</span>
                       </div>
                       {storeInfo?.alley && (
                         <div className="flex justify-between py-1.5">
