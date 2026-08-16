@@ -29,7 +29,7 @@ def scanned_to_dict(item: ScannedProduct) -> dict:
         "uniformityScore": item.uniformity_score,
         "description": item.description,
         "aiSummary": item.ai_summary,
-        "createdAt": item.created_at.isoformat() if item.created_at else None,
+        "createdAt": item.created_at.isoformat() + "Z" if item.created_at else None,
     }
 
 

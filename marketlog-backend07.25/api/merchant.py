@@ -5,7 +5,7 @@ import os
 import uuid
 
 from db import get_db
-from models import Market, Product, Store, User, product_to_dict
+from models import Market, Product, Store, User, product_to_dict, resolve_merchant_market_id
 from api.auth import get_current_user
 
 router = APIRouter(tags=["Merchant"])
@@ -18,11 +18,13 @@ def require_merchant(current_user: User) -> str:
     return current_user.shop_name or current_user.display_name
 
 
-def merchant_market_id(current_user: User) -> str:
+def merchant_market_id(db: Session, current_user: User) -> str:
     """로그인 후 마이 탭에서 고른 소속 전통시장 — 이 값 기준으로 점포/상품이 전부 그
-    시장에 묶인다. market_id가 없는 기존 계정(이 필드가 생기기 전에 가입해 이미 점포가
-    있는 경우)은 "yangdong"으로 취급한다."""
-    return current_user.market_id or "yangdong"
+    시장에 묶인다. resolve_merchant_market_id(models.py, auth.py의 login/me와 공유)가
+    market_id를 확정할 수 없는 경우(진짜 신규 계정, 아직 점포도 없음)에도 이 함수
+    자체는 "yangdong"을 그대로 반환한다 — set_store_location에서 처음 점포를 만들 때
+    같은 fallback 시장으로 만들어져야 나중에 다시 조회될 수 있기 때문이다."""
+    return resolve_merchant_market_id(db, current_user) or "yangdong"
 
 
 def market_region(db: Session, market_id: str) -> str:
@@ -86,7 +88,7 @@ def create_product(
     db: Session = Depends(get_db),
 ):
     shop_name = require_merchant(current_user)
-    market_id = merchant_market_id(current_user)
+    market_id = merchant_market_id(db, current_user)
     store = require_store_ready(db, market_id, shop_name)
     market = db.query(Market).filter(Market.id == market_id).first()
     product = Product(
@@ -193,7 +195,11 @@ def set_merchant_market(
     db: Session = Depends(get_db),
 ):
     require_merchant(current_user)
-    if current_user.market_id:
+    # market_id가 비어 있어도, 시장 선택 기능이 생기기 전에 가입해 이미 점포가 있는
+    # 계정이면 resolve_merchant_market_id가 "yangdong"으로 확정해서 market_id에 그대로
+    # 기록해준다 — 여기서 다른 시장으로 바꿔버리면 그 점포/상품이 새 시장 기준 조회에
+    # 안 걸려서 통째로 사라진 것처럼 보이는 문제가 실제로 있었다.
+    if resolve_merchant_market_id(db, current_user):
         raise HTTPException(status_code=400, detail="이미 소속 전통시장이 설정되어 있습니다.")
 
     if payload.marketId:
@@ -231,7 +237,7 @@ def get_store_location(
     db: Session = Depends(get_db),
 ):
     shop_name = require_merchant(current_user)
-    market_id = merchant_market_id(current_user)
+    market_id = merchant_market_id(db, current_user)
     store = (
         db.query(Store)
         .filter(Store.market_id == market_id, Store.name == shop_name)
@@ -249,7 +255,7 @@ def set_store_location(
     db: Session = Depends(get_db),
 ):
     shop_name = require_merchant(current_user)
-    market_id = merchant_market_id(current_user)
+    market_id = merchant_market_id(db, current_user)
     store = (
         db.query(Store)
         .filter(Store.market_id == market_id, Store.name == shop_name)
@@ -323,7 +329,7 @@ def get_store_profile(
     shop_name = require_merchant(current_user)
     store = (
         db.query(Store)
-        .filter(Store.market_id == merchant_market_id(current_user), Store.name == shop_name)
+        .filter(Store.market_id == merchant_market_id(db, current_user), Store.name == shop_name)
         .first()
     )
     if not store:
@@ -340,7 +346,7 @@ def update_store_profile(
     shop_name = require_merchant(current_user)
     store = (
         db.query(Store)
-        .filter(Store.market_id == merchant_market_id(current_user), Store.name == shop_name)
+        .filter(Store.market_id == merchant_market_id(db, current_user), Store.name == shop_name)
         .first()
     )
     if not store:
@@ -385,7 +391,7 @@ async def kakao_register(
     db: Session = Depends(get_db),
 ):
     shop_name = require_merchant(current_user)
-    market_id = merchant_market_id(current_user)
+    market_id = merchant_market_id(db, current_user)
 
     # 나중에 Gemini API 연동할 자리
     product = Product(
@@ -443,7 +449,7 @@ async def upload_product(
     with open(file_path, "wb") as buffer:
         buffer.write(contents)
 
-    market_id = merchant_market_id(current_user)
+    market_id = merchant_market_id(db, current_user)
     product = Product(
         market_id=market_id,
         store_id=resolve_store_id(db, market_id, shop_name),

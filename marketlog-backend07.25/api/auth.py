@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from db import get_db
-from models import User, Market
+from models import User, Market, resolve_merchant_market_id
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
 
@@ -145,12 +145,21 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     if not user or not verify_password(request.password, user.password_hash):
         raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
 
+    # 시장 선택 기능이 생기기 전에 가입해 이미 점포가 있는 상인 계정은 market_id가
+    # 비어 있어도 실제로는 "yangdong" 기준으로 동작한다 — 로그인 응답에도 그 확정된
+    # 값이 실려야 프론트가 "소속 전통시장 미선택"으로 잘못 판단해 상품 등록을 막지
+    # 않는다.
+    if user.role == "merchant":
+        resolve_merchant_market_id(db, user)
+
     token = create_access_token(user.id)
     return {"success": True, "token": token, "user": serialize_user(user)}
 
 
 @router.get("/me")
-def me(current_user: User = Depends(get_current_user)):
+def me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if current_user.role == "merchant":
+        resolve_merchant_market_id(db, current_user)
     return {"success": True, "user": serialize_user(current_user)}
 
 

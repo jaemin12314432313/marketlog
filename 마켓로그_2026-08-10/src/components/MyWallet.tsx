@@ -183,6 +183,10 @@ export const MyWallet: React.FC<MyWalletProps> = ({
   const [hasStoreProfile, setHasStoreProfile] = useState<boolean | null>(null); // null = 로딩 중
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [locationVersion, setLocationVersion] = useState(0);
+  // 주요 품목/영업시간 값이 길면 요약 화면 한 줄을 넘어가서 지저분해지므로 기본은
+  // 한 줄로 잘라 보여주고 눌러서 펼칠 수 있게 한다.
+  const [isShopCategoryExpanded, setIsShopCategoryExpanded] = useState(false);
+  const [isShopHoursExpanded, setIsShopHoursExpanded] = useState(false);
   const [shopInfo, setShopInfo] = useState({
     storeName: userShopName || initialShopName,
     marketName,
@@ -213,6 +217,14 @@ export const MyWallet: React.FC<MyWalletProps> = ({
   useEffect(() => {
     if (userProfileImage) setProfileImage(userProfileImage);
   }, [userProfileImage]);
+
+  // shopInfo.marketName은 useState 초기값으로만 받아서, 소속 전통시장을 처음 선택한
+  // 직후(handleConfirmMarket → onMarketSelected → 부모의 marketName prop 갱신)에도
+  // 로컬 상태가 그대로 남아 "미선택"만 계속 보여주는 문제가 있었다 — prop이 바뀌면
+  // 같이 갱신되게 동기화한다.
+  useEffect(() => {
+    setShopInfo((prev) => ({ ...prev, marketName }));
+  }, [marketName]);
 
   // Personal Information Editing State — 실제 로그인한 유저의 진짜 정보를 사용한다.
   const [personalInfo, setPersonalInfo] = useState({
@@ -1013,19 +1025,55 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                 </div>
                 <div className="flex justify-between py-1.5">
                   <span className="text-[#64748B] font-medium">소속 전통시장</span>
-                  <span className="font-extrabold text-emerald-600">{shopInfo.marketName || "미선택"}</span>
+                  <span className="font-extrabold text-emerald-600">
+                    {shopInfo.marketName || (hasStoreProfile ? "광주 양동시장" : "미선택")}
+                  </span>
                 </div>
-                <div className="flex justify-between py-1.5">
-                  <span className="text-[#64748B] font-medium">주요 품목</span>
-                  <span className="font-extrabold text-[#0F172A]">{shopInfo.category || "미등록"}</span>
+                <div className="py-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[#64748B] font-medium shrink-0">주요 품목</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsShopCategoryExpanded((v) => !v)}
+                      className="flex items-center gap-1 min-w-0 cursor-pointer"
+                    >
+                      <span
+                        className={`font-extrabold text-[#0F172A] text-right ${
+                          isShopCategoryExpanded ? "whitespace-normal break-words" : "truncate"
+                        }`}
+                      >
+                        {shopInfo.category || "미등록"}
+                      </span>
+                      <span className="material-symbols-outlined text-slate-400 text-base shrink-0">
+                        {isShopCategoryExpanded ? "expand_less" : "expand_more"}
+                      </span>
+                    </button>
+                  </div>
                 </div>
                 <div className="flex justify-between py-1.5">
                   <span className="text-[#64748B] font-medium">전화번호</span>
                   <span className="font-bold text-[#334155]">{shopInfo.phone || "미등록"}</span>
                 </div>
-                <div className="flex justify-between py-1.5">
-                  <span className="text-[#64748B] font-medium">영업시간</span>
-                  <span className="font-bold text-[#334155]">{shopInfo.hours || "미등록"}</span>
+                <div className="py-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[#64748B] font-medium shrink-0">영업시간</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsShopHoursExpanded((v) => !v)}
+                      className="flex items-center gap-1 min-w-0 cursor-pointer"
+                    >
+                      <span
+                        className={`font-bold text-[#334155] text-right ${
+                          isShopHoursExpanded ? "whitespace-normal break-words" : "truncate"
+                        }`}
+                      >
+                        {shopInfo.hours || "미등록"}
+                      </span>
+                      <span className="material-symbols-outlined text-slate-400 text-base shrink-0">
+                        {isShopHoursExpanded ? "expand_less" : "expand_more"}
+                      </span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1051,6 +1099,21 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                   placeholder="예: 양동수산"
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
                 />
+              </div>
+
+              {/* 소속 전통시장 — 이 폼까지 왔다는 건 이미 점포(Store 레코드)가 있다는
+                  뜻이고(hasStoreProfile !== false일 때만 이 폼이 보임), 백엔드의
+                  merchant_market_id()가 그런 계정은 market_id가 비어 있어도 항상
+                  "yangdong"(광주 양동시장) 기준으로 점포를 저장/조회하고 있다. 여기서
+                  다른 시장으로 바꾸는 걸 허용하면 그 점포/상품이 새 시장 기준 조회에 안
+                  걸려서 통째로 사라져 보이는 문제가 실제로 있었다(백엔드도 같은 이유로
+                  set_merchant_market에서 이 경우를 막는다) — 그래서 여기서는 고르게 하지
+                  않고 항상 읽기 전용으로만 보여준다. */}
+              <div className="space-y-1">
+                <label className="font-bold text-[#334155] block">소속 전통시장</label>
+                <p className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-emerald-700">
+                  {shopInfo.marketName || "광주 양동시장"}
+                </p>
               </div>
 
               {/* 주요 품목 — 타이핑 대신 소비자 홈 피드와 같은 5개 카테고리를 체크 버튼으로 고른다 */}

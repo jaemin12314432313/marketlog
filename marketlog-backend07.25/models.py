@@ -115,6 +115,25 @@ class Store(Base):
     market = relationship("Market", back_populates="stores")
 
 
+# 소속 전통시장 선택 기능이 생기기 전에 가입해 이미 점포가 있는 계정은 market_id가 비어
+# 있어도 그 점포가 "yangdong"(광주 양동시장) 기준으로 저장돼 있다 — 여러 API 모듈
+# (auth.py의 login/me, merchant.py의 점포/상품 조회)이 공통으로 이 사실을 확정해서
+# market_id에 기록해야 해서(모듈 간 순환 import를 피하려고) models.py에 둔다.
+# market_id가 있으면 그대로, 없고 점포가 실제로 있으면 "yangdong"으로 확정해 기록,
+# 점포도 없는 진짜 신규 계정이면 확정하지 않고(마이 탭 시장 선택 온보딩 카드가 계속
+# 보이도록) None을 반환한다.
+def resolve_merchant_market_id(db, user: "User") -> "str | None":
+    if user.market_id:
+        return user.market_id
+    shop_name = user.shop_name or user.display_name
+    existing_store = db.query(Store).filter(Store.market_id == "yangdong", Store.name == shop_name).first()
+    if existing_store:
+        user.market_id = "yangdong"
+        db.commit()
+        return "yangdong"
+    return None
+
+
 class Product(Base):
     __tablename__ = "products"
 
@@ -175,5 +194,8 @@ def product_to_dict(product: Product) -> dict:
         "region": product.region,
         "marketId": product.market_id,
         "storeId": product.store_id,
-        "createdAt": product.created_at.isoformat() if product.created_at else None,
+        # created_at은 naive UTC(datetime.utcnow())로 저장돼 있어서 'Z'를 안 붙이면
+        # 프론트 JS의 Date 파서가 이 문자열을 "브라우저 로컬시간"으로 잘못 해석해
+        # KST 기준으로 최대 9시간(자정 근처면 하루 통째로) 어긋난 날짜가 표시된다.
+        "createdAt": product.created_at.isoformat() + "Z" if product.created_at else None,
     }

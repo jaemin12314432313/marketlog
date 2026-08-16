@@ -112,7 +112,10 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
   // 위치는 있어도 전화번호/영업시간이 비어있으면 상품은 있는데 연락할 방법이 없는
   // 반쪽짜리 점포가 된다 — 신규 상품 등록은 이 세 가지가 다 채워졌을 때만 허용한다.
   const [hasStoreContactInfo, setHasStoreContactInfo] = useState<boolean | null>(null);
-  const canRegisterProducts = hasStoreLocation && hasStoreContactInfo;
+  // marketName은 userMarketId가 있을 때만 채워진다 — 시장 선택 기능이 생기기 전에 가입한
+  // 예전 계정은 hasStoreLocation/hasStoreContactInfo가 이미 true라도 소속 전통시장을 아직
+  // 안 골랐을 수 있어서, 이걸 빼먹으면 시장 미선택 상태로 계속 상품이 등록되는 문제가 있었다.
+  const canRegisterProducts = hasStoreLocation && hasStoreContactInfo && Boolean(marketName);
 
   const refreshStoreReadiness = () => {
     getStoreLocation()
@@ -319,7 +322,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
   const handleSubmitManual = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProductId && !canRegisterProducts) {
-      alert("새 상품을 등록하려면 먼저 점포 위치와 전화번호/영업시간을 등록해주세요.");
+      alert("새 상품을 등록하려면 먼저 소속 전통시장, 점포 위치, 전화번호/영업시간을 등록해주세요.");
       return;
     }
     const numPrice = Number(price);
@@ -437,13 +440,13 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
       {/* 점포 위치 등록 UI는 마이 탭의 '점포 기본 상세 정보' 카드로 옮겨서, 위치·전화번호·
           영업시간을 한 곳에서 같이 관리하게 했다. 여기서는 등록 여부만 확인해서 상품
           등록 자체를 막는 게이트로만 쓴다. */}
-      {(hasStoreLocation === false || hasStoreContactInfo === false) && (
+      {(hasStoreLocation === false || hasStoreContactInfo === false || (hasStoreLocation && hasStoreContactInfo && !marketName)) && (
         <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50 flex items-start gap-3">
           <span className="material-symbols-outlined text-amber-600 shrink-0">warning</span>
           <div className="text-xs text-amber-900">
             <p className="font-extrabold">아직 새 상품을 등록할 수 없어요</p>
             <p className="mt-1 leading-relaxed text-amber-800">
-              마이 탭의 '점포 기본 상세 정보'에서 점포 위치와 전화번호, 영업시간을 먼저 등록해주세요.
+              마이 탭의 '점포 기본 상세 정보'에서 소속 전통시장과 점포 위치, 전화번호, 영업시간을 먼저 등록해주세요.
             </p>
           </div>
         </div>
