@@ -10,11 +10,13 @@ router = APIRouter(prefix="/api/v1/map", tags=["map"])
 
 GEOCODE_URL = "https://maps.apigw.ntruss.com/map-geocode/v2/geocode"
 REVERSE_GEOCODE_URL = "https://maps.apigw.ntruss.com/map-reversegeocode/v2/gc"
-# 이건 위 지오코딩(NCP Maps)이랑 완전히 다른 서비스다 — 네이버 개발자센터(NAVER
-# Developers/API HUB)에서 별도로 신청하는 "검색 API > 지역" 이고, 인증 키도
-# NAVER_SEARCH_CLIENT_ID/SECRET로 따로 받는다. 주소 문자열이 아니라 "양동시장" 같은
-# 상호/장소명으로 검색할 수 있는 게 이 API만의 기능이라 지오코딩으로 대체가 안 된다.
-LOCAL_SEARCH_URL = "https://openapi.naver.com/v1/search/local.json"
+# 이건 위 지오코딩(NCP Maps)이랑 완전히 다른 서비스다 — NAVER API HUB(console.ncloud.com)
+# 에서 별도로 신청하는 "검색 > 지역" 이고, 인증 키도 NAVER_SEARCH_CLIENT_ID/SECRET로
+# 따로 받는다. 주소 문자열이 아니라 "양동시장" 같은 상호/장소명으로 검색할 수 있는 게
+# 이 API만의 기능이라 지오코딩으로 대체가 안 된다.
+# 예전 openapi.naver.com/v1/search/local.json 엔드포인트는 API HUB로 이관되면서 경로와
+# 인증 헤더(X-Naver-Client-Id → X-NCP-APIGW-API-KEY-ID)가 통째로 바뀌었다.
+LOCAL_SEARCH_URL = "https://naverapihub.apigw.ntruss.com/search/v1/local"
 
 DEFAULT_MARKET_ID = "yangdong"
 
@@ -87,8 +89,9 @@ def _parse_local_search_coord(raw: str) -> float:
 
 
 # 1.6. 상호명/장소명 검색 — 지오코딩(주소 문자열 전용)과 달리 "양동시장"처럼 정확한
-# 주소를 모르는 장소명으로도 찾을 수 있다. NAVER Developers에서 별도 신청한
-# NAVER_SEARCH_CLIENT_ID/SECRET을 쓴다(지도용 NAVER_CLIENT_ID/SECRET과는 다른 키).
+# 주소를 모르는 장소명으로도 찾을 수 있다. NAVER API HUB에서 별도 신청한
+# NAVER_SEARCH_CLIENT_ID/SECRET을 쓴다(지도용 NAVER_CLIENT_ID/SECRET과는 다른 키,
+# 인증 헤더도 NCP APIGW 방식이라 지오코딩과 동일한 x-ncp-apigw-api-key 계열이다).
 @router.get("/search-place")
 def search_place(query: str):
     client_id = os.getenv("NAVER_SEARCH_CLIENT_ID")
@@ -101,8 +104,8 @@ def search_place(query: str):
             LOCAL_SEARCH_URL,
             params={"query": query, "display": 5, "sort": "random"},
             headers={
-                "X-Naver-Client-Id": client_id,
-                "X-Naver-Client-Secret": client_secret,
+                "X-NCP-APIGW-API-KEY-ID": client_id,
+                "X-NCP-APIGW-API-KEY": client_secret,
             },
             timeout=10,
         )
