@@ -57,6 +57,9 @@ interface HomeFeedProps {
   bookmarkedProductIds?: string[];
   onToggleBookmark?: (product: ProductItem) => void;
   isLoading?: boolean;
+  // 상인이 방금 물건을 새로 등록/수정했을 때, 탭을 나갔다 들어오지 않고도 바로 최신
+  // 목록을 받아올 수 있게 하는 수동 새로고침. 없으면 버튼 자체를 숨긴다.
+  onRefresh?: () => Promise<void>;
 }
 
 export const HomeFeed: React.FC<HomeFeedProps> = ({
@@ -71,8 +74,21 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
   bookmarkedProductIds = [],
   onToggleBookmark,
   isLoading = false,
+  onRefresh,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    if (!onRefresh || isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await onRefresh();
+    } catch (err) {
+      console.error("상품 피드 새로고침 실패", err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
   const [sortBy, setSortBy] = useState<"latest" | "discount" | "priceLow" | "priceHigh">("latest");
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -271,6 +287,20 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
             </>
           )}
         </div>
+
+        {onRefresh && (
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="ml-auto w-9 h-9 rounded-full flex items-center justify-center border bg-white border-[#E2E8F0] text-[#334155] hover:border-[#CBD5E1] transition-all active:scale-95 disabled:opacity-60 shrink-0"
+            title="새로고침"
+          >
+            <span className={`material-symbols-outlined text-lg ${isRefreshing ? "animate-spin" : ""}`}>
+              refresh
+            </span>
+          </button>
+        )}
       </section>
 
       {/* Live Product Feed Container */}
