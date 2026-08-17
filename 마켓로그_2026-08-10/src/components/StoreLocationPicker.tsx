@@ -271,7 +271,7 @@ export const StoreLocationPicker: React.FC<StoreLocationPickerProps> = ({
     }
     setIsSaving(true);
     try {
-      await setStoreLocation(pin);
+      await setStoreLocation({ ...pin, address: resolvedAddress });
       alert("점포 위치가 등록되었습니다. 이제 지도에서 내 점포와 상품을 볼 수 있어요.");
       onSaved?.();
       handleClose();

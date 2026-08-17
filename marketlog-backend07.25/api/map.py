@@ -248,6 +248,7 @@ def get_map_stores(market_name: str = "양동시장", db: Session = Depends(get_
                 "alley": s.alley,
                 "phone": s.phone,
                 "hours": s.hours,
+                "address": s.address,
                 "products": products_by_store.get(s.id, []),
             }
             for s in stores
@@ -273,5 +274,6 @@ def get_store_by_name(name: str, db: Session = Depends(get_db)):
             "phone": store.phone,
             "hours": store.hours,
             "storyText": store.story_text,
+            "address": store.address,
         },
     }

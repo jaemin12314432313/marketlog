@@ -35,6 +35,7 @@ _pending_columns = {
         ("market_id", "VARCHAR"),
     ],
     "scanned_products": [("ai_summary", "VARCHAR")],
+    "stores": [("address", "VARCHAR NOT NULL DEFAULT ''")],
 }
 for _table, _columns in _pending_columns.items():
     if _table not in _inspector.get_table_names():

@@ -943,6 +943,12 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                           <span className="font-bold text-[#334155] text-right max-w-[240px]">{storeInfo.alley}</span>
                         </div>
                       )}
+                      {storeInfo?.address && (
+                        <div className="flex justify-between py-1.5 gap-3">
+                          <span className="text-[#64748B] font-medium shrink-0">위치</span>
+                          <span className="font-bold text-[#334155] text-right max-w-[240px]">{storeInfo.address}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between py-1.5">
                         <span className="text-[#64748B] font-medium">전화번호</span>
                         {storeInfo?.phone ? (

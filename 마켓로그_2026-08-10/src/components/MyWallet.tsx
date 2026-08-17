@@ -194,6 +194,7 @@ export const MyWallet: React.FC<MyWalletProps> = ({
     phone: "",
     hours: "",
     description: "",
+    address: "",
   });
 
   // 영업시간 입력 모드 — "매일 동일하게 영업"이 기본값이라 시작/종료 시간 2개만 고르면
@@ -379,6 +380,7 @@ export const MyWallet: React.FC<MyWalletProps> = ({
             phone: res.profile!.phone,
             hours: res.profile!.hours,
             description: res.profile!.storyText,
+            address: res.profile!.address,
           }));
         } else {
           setHasStoreProfile(false);
@@ -1038,6 +1040,12 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                 <div className="flex justify-between py-1.5">
                   <span className="text-[#64748B] font-medium">상호명</span>
                   <span className="font-extrabold text-[#0F172A]">{shopInfo.storeName}</span>
+                </div>
+                <div className="flex justify-between py-1.5 gap-3">
+                  <span className="text-[#64748B] font-medium shrink-0">위치</span>
+                  <span className="font-bold text-[#334155] text-right truncate">
+                    {shopInfo.address || "지도에 핀을 찍으면 자동으로 채워져요"}
+                  </span>
                 </div>
                 <div className="flex justify-between py-1.5">
                   <span className="text-[#64748B] font-medium">소속 전통시장</span>

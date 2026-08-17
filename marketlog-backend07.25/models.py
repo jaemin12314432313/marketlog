@@ -111,6 +111,9 @@ class Store(Base):
     story_text = Column(String, nullable=False, default="")
     phone = Column(String, nullable=False, default="")
     hours = Column(String, nullable=False, default="")
+    # 상인이 위치 등록 시 지도를 클릭/검색한 좌표를 역지오코딩해서 자동으로 채워지는
+    # 도로명 주소 — 점포 상세 정보에서 위경도 숫자 대신 사람이 읽을 수 있는 위치로 보여준다.
+    address = Column(String, nullable=False, default="")
 
     market = relationship("Market", back_populates="stores")
 

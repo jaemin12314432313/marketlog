@@ -242,6 +242,9 @@ def set_merchant_market(
 class StoreLocationRequest(BaseModel):
     lat: float
     lng: float
+    # 프론트가 지도 클릭/검색 시 역지오코딩해서 얻은 도로명 주소 — 없어도(역지오코딩
+    # 실패) 위치 저장 자체는 그대로 진행한다.
+    address: str = ""
 
 
 @router.get("/api/v1/merchant/store-location")
@@ -258,7 +261,7 @@ def get_store_location(
     )
     if not store:
         return {"success": True, "store": None}
-    return {"success": True, "store": {"id": store.id, "lat": store.lat, "lng": store.lng}}
+    return {"success": True, "store": {"id": store.id, "lat": store.lat, "lng": store.lng, "address": store.address}}
 
 
 @router.put("/api/v1/merchant/store-location")
@@ -277,6 +280,8 @@ def set_store_location(
     if store:
         store.lat = payload.lat
         store.lng = payload.lng
+        if payload.address:
+            store.address = payload.address
     else:
         market = db.query(Market).filter(Market.id == market_id).first()
         # 직접입력으로 새로 만든 시장은 좌표를 몰라서 0,0으로 시작했다 — 이 상인이 처음
@@ -291,6 +296,7 @@ def set_store_location(
             subtitle="상인 등록 점포",
             lat=payload.lat,
             lng=payload.lng,
+            address=payload.address,
             category="merchant",
             icon="storefront",
             badge_color="#0052FF",
@@ -309,7 +315,7 @@ def set_store_location(
     db.query(Product).filter(Product.shop_name == shop_name).update({"store_id": store.id})
     db.commit()
 
-    return {"success": True, "store": {"id": store.id, "lat": store.lat, "lng": store.lng}}
+    return {"success": True, "store": {"id": store.id, "lat": store.lat, "lng": store.lng, "address": store.address}}
 
 
 # 상인 점포 상세정보(주요 품목/전화번호/영업시간/소개글) — 예전엔 MyWallet 화면에서
@@ -331,6 +337,7 @@ def _store_profile_dict(store: Store) -> dict:
         "phone": store.phone,
         "hours": store.hours,
         "storyText": store.story_text,
+        "address": store.address,
     }
 
 

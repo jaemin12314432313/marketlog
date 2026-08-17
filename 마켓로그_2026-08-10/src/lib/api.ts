@@ -83,6 +83,7 @@ export interface MapStorePin {
   notice: string;
   notice_time: string;
   alley: string;
+  address: string;
   products: { id: string; title: string; price: number; image_url: string }[];
 }
 
@@ -153,6 +154,7 @@ export interface StoreInfo {
   phone: string;
   hours: string;
   storyText: string;
+  address: string;
 }
 
 export function fetchStoreByName(name: string): Promise<{ status: string; store: StoreInfo | null }> {
@@ -343,13 +345,16 @@ export interface StoreLocation {
   id: string;
   lat: number;
   lng: number;
+  address: string;
 }
 
 export function getStoreLocation(): Promise<{ success: boolean; store: StoreLocation | null }> {
   return apiFetch("/api/v1/merchant/store-location");
 }
 
-export function setStoreLocation(payload: { lat: number; lng: number }): Promise<{ success: boolean; store: StoreLocation }> {
+export function setStoreLocation(
+  payload: { lat: number; lng: number; address?: string }
+): Promise<{ success: boolean; store: StoreLocation }> {
   return apiFetch("/api/v1/merchant/store-location", {
     method: "PUT",
     body: JSON.stringify(payload),
@@ -373,6 +378,7 @@ export interface StoreProfile {
   phone: string;
   hours: string;
   storyText: string;
+  address: string;
 }
 
 export function getStoreProfile(): Promise<{ success: boolean; profile: StoreProfile | null }> {
