@@ -1054,50 +1054,66 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                   </span>
                 </div>
                 <div className="py-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[#64748B] font-medium shrink-0">주요 품목</span>
-                    <button
-                      type="button"
-                      onClick={() => setIsShopCategoryExpanded((v) => !v)}
-                      className="flex items-center gap-1 min-w-0 cursor-pointer"
-                    >
-                      <span
-                        className={`font-extrabold text-[#0F172A] text-right ${
-                          isShopCategoryExpanded ? "whitespace-normal break-words" : "truncate"
-                        }`}
+                  {/* 값이 짧으면(한 줄에 다 들어가면) 화살표 없이 다른 행들처럼 평범하게
+                      보여준다 — 안 그러면 접었다 펼 것도 없는데 화살표만 붙어서 어색하다. */}
+                  {shopInfo.category.length > 14 ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[#64748B] font-medium shrink-0">주요 품목</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsShopCategoryExpanded((v) => !v)}
+                        className="flex items-center gap-1 min-w-0 cursor-pointer"
                       >
-                        {shopInfo.category || "미등록"}
-                      </span>
-                      <span className="material-symbols-outlined text-slate-400 text-base shrink-0">
-                        {isShopCategoryExpanded ? "expand_less" : "expand_more"}
-                      </span>
-                    </button>
-                  </div>
+                        <span
+                          className={`font-extrabold text-[#0F172A] text-right ${
+                            isShopCategoryExpanded ? "whitespace-normal break-words" : "truncate"
+                          }`}
+                        >
+                          {shopInfo.category}
+                        </span>
+                        <span className="material-symbols-outlined text-slate-400 text-base shrink-0">
+                          {isShopCategoryExpanded ? "expand_less" : "expand_more"}
+                        </span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between">
+                      <span className="text-[#64748B] font-medium">주요 품목</span>
+                      <span className="font-extrabold text-[#0F172A]">{shopInfo.category || "미등록"}</span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex justify-between py-1.5">
                   <span className="text-[#64748B] font-medium">전화번호</span>
                   <span className="font-bold text-[#334155]">{shopInfo.phone || "미등록"}</span>
                 </div>
                 <div className="py-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[#64748B] font-medium shrink-0">영업시간</span>
-                    <button
-                      type="button"
-                      onClick={() => setIsShopHoursExpanded((v) => !v)}
-                      className="flex items-center gap-1 min-w-0 cursor-pointer"
-                    >
-                      <span
-                        className={`font-bold text-[#334155] text-right ${
-                          isShopHoursExpanded ? "whitespace-normal break-words" : "truncate"
-                        }`}
+                  {shopInfo.hours.length > 14 ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[#64748B] font-medium shrink-0">영업시간</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsShopHoursExpanded((v) => !v)}
+                        className="flex items-center gap-1 min-w-0 cursor-pointer"
                       >
-                        {shopInfo.hours || "미등록"}
-                      </span>
-                      <span className="material-symbols-outlined text-slate-400 text-base shrink-0">
-                        {isShopHoursExpanded ? "expand_less" : "expand_more"}
-                      </span>
-                    </button>
-                  </div>
+                        <span
+                          className={`font-bold text-[#334155] text-right ${
+                            isShopHoursExpanded ? "whitespace-normal break-words" : "truncate"
+                          }`}
+                        >
+                          {shopInfo.hours}
+                        </span>
+                        <span className="material-symbols-outlined text-slate-400 text-base shrink-0">
+                          {isShopHoursExpanded ? "expand_less" : "expand_more"}
+                        </span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between">
+                      <span className="text-[#64748B] font-medium">영업시간</span>
+                      <span className="font-bold text-[#334155]">{shopInfo.hours || "미등록"}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1123,6 +1139,16 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                   placeholder="예: 양동수산"
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
                 />
+              </div>
+
+              {/* 위치(도로명 주소) — 이 폼에서 직접 고치는 값이 아니라 "지도 수정"에서
+                  핀을 찍으면 자동으로 채워지는 값이라, 여기서는 참고용으로 읽기 전용
+                  회색 박스로만 보여준다. */}
+              <div className="space-y-1">
+                <label className="font-bold text-[#334155] block">위치</label>
+                <p className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-500">
+                  {shopInfo.address || "지도에 핀을 찍으면 자동으로 채워져요"}
+                </p>
               </div>
 
               {/* 소속 전통시장 — 이미 골랐으면 기본은 읽기 전용으로 보여주고 "변경"을
