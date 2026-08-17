@@ -138,7 +138,10 @@ export function searchPlace(query: string): Promise<{ status: string; places: Se
 
 // 좌표 → 구/동 단위 주소 라벨. geocodeAddress와 같은 이유(클라이언트 사이드
 // naver.maps.Service가 이 계정에서 안 붙음)로 백엔드가 대신 호출해준다.
-export function reverseGeocode(lat: number, lng: number): Promise<{ status: string; label: string }> {
+export function reverseGeocode(
+  lat: number,
+  lng: number
+): Promise<{ status: string; label: string; roadAddress: string }> {
   return apiFetch(`/api/v1/map/reverse-geocode?lat=${lat}&lng=${lng}`);
 }
 

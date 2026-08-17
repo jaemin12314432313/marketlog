@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { fetchMapConfig, fetchMapStores, geocodeAddress, getStoreLocation, searchPlace, setStoreLocation } from "../lib/api";
+import { fetchMapConfig, fetchMapStores, geocodeAddress, getStoreLocation, reverseGeocode, searchPlace, setStoreLocation } from "../lib/api";
 
 const NAVER_SCRIPT_ID = "naver-maps-sdk";
 
@@ -43,6 +43,33 @@ export const StoreLocationPicker: React.FC<StoreLocationPickerProps> = ({
   const [addressResults, setAddressResults] = useState<
     { label: string; sublabel: string; lat: number; lng: number }[]
   >([]);
+  // 지도를 클릭하거나 검색 결과를 골라 핀이 찍히면, 그 좌표의 도로명 주소를 자동으로
+  // 역지오코딩해서 보여준다 — 위도/경도 숫자만 봐서는 어디인지 알기 어려우니까.
+  const [resolvedAddress, setResolvedAddress] = useState("");
+  const [isResolvingAddress, setIsResolvingAddress] = useState(false);
+
+  useEffect(() => {
+    if (!pin) {
+      setResolvedAddress("");
+      return;
+    }
+    let cancelled = false;
+    setIsResolvingAddress(true);
+    reverseGeocode(pin.lat, pin.lng)
+      .then((res) => {
+        if (!cancelled) setResolvedAddress(res.roadAddress || res.label || "");
+      })
+      .catch((err) => {
+        console.error("주소 역지오코딩 실패", err);
+        if (!cancelled) setResolvedAddress("");
+      })
+      .finally(() => {
+        if (!cancelled) setIsResolvingAddress(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pin]);
 
   const mapElement = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -329,11 +356,17 @@ export const StoreLocationPicker: React.FC<StoreLocationPickerProps> = ({
         </div>
 
         <div className="p-4 space-y-2.5 shrink-0">
-          <p className="text-[11px] text-slate-500 leading-relaxed">
-            {pin
-              ? `선택된 위치: 위도 ${pin.lat.toFixed(6)}, 경도 ${pin.lng.toFixed(6)}`
-              : "아직 위치를 선택하지 않았어요."}
-          </p>
+          {pin ? (
+            <div className="text-[11px] text-slate-500 leading-relaxed space-y-0.5">
+              <p className="font-bold text-slate-700 flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm shrink-0">location_on</span>
+                {isResolvingAddress ? "주소 확인 중..." : resolvedAddress || "이 위치의 도로명 주소를 찾지 못했어요."}
+              </p>
+              <p>위도 {pin.lat.toFixed(6)}, 경도 {pin.lng.toFixed(6)}</p>
+            </div>
+          ) : (
+            <p className="text-[11px] text-slate-500 leading-relaxed">아직 위치를 선택하지 않았어요.</p>
+          )}
           <button
             onClick={handleConfirm}
             disabled={isSaving || !pin}

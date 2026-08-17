@@ -39,7 +39,7 @@ async function resolveScanLocationLabel(): Promise<string> {
   const pos = await withTimeout(getCurrentPositionOnce(6000), 6500, null);
   if (!pos) return "";
   try {
-    const res = await withTimeout(reverseGeocode(pos.lat, pos.lng), 6000, { status: "error", label: "" });
+    const res = await withTimeout(reverseGeocode(pos.lat, pos.lng), 6000, { status: "error", label: "", roadAddress: "" });
     return res.label || "";
   } catch {
     return "";

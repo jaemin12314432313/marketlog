@@ -148,7 +148,9 @@ def reverse_geocode(lat: float, lng: float):
     try:
         resp = httpx.get(
             REVERSE_GEOCODE_URL,
-            params={"coords": f"{lng},{lat}", "orders": "admcode", "output": "json"},
+            # admcode=구/동 단위 라벨(스캔 위치 표시용), roadaddr=도로명 주소(점포 위치
+            # 등록에서 지도 클릭 시 자동으로 채워주는 용도) — 한 번에 같이 받는다.
+            params={"coords": f"{lng},{lat}", "orders": "admcode,roadaddr", "output": "json"},
             headers={
                 "x-ncp-apigw-api-key-id": client_id,
                 "x-ncp-apigw-api-key": client_secret,
@@ -164,19 +166,39 @@ def reverse_geocode(lat: float, lng: float):
     data = resp.json()
     results = data.get("results", [])
     if not results:
-        return {"status": "success", "label": ""}
+        return {"status": "success", "label": "", "roadAddress": ""}
 
-    region = results[0].get("region", {})
-    # area1=시/도, area2=시/군/구, area3=읍/면/동 — 정확한 지번까지는 필요 없고
-    # (오히려 노출 안 하는 게 나음) 구/동 단위 라벨이면 충분하다.
-    label = " ".join(
-        filter(None, [
-            region.get("area1", {}).get("name", ""),
-            region.get("area2", {}).get("name", ""),
-            region.get("area3", {}).get("name", ""),
-        ])
-    )
-    return {"status": "success", "label": label}
+    label = ""
+    road_address = ""
+    for r in results:
+        region = r.get("region", {})
+        if r.get("name") == "admcode":
+            # area1=시/도, area2=시/군/구, area3=읍/면/동 — 정확한 지번까지는 필요 없고
+            # (오히려 노출 안 하는 게 나음) 구/동 단위 라벨이면 충분하다.
+            label = " ".join(
+                filter(None, [
+                    region.get("area1", {}).get("name", ""),
+                    region.get("area2", {}).get("name", ""),
+                    region.get("area3", {}).get("name", ""),
+                ])
+            )
+        elif r.get("name") == "roadaddr":
+            land = r.get("land", {})
+            road_name = land.get("name", "")
+            number1 = land.get("number1", "")
+            number2 = land.get("number2", "")
+            building_number = f"{number1}-{number2}" if number2 else number1
+            road_address = " ".join(
+                filter(None, [
+                    region.get("area1", {}).get("name", ""),
+                    region.get("area2", {}).get("name", ""),
+                    region.get("area3", {}).get("name", ""),
+                    road_name,
+                    building_number,
+                ])
+            )
+
+    return {"status": "success", "label": label, "roadAddress": road_address}
 
 
 # 2. 지도 중심 좌표 및 점포 핀(Marker) 데이터 전달 (DB 기반)
