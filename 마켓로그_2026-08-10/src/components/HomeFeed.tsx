@@ -171,7 +171,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
   return (
     <div
       className="w-full max-w-[600px] mx-auto content-pb-safe px-4 flex flex-col gap-5"
-      style={{ paddingTop: "calc(5.25rem + env(safe-area-inset-top, 0px))" }}
+      style={{ paddingTop: "calc(5.5rem + env(safe-area-inset-top, 0px))" }}
     >
       {/* Search Input Bar */}
       <div className="relative w-full">

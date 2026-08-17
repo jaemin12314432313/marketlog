@@ -24,7 +24,17 @@ export const Header: React.FC<HeaderProps> = ({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   return (
-    <header className="fixed top-0 left-0 w-full z-40 flex justify-between items-center px-3 sm:px-4 md:px-6 min-h-20 pt-safe bg-surface-white border-b border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.05)] transition-all flex-nowrap gap-2">
+    <header
+      className="fixed top-0 left-0 w-full z-40 flex justify-between items-center px-3 sm:px-4 md:px-6 pt-safe bg-surface-white border-b border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.05)] transition-all flex-nowrap gap-2"
+      style={{ minHeight: "calc(5rem + env(safe-area-inset-top, 0px))" }}
+    >
+      {/* min-h-20(고정 80px)를 pt-safe(padding-top: env(safe-area-inset-top))와 같이 쓰면
+          안전영역이 있는 실기기에서 헤더 총 높이가 80px에 그대로 묶여버린다 — min-height는
+          내용+패딩 합이 80px을 넘을 때만 늘어나는 "바닥값"이라, 패딩이 안전영역만큼
+          늘어나도 그 합이 여전히 80px 밑이면 헤더는 그대로 80px다. 그런데 마이 탭 등의
+          content-pt-safe는 "헤더가 안전영역만큼 커진다"고 가정하고 여백을 계산해서,
+          안전영역이 클수록 헤더-콘텐츠 사이 빈 공간이 점점 커지는 버그였다. min-height
+          자체에 안전영역을 더해 헤더가 실제로 그만큼 커지도록 고쳤다. */}
       {/* Left: App Logo */}
       <div className="flex items-center gap-2 shrink-0">
         <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-white shrink-0 transition-colors ${

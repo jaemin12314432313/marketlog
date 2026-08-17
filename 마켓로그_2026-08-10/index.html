@@ -45,10 +45,11 @@
 
       /* 상단/하단 고정바(Header, BottomNav)가 안전영역만큼 늘어나므로, 그 밑에 깔리는
          페이지 콘텐츠도 고정된 pt-20/pb-28(80px/112px) 대신 같은 만큼 여유를 더해야
-         겹치지 않는다. 헤더 자체가 min-h-20(5rem)이라 5rem이면 헤더 바로 밑에 딱
-         붙는데, 여유를 6rem(1rem=16px 여백)으로 뒀더니 실기기에서 마이 탭 등의
-         상단 카드가 헤더와 너무 멀어 보인다는 피드백이 있어 여백을 줄였다. */
-      .content-pt-safe { padding-top: calc(5.25rem + env(safe-area-inset-top, 0px)); }
+         겹치지 않는다. 헤더 실제 높이는 5rem(min-height, Header.tsx의 style 참고) +
+         안전영역이므로, 그보다 0.5rem(8px) 더 여유를 둔다 — 예전엔 헤더가 min-h-20
+         (고정 80px)만 쓰고 있어서 안전영역이 클수록 헤더는 그대로인데 이 여백만
+         계속 커져 실기기에서 위쪽이 텅 비어 보이는 문제가 있었다. */
+      .content-pt-safe { padding-top: calc(5.5rem + env(safe-area-inset-top, 0px)); }
       .content-pb-safe { padding-bottom: calc(7rem + env(safe-area-inset-bottom, 20px)); }
 
       /* 가격 범위 필터용 이중 슬라이더 — <input type="range"> 두 개를 겹쳐서 만든다.
