@@ -15,6 +15,18 @@ function displayGrade(grade: string): string {
   return grade === "A+" ? "특상" : "보통";
 }
 
+// HomeFeed와 동일한 규칙 — 원산지/단위를 따로 뱃지로 흩어놓지 않고 "[국내산] 완도
+// 양배추 1kg"처럼 하나의 문장으로 합친다. 사장님이 자기 상품 목록에서 보는 이름이
+// 실제 소비자 피드에 뜨는 이름과 다르면("배추"만 보이는데 피드엔 "완도 양배추 1kg")
+// 헷갈리므로 같은 조합 규칙을 그대로 쓴다.
+function formatProductDisplayTitle(product: ProductItem): string {
+  const [originType, originDetail] = (product.origin || "").split(" · ").map((s) => s.trim());
+  const typePart = originType ? `[${originType}] ` : "";
+  const detailPart = originDetail ? `${originDetail} ` : "";
+  const unitPart = product.unit ? ` ${product.unit}` : "";
+  return `${typePart}${detailPart}${product.title}${unitPart}`;
+}
+
 // 상품명에 "완도산 전복 (1kg)"처럼 무게/수량을 같이 적어버리면 공공시세 비교 같은 걸 짤 때
 // 텍스트를 파싱해야 해서 애를 먹는다 — 그래서 단위를 상품명과 분리된 필드로 따로 받는다.
 // 단위는 항상 kg로 고정한다 — 상인마다 개/포기/마리 등 다른 단위를 쓰면 공공시세(kg 기준)
@@ -462,7 +474,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     <div className="w-full max-w-[600px] mx-auto content-pt-safe content-pb-safe px-4 space-y-6">
       {/* Toast Banner */}
       {toastMessage && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#0F172A] text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-xl flex items-center gap-2 border border-slate-700 animate-in fade-in zoom-in duration-200">
+        <div className="toast-safe-top fixed left-1/2 -translate-x-1/2 z-50 bg-[#0F172A] text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-xl flex items-center gap-2 border border-slate-700 animate-in fade-in zoom-in duration-200">
           <span className="material-symbols-outlined text-emerald-400 text-sm">check_circle</span>
           <span>{toastMessage}</span>
         </div>
@@ -1000,16 +1012,24 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                   }`}
                   title="클릭 시 점포 물건 수동 등록(수정) 양식으로 이동"
                 >
-                  {/* Product Image Thumbnail */}
-                  <div className="w-20 h-20 rounded-xl bg-slate-100 overflow-hidden flex-shrink-0 relative">
+                  {/* Product Image Thumbnail — 소비자 피드 카드(HomeFeed)와 같은 톤(테두리 있는
+                      rounded-2xl, 필 형태 등급 배지 + 아이콘)으로 맞춰서, 사장님이 자기 상품이
+                      실제로 어떤 느낌으로 노출되는지 관리 화면에서도 바로 감이 오게 한다. */}
+                  <div className="relative w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 border border-[#E2E8F0] bg-slate-100">
                     <img src={p.imageUrl} alt={p.title} className="w-full h-full object-cover" />
-                    <span
-                      className={`absolute top-1 left-1 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded shadow-xs ${
-                        p.grade?.startsWith("A") ? "bg-emerald-600" : "bg-[#0052FF]"
+                    <div
+                      className={`absolute top-1 left-1 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold text-white flex items-center gap-0.5 shadow-sm z-10 ${
+                        p.grade?.startsWith("A") ? "bg-[#00C875]" : "bg-[#0052FF]"
                       }`}
                     >
-                      {displayGrade(p.grade)}
-                    </span>
+                      <span
+                        className="material-symbols-outlined text-[11px] font-extrabold"
+                        style={{ fontVariationSettings: "'FILL' 1" }}
+                      >
+                        check_circle
+                      </span>
+                      <span>{displayGrade(p.grade)}</span>
+                    </div>
                   </div>
 
                   {/* Details */}
@@ -1021,19 +1041,20 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                         </span>
                       </div>
                     )}
-                    <h4 className="text-sm font-bold text-slate-900 truncate hover:text-emerald-600 transition-colors">
-                      {p.title}
-                      {p.unit && <span className="text-slate-400 font-semibold"> ({p.unit})</span>}
+                    <h4 className="text-sm font-extrabold text-[#0F172A] truncate hover:text-[#0052FF] transition-colors">
+                      {formatProductDisplayTitle(p)}
                     </h4>
-                    <div className="space-y-0.5">
-                      <span className="block text-base font-black text-slate-900">
-                        {p.price.toLocaleString()}원
-                      </span>
-                      {p.createdAt && (
-                        <span className="block text-[10px] font-bold text-slate-400">
-                          {formatRegisteredDate(p.createdAt)} 등록
-                        </span>
-                      )}
+                    {/* 등록 시각은 소비자 피드처럼 "N시간 전" 상대 시간이 아니라, 사장님 본인
+                        관리 화면이라 언제 올렸는지 헷갈리지 않게 절대 날짜(YYYY.MM.DD)를
+                        그대로 유지한다 — 글자 색/크기만 피드의 상대 시간 줄과 맞춘다. */}
+                    {p.createdAt && (
+                      <p className="text-[11px] text-[#94A3B8] font-medium">
+                        {formatRegisteredDate(p.createdAt)} 등록
+                      </p>
+                    )}
+                    <div className="text-lg font-black text-[#0F172A] tracking-tight">
+                      {p.price.toLocaleString()}
+                      <span className="text-xs font-bold text-[#0F172A] ml-0.5">원</span>
                     </div>
                   </div>
 

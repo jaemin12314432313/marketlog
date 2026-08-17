@@ -579,7 +579,7 @@ export const MyWallet: React.FC<MyWalletProps> = ({
     <div className="w-full max-w-[600px] mx-auto content-pt-safe content-pb-safe px-4 space-y-6">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-[#0F172A] text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-xl flex items-center gap-2 border border-slate-700 animate-in fade-in zoom-in duration-200">
+        <div className="toast-safe-top fixed left-1/2 -translate-x-1/2 z-50 bg-[#0F172A] text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-xl flex items-center gap-2 border border-slate-700 animate-in fade-in zoom-in duration-200">
           <span className="material-symbols-outlined text-base text-emerald-400">check_circle</span>
           <span>{toastMessage}</span>
         </div>
@@ -1060,36 +1060,6 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                     {shopInfo.marketName || (hasStoreProfile ? "광주 양동시장" : "미선택")}
                   </span>
                 </div>
-                <div className="py-1.5">
-                  {/* 값이 짧으면(한 줄에 다 들어가면) 화살표 없이 다른 행들처럼 평범하게
-                      보여준다 — 안 그러면 접었다 펼 것도 없는데 화살표만 붙어서 어색하다. */}
-                  {shopInfo.category.length > 14 ? (
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[#64748B] font-medium shrink-0">주요 품목</span>
-                      <button
-                        type="button"
-                        onClick={() => setIsShopCategoryExpanded((v) => !v)}
-                        className="flex items-center gap-1 min-w-0 cursor-pointer"
-                      >
-                        <span
-                          className={`font-extrabold text-[#0F172A] text-right ${
-                            isShopCategoryExpanded ? "whitespace-normal break-words" : "truncate"
-                          }`}
-                        >
-                          {shopInfo.category}
-                        </span>
-                        <span className="material-symbols-outlined text-slate-400 text-base shrink-0">
-                          {isShopCategoryExpanded ? "expand_less" : "expand_more"}
-                        </span>
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex justify-between">
-                      <span className="text-[#64748B] font-medium">주요 품목</span>
-                      <span className="font-extrabold text-[#0F172A]">{shopInfo.category || "미등록"}</span>
-                    </div>
-                  )}
-                </div>
                 <div className="flex justify-between py-1.5">
                   <span className="text-[#64748B] font-medium">전화번호</span>
                   <span className="font-bold text-[#334155]">{shopInfo.phone || "미등록"}</span>
@@ -1119,6 +1089,36 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                     <div className="flex justify-between">
                       <span className="text-[#64748B] font-medium">영업시간</span>
                       <span className="font-bold text-[#334155]">{shopInfo.hours || "미등록"}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="py-1.5">
+                  {/* 값이 짧으면(한 줄에 다 들어가면) 화살표 없이 다른 행들처럼 평범하게
+                      보여준다 — 안 그러면 접었다 펼 것도 없는데 화살표만 붙어서 어색하다. */}
+                  {shopInfo.category.length > 14 ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[#64748B] font-medium shrink-0">주요 품목</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsShopCategoryExpanded((v) => !v)}
+                        className="flex items-center gap-1 min-w-0 cursor-pointer"
+                      >
+                        <span
+                          className={`font-extrabold text-[#0F172A] text-right ${
+                            isShopCategoryExpanded ? "whitespace-normal break-words" : "truncate"
+                          }`}
+                        >
+                          {shopInfo.category}
+                        </span>
+                        <span className="material-symbols-outlined text-slate-400 text-base shrink-0">
+                          {isShopCategoryExpanded ? "expand_less" : "expand_more"}
+                        </span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between">
+                      <span className="text-[#64748B] font-medium">주요 품목</span>
+                      <span className="font-extrabold text-[#0F172A]">{shopInfo.category || "미등록"}</span>
                     </div>
                   )}
                 </div>
@@ -1248,95 +1248,17 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                 )}
               </div>
 
-              {/* 주요 품목 — 세부 품목 체크박스까지 펼치면 세로로 길어져서, 기본은 접어두고
-                  헤더에 지금 고른 값 요약만 보여준다. 타이핑 대신 소비자 홈 피드와 같은
-                  5개 카테고리를 체크 버튼으로 고른다. */}
-              <div className="space-y-1.5">
-                <button
-                  type="button"
-                  onClick={() => setIsEditCategoryOpen((v) => !v)}
-                  className="w-full flex items-center justify-between gap-2 cursor-pointer"
-                >
-                  <span className="font-bold text-[#334155]">주요 품목</span>
-                  <span className="flex items-center gap-1 min-w-0">
-                    <span className="text-[11px] font-bold text-slate-500 truncate">
-                      {selectedShopCategories.length > 0 ? selectedShopCategories.join(", ") : "미선택"}
-                    </span>
-                    <span className="material-symbols-outlined text-slate-400 text-base shrink-0">
-                      {isEditCategoryOpen ? "expand_less" : "expand_more"}
-                    </span>
-                  </span>
-                </button>
-                {isEditCategoryOpen && (
-                <>
-                <div className="flex flex-wrap gap-2">
-                  {SHOP_CATEGORY_OPTIONS.map((cat) => {
-                    const selected = selectedShopCategories.includes(cat);
-                    return (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => toggleShopCategory(cat)}
-                        className={`px-4 py-2.5 rounded-xl border text-sm font-bold transition-colors flex items-center gap-1 cursor-pointer ${
-                          selected
-                            ? "bg-emerald-600 border-emerald-600 text-white"
-                            : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50"
-                        }`}
-                      >
-                        {selected && <span className="material-symbols-outlined text-base leading-none">check</span>}
-                        {cat}
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-[10px] text-slate-400">파는 품목을 모두 눌러서 골라주세요. 여러 개 선택할 수 있어요.</p>
-
-                {/* 대분류를 고르면 그 밑에 세부 품목(중분류)이 펼쳐진다 */}
-                {selectedShopCategories.length > 0 && (
-                  <div className="space-y-2.5 pl-3 border-l-2 border-emerald-100 mt-1">
-                    {selectedShopCategories.map((major) => (
-                      <div key={major} className="space-y-1">
-                        <span className="text-[11px] font-bold text-slate-500">{major} 세부 품목 (선택)</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {(SHOP_SUBCATEGORY_OPTIONS[major] || []).map((sub) => {
-                            const on = (selectedShopSubcategories[major] || []).includes(sub);
-                            return (
-                              <button
-                                key={sub}
-                                type="button"
-                                onClick={() => toggleShopSubcategory(major, sub)}
-                                className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer ${
-                                  on
-                                    ? "bg-emerald-500 border-emerald-500 text-white"
-                                    : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
-                                }`}
-                              >
-                                {on && <span className="material-symbols-outlined text-sm leading-none">check</span>}
-                                {sub}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* 목록에 없는 품목은 여기에만 짧게 직접 입력 */}
-                <div className="space-y-1 pt-1">
-                  <label className="font-bold text-[#334155] block text-[11px]">목록에 없는 품목 직접 입력 (선택)</label>
-                  <input
-                    type="text"
-                    value={shopCategoryCustomText}
-                    onChange={(e) => handleShopCategoryCustomChange(e.target.value)}
-                    placeholder={
-                      SHOP_CUSTOM_ITEM_PLACEHOLDER[selectedShopCategories[0]] || SHOP_CUSTOM_ITEM_PLACEHOLDER_DEFAULT
-                    }
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
-                  />
-                </div>
-                </>
-                )}
+              {/* 전화번호 — 숫자만 쳐도 자동으로 하이픈이 붙고, 모바일에서 숫자 키패드가 뜬다 */}
+              <div className="space-y-1">
+                <label className="font-bold text-[#334155] block">전화번호</label>
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, phone: formatPhoneAsYouType(e.target.value) }))}
+                  placeholder="062-365-1234"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
+                />
               </div>
 
               {/* 영업시간 — 시장 상인은 대부분 요일 구분 없이 매일 같은 시간에 열고 특정
@@ -1459,17 +1381,95 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                 )}
               </div>
 
-              {/* 전화번호 — 숫자만 쳐도 자동으로 하이픈이 붙고, 모바일에서 숫자 키패드가 뜬다 */}
-              <div className="space-y-1">
-                <label className="font-bold text-[#334155] block">전화번호</label>
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  value={editForm.phone}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, phone: formatPhoneAsYouType(e.target.value) }))}
-                  placeholder="062-365-1234"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
-                />
+              {/* 주요 품목 — 세부 품목 체크박스까지 펼치면 세로로 길어져서, 기본은 접어두고
+                  헤더에 지금 고른 값 요약만 보여준다. 타이핑 대신 소비자 홈 피드와 같은
+                  5개 카테고리를 체크 버튼으로 고른다. */}
+              <div className="space-y-1.5">
+                <button
+                  type="button"
+                  onClick={() => setIsEditCategoryOpen((v) => !v)}
+                  className="w-full flex items-center justify-between gap-2 cursor-pointer"
+                >
+                  <span className="font-bold text-[#334155]">주요 품목</span>
+                  <span className="flex items-center gap-1 min-w-0">
+                    <span className="text-[11px] font-bold text-slate-500 truncate">
+                      {selectedShopCategories.length > 0 ? selectedShopCategories.join(", ") : "미선택"}
+                    </span>
+                    <span className="material-symbols-outlined text-slate-400 text-base shrink-0">
+                      {isEditCategoryOpen ? "expand_less" : "expand_more"}
+                    </span>
+                  </span>
+                </button>
+                {isEditCategoryOpen && (
+                <>
+                <div className="flex flex-wrap gap-2">
+                  {SHOP_CATEGORY_OPTIONS.map((cat) => {
+                    const selected = selectedShopCategories.includes(cat);
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => toggleShopCategory(cat)}
+                        className={`px-4 py-2.5 rounded-xl border text-sm font-bold transition-colors flex items-center gap-1 cursor-pointer ${
+                          selected
+                            ? "bg-emerald-600 border-emerald-600 text-white"
+                            : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        {selected && <span className="material-symbols-outlined text-base leading-none">check</span>}
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-slate-400">파는 품목을 모두 눌러서 골라주세요. 여러 개 선택할 수 있어요.</p>
+
+                {/* 대분류를 고르면 그 밑에 세부 품목(중분류)이 펼쳐진다 */}
+                {selectedShopCategories.length > 0 && (
+                  <div className="space-y-2.5 pl-3 border-l-2 border-emerald-100 mt-1">
+                    {selectedShopCategories.map((major) => (
+                      <div key={major} className="space-y-1">
+                        <span className="text-[11px] font-bold text-slate-500">{major} 세부 품목 (선택)</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(SHOP_SUBCATEGORY_OPTIONS[major] || []).map((sub) => {
+                            const on = (selectedShopSubcategories[major] || []).includes(sub);
+                            return (
+                              <button
+                                key={sub}
+                                type="button"
+                                onClick={() => toggleShopSubcategory(major, sub)}
+                                className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer ${
+                                  on
+                                    ? "bg-emerald-500 border-emerald-500 text-white"
+                                    : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                                }`}
+                              >
+                                {on && <span className="material-symbols-outlined text-sm leading-none">check</span>}
+                                {sub}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 목록에 없는 품목은 여기에만 짧게 직접 입력 */}
+                <div className="space-y-1 pt-1">
+                  <label className="font-bold text-[#334155] block text-[11px]">목록에 없는 품목 직접 입력 (선택)</label>
+                  <input
+                    type="text"
+                    value={shopCategoryCustomText}
+                    onChange={(e) => handleShopCategoryCustomChange(e.target.value)}
+                    placeholder={
+                      SHOP_CUSTOM_ITEM_PLACEHOLDER[selectedShopCategories[0]] || SHOP_CUSTOM_ITEM_PLACEHOLDER_DEFAULT
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
+                  />
+                </div>
+                </>
+                )}
               </div>
 
               {/* 점포 한줄 안내 / 소개 */}

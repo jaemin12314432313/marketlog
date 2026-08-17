@@ -50,6 +50,13 @@
          (고정 80px)만 쓰고 있어서 안전영역이 클수록 헤더는 그대로인데 이 여백만
          계속 커져 실기기에서 위쪽이 텅 비어 보이는 문제가 있었다. */
       .content-pt-safe { padding-top: calc(5.5rem + env(safe-area-inset-top, 0px)); }
+
+      /* 상단 토스트 배너용 — 예전엔 top-20(고정 80px)을 썼는데, 헤더 실제 높이가
+         5rem + 안전영역(env(safe-area-inset-top))이라 안전영역이 있는 기기(엣지투엣지
+         안드로이드 WebView 등)에서는 헤더가 그만큼 더 늘어나는데 토스트는 그대로라
+         헤더 위에 겹쳐 보였다(좌상단에 붕 뜬 것처럼 보이는 원인). content-pt-safe와
+         같은 기준으로 헤더 바로 밑에 오도록 맞춘다. */
+      .toast-safe-top { top: calc(5.5rem + env(safe-area-inset-top, 0px)); }
       .content-pb-safe { padding-bottom: calc(7rem + env(safe-area-inset-bottom, 20px)); }
 
       /* 가격 범위 필터용 이중 슬라이더 — <input type="range"> 두 개를 겹쳐서 만든다.

@@ -169,8 +169,12 @@ export interface StoreInfo {
   address: string;
 }
 
-export function fetchStoreByName(name: string): Promise<{ status: string; store: StoreInfo | null }> {
-  return apiFetch(`/api/v1/map/store?name=${encodeURIComponent(name)}`);
+export function fetchStoreByName(
+  name: string,
+  marketId?: string
+): Promise<{ status: string; store: StoreInfo | null }> {
+  const marketQuery = marketId ? `&market_id=${encodeURIComponent(marketId)}` : "";
+  return apiFetch(`/api/v1/map/store?name=${encodeURIComponent(name)}${marketQuery}`);
 }
 
 export interface AnalyzeProductResponse {

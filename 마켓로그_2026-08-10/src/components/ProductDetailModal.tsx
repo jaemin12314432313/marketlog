@@ -598,11 +598,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       setIsStoreInfoLoaded(true);
       return;
     }
-    fetchStoreByName(product.shopName)
+    fetchStoreByName(product.shopName, product.marketId)
       .then((res) => setStoreInfo(res.store))
       .catch((err) => console.error("점포 정보를 불러오지 못했습니다.", err))
       .finally(() => setIsStoreInfoLoaded(true));
-  }, [product?.shopName]);
+  }, [product?.shopName, product?.marketId]);
 
   const handleToggle = () => {
     onToggleBookmark(product);
@@ -921,34 +921,32 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </div>
                 ) : (
                   <>
+                    {/* 필드 순서/이름을 마이 탭의 "점포 상세 정보"(MyWallet.tsx)와 맞춘다 —
+                        상호명→위치→소속 전통시장→전화번호→영업시간→주요 품목. 사장님이
+                        보는 화면과 소비자가 보는 화면이 같은 순서라야 "이대로 저장한 게
+                        맞나" 헷갈리지 않는다. 골목은 지도 CSV로 들어온 옛 데이터에만 있는
+                        필드라 마이 탭엔 없지만, 위치와 같은 성격이라 위치 바로 옆에 둔다. */}
                     <div className="space-y-2 text-xs divide-y divide-[#F1F5F9]">
                       <div className="flex justify-between py-1.5">
                         <span className="text-[#64748B] font-medium">상호명</span>
                         <span className="font-extrabold text-[#0F172A]">{product.shopName}</span>
                       </div>
-                      <div className="flex justify-between py-1.5">
-                        <span className="text-[#64748B] font-medium">소속 전통시장</span>
-                        <span className="font-extrabold text-emerald-600">{marketInfo.name}</span>
-                      </div>
-                      <div className="flex justify-between py-1.5">
-                        <span className="text-[#64748B] font-medium">주요 품목</span>
-                        {/* 점포에 등록된 주요 품목이 없을 때 지금 보고 있는 상품의 카테고리로
-                            대신 채우면, 그 점포가 실제로는 다른 걸 팔면서도 마치 이 상품
-                            카테고리가 주력인 것처럼 보여서 오해를 준다 — 정직하게 미등록 표시. */}
-                        <span className="font-extrabold text-[#0F172A]">{storeInfo?.subtitle || "미등록"}</span>
-                      </div>
-                      {storeInfo?.alley && (
-                        <div className="flex justify-between py-1.5">
-                          <span className="text-[#64748B] font-medium">골목</span>
-                          <span className="font-bold text-[#334155] text-right max-w-[240px]">{storeInfo.alley}</span>
-                        </div>
-                      )}
                       {storeInfo?.address && (
                         <div className="flex justify-between py-1.5 gap-3">
                           <span className="text-[#64748B] font-medium shrink-0">위치</span>
                           <span className="font-bold text-[#334155] text-right max-w-[240px]">{storeInfo.address}</span>
                         </div>
                       )}
+                      {storeInfo?.alley && (
+                        <div className="flex justify-between py-1.5">
+                          <span className="text-[#64748B] font-medium">골목</span>
+                          <span className="font-bold text-[#334155] text-right max-w-[240px]">{storeInfo.alley}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between py-1.5">
+                        <span className="text-[#64748B] font-medium">소속 전통시장</span>
+                        <span className="font-extrabold text-emerald-600">{marketInfo.name}</span>
+                      </div>
                       <div className="flex justify-between py-1.5">
                         <span className="text-[#64748B] font-medium">전화번호</span>
                         {storeInfo?.phone ? (
@@ -966,6 +964,13 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       <div className="flex justify-between py-1.5">
                         <span className="text-[#64748B] font-medium">영업시간</span>
                         <span className="font-bold text-[#334155]">{storeInfo?.hours || "정보 없음"}</span>
+                      </div>
+                      <div className="flex justify-between py-1.5">
+                        <span className="text-[#64748B] font-medium">주요 품목</span>
+                        {/* 점포에 등록된 주요 품목이 없을 때 지금 보고 있는 상품의 카테고리로
+                            대신 채우면, 그 점포가 실제로는 다른 걸 팔면서도 마치 이 상품
+                            카테고리가 주력인 것처럼 보여서 오해를 준다 — 정직하게 미등록 표시. */}
+                        <span className="font-extrabold text-[#0F172A]">{storeInfo?.subtitle || "미등록"}</span>
                       </div>
                     </div>
 

@@ -259,9 +259,18 @@ def get_map_stores(market_name: str = "양동시장", db: Session = Depends(get_
 # 3. 상품 상세 화면의 "매장 정보" 탭 등에서, 지도 핀 목적의 필터링 없이 점포 하나의
 # 실제 정보(주요품목/전화/영업시간/골목/소개)만 조회할 때 쓴다. 못 찾으면 store: null —
 # 아직 지도에 위치를 등록하지 않은 상인일 수 있으므로, 프론트가 "정보 없음"으로 처리한다.
+#
+# market_id를 무조건 DEFAULT_MARKET_ID("yangdong")로 고정해뒀던 예전 코드는, 다른
+# 시장(망원/자갈치/직접입력 등) 소속 상인의 점포는 여기서 아예 못 찾아서 상인이 마이
+# 탭에서 저장한 전화/영업시간/주요품목이 소비자 화면에는 전부 "정보 없음"으로 보이는
+# 버그가 있었다. product.marketId를 프론트에서 넘겨주면 그 시장으로 좁혀서 찾고,
+# 없으면(예전 클라이언트 등) 시장 제한 없이 이름만으로 찾는다.
 @router.get("/store")
-def get_store_by_name(name: str, db: Session = Depends(get_db)):
-    store = db.query(Store).filter(Store.market_id == DEFAULT_MARKET_ID, Store.name == name).first()
+def get_store_by_name(name: str, market_id: str | None = None, db: Session = Depends(get_db)):
+    query = db.query(Store).filter(Store.name == name)
+    if market_id:
+        query = query.filter(Store.market_id == market_id)
+    store = query.first()
     if not store:
         return {"status": "success", "store": None}
     return {
