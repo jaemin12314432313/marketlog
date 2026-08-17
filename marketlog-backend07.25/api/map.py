@@ -10,6 +10,11 @@ router = APIRouter(prefix="/api/v1/map", tags=["map"])
 
 GEOCODE_URL = "https://maps.apigw.ntruss.com/map-geocode/v2/geocode"
 REVERSE_GEOCODE_URL = "https://maps.apigw.ntruss.com/map-reversegeocode/v2/gc"
+# 이건 위 지오코딩(NCP Maps)이랑 완전히 다른 서비스다 — 네이버 개발자센터(NAVER
+# Developers/API HUB)에서 별도로 신청하는 "검색 API > 지역" 이고, 인증 키도
+# NAVER_SEARCH_CLIENT_ID/SECRET로 따로 받는다. 주소 문자열이 아니라 "양동시장" 같은
+# 상호/장소명으로 검색할 수 있는 게 이 API만의 기능이라 지오코딩으로 대체가 안 된다.
+LOCAL_SEARCH_URL = "https://openapi.naver.com/v1/search/local.json"
 
 DEFAULT_MARKET_ID = "yangdong"
 
@@ -69,7 +74,65 @@ def geocode_address(query: str):
     }
 
 
-# 1.6. 좌표 → 주소 (역지오코딩) — AI 스캔 후 저장목록에 "몇 시에 어디서 스캔했는지"
+def _parse_local_search_coord(raw: str) -> float:
+    """mapx/mapy는 정수 문자열로 온다. 네이버가 2024-11-17부터 이 값의 좌표계를
+    KATECH에서 WGS84로 바꿨는데, 스케일(예: 1e7배 정수인지)이 문서마다 다르게
+    적혀 있어 확실치 않다 — 그래서 값 범위를 보고 방어적으로 판단한다. 위도/경도는
+    -180~180을 못 넘으므로, 그보다 훨씬 큰 정수면 1e7로 나눈 값으로 취급한다.
+    """
+    value = float(raw)
+    if abs(value) > 180:
+        value = value / 1e7
+    return value
+
+
+# 1.6. 상호명/장소명 검색 — 지오코딩(주소 문자열 전용)과 달리 "양동시장"처럼 정확한
+# 주소를 모르는 장소명으로도 찾을 수 있다. NAVER Developers에서 별도 신청한
+# NAVER_SEARCH_CLIENT_ID/SECRET을 쓴다(지도용 NAVER_CLIENT_ID/SECRET과는 다른 키).
+@router.get("/search-place")
+def search_place(query: str):
+    client_id = os.getenv("NAVER_SEARCH_CLIENT_ID")
+    client_secret = os.getenv("NAVER_SEARCH_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=500, detail="네이버 검색 API 인증 정보가 서버에 설정되어 있지 않습니다.")
+
+    try:
+        resp = httpx.get(
+            LOCAL_SEARCH_URL,
+            params={"query": query, "display": 5, "sort": "random"},
+            headers={
+                "X-Naver-Client-Id": client_id,
+                "X-Naver-Client-Secret": client_secret,
+            },
+            timeout=10,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"네이버 지역 검색 서버 호출에 실패했습니다: {e}")
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"네이버 지역 검색 API 오류 (status={resp.status_code}): {resp.text[:200]}")
+
+    data = resp.json()
+    items = data.get("items", [])
+    return {
+        "status": "success",
+        "places": [
+            {
+                # title엔 검색어와 일치하는 부분에 <b> 태그가 섞여 온다 — 화면에 그대로
+                # 보여줄 거면 태그를 지운다.
+                "name": item.get("title", "").replace("<b>", "").replace("</b>", ""),
+                "category": item.get("category", ""),
+                "roadAddress": item.get("roadAddress", ""),
+                "jibunAddress": item.get("address", ""),
+                "lat": _parse_local_search_coord(item.get("mapy", "0")),
+                "lng": _parse_local_search_coord(item.get("mapx", "0")),
+            }
+            for item in items
+        ],
+    }
+
+
+# 1.7. 좌표 → 주소 (역지오코딩) — AI 스캔 후 저장목록에 "몇 시에 어디서 스캔했는지"
 # 표시하려고 쓴다. 얘도 geocode와 같은 이유(클라이언트 사이드 naver.maps.Service가 이
 # 계정에서 안 붙음)로 프론트에서 직접 못 부르길래, 여기서 서버사이드 REST로 대신한다.
 @router.get("/reverse-geocode")

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { fetchMapConfig, fetchMapStores, geocodeAddress, getStoreLocation, setStoreLocation } from "../lib/api";
+import { fetchMapConfig, fetchMapStores, geocodeAddress, getStoreLocation, searchPlace, setStoreLocation } from "../lib/api";
 
 const NAVER_SCRIPT_ID = "naver-maps-sdk";
 
@@ -37,8 +37,11 @@ export const StoreLocationPicker: React.FC<StoreLocationPickerProps> = ({
   // 지오코딩(naver.maps.Service.geocode)으로 좌표를 찾은 뒤 그 자리로 지도/핀을 옮긴다.
   const [addressQuery, setAddressQuery] = useState("");
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
+  // 주소 지오코딩 결과와 상호명 검색(네이버 검색 API) 결과를 한 목록에 같이 보여준다 —
+  // "양동시장"처럼 정확한 주소를 모르는 장소명으로도 찾을 수 있게. 상호명 검색 API 키가
+  // 아직 없으면 그쪽만 조용히 빈 배열로 실패하고 주소 검색 결과는 그대로 나온다.
   const [addressResults, setAddressResults] = useState<
-    { roadAddress: string; jibunAddress: string; lat: number; lng: number }[]
+    { label: string; sublabel: string; lat: number; lng: number }[]
   >([]);
 
   const mapElement = useRef<HTMLDivElement>(null);
@@ -170,12 +173,33 @@ export const StoreLocationPicker: React.FC<StoreLocationPickerProps> = ({
     setIsSearchingAddress(true);
     setAddressResults([]);
     try {
-      const res = await geocodeAddress(query);
-      if (!res.addresses.length) {
-        alert("검색 결과가 없어요. 도로명 주소나 지번 주소로 다시 시도해보세요.");
+      const [placeRes, addrRes] = await Promise.allSettled([searchPlace(query), geocodeAddress(query)]);
+
+      const placeResults =
+        placeRes.status === "fulfilled"
+          ? placeRes.value.places.map((p) => ({
+              label: p.name,
+              sublabel: [p.category, p.roadAddress || p.jibunAddress].filter(Boolean).join(" · "),
+              lat: p.lat,
+              lng: p.lng,
+            }))
+          : [];
+      const addressResultsList =
+        addrRes.status === "fulfilled"
+          ? addrRes.value.addresses.map((a) => ({
+              label: a.roadAddress || a.jibunAddress,
+              sublabel: a.roadAddress && a.jibunAddress ? a.jibunAddress : "",
+              lat: a.lat,
+              lng: a.lng,
+            }))
+          : [];
+
+      const merged = [...placeResults, ...addressResultsList].slice(0, 6);
+      if (merged.length === 0) {
+        alert("검색 결과가 없어요. 장소명이나 도로명/지번 주소로 다시 시도해보세요.");
         return;
       }
-      setAddressResults(res.addresses.slice(0, 5));
+      setAddressResults(merged);
     } catch (err) {
       console.error("주소 검색 실패", err);
       alert("주소 검색에 실패했습니다. 잠시 후 다시 시도해주세요.");
@@ -264,7 +288,7 @@ export const StoreLocationPicker: React.FC<StoreLocationPickerProps> = ({
                     handleAddressSearch();
                   }
                 }}
-                placeholder="도로명/지번 주소로 검색"
+                placeholder="장소명 또는 주소로 검색"
                 className="flex-1 bg-transparent border-none focus:outline-none text-sm text-slate-800 placeholder-slate-400"
               />
             </div>
@@ -287,10 +311,8 @@ export const StoreLocationPicker: React.FC<StoreLocationPickerProps> = ({
                   onClick={() => handleSelectAddressResult(result)}
                   className="w-full text-left px-3.5 py-2.5 text-xs hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0"
                 >
-                  <p className="font-bold text-slate-800">{result.roadAddress || result.jibunAddress}</p>
-                  {result.roadAddress && result.jibunAddress && (
-                    <p className="text-slate-400 mt-0.5">{result.jibunAddress}</p>
-                  )}
+                  <p className="font-bold text-slate-800">{result.label}</p>
+                  {result.sublabel && <p className="text-slate-400 mt-0.5">{result.sublabel}</p>}
                 </button>
               ))}
             </div>

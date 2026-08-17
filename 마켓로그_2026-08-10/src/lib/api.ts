@@ -121,6 +121,21 @@ export function geocodeAddress(query: string): Promise<{ status: string; address
   return apiFetch(`/api/v1/map/geocode?query=${encodeURIComponent(query)}`);
 }
 
+export interface SearchPlace {
+  name: string;
+  category: string;
+  roadAddress: string;
+  jibunAddress: string;
+  lat: number;
+  lng: number;
+}
+
+// 상호명/장소명 검색("양동시장" 같은). geocodeAddress는 정확한 주소 문자열만 받는
+// 지오코딩 전용 API라 장소명 검색이 안 돼서, 별도 신청한 네이버 검색 API(지역)를 쓴다.
+export function searchPlace(query: string): Promise<{ status: string; places: SearchPlace[] }> {
+  return apiFetch(`/api/v1/map/search-place?query=${encodeURIComponent(query)}`);
+}
+
 // 좌표 → 구/동 단위 주소 라벨. geocodeAddress와 같은 이유(클라이언트 사이드
 // naver.maps.Service가 이 계정에서 안 붙음)로 백엔드가 대신 호출해준다.
 export function reverseGeocode(lat: number, lng: number): Promise<{ status: string; label: string }> {
