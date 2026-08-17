@@ -194,18 +194,16 @@ def set_merchant_market(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    require_merchant(current_user)
+    shop_name = require_merchant(current_user)
     # market_id가 비어 있어도, 시장 선택 기능이 생기기 전에 가입해 이미 점포가 있는
     # 계정이면 resolve_merchant_market_id가 "yangdong"으로 확정해서 market_id에 그대로
-    # 기록해준다 — 여기서 다른 시장으로 바꿔버리면 그 점포/상품이 새 시장 기준 조회에
-    # 안 걸려서 통째로 사라진 것처럼 보이는 문제가 실제로 있었다.
-    if resolve_merchant_market_id(db, current_user):
-        raise HTTPException(status_code=400, detail="이미 소속 전통시장이 설정되어 있습니다.")
+    # 기록해준다.
+    old_market_id = resolve_merchant_market_id(db, current_user)
 
     if payload.marketId:
         if not db.query(Market).filter(Market.id == payload.marketId).first():
             raise HTTPException(status_code=400, detail="존재하지 않는 전통시장입니다.")
-        current_user.market_id = payload.marketId
+        new_market_id = payload.marketId
     elif payload.customName and payload.customName.strip():
         market = Market(
             id=f"custom-{uuid.uuid4().hex[:10]}",
@@ -215,10 +213,25 @@ def set_merchant_market(
             center_lng=0.0,
         )
         db.add(market)
-        current_user.market_id = market.id
+        new_market_id = market.id
     else:
         raise HTTPException(status_code=400, detail="소속 전통시장을 선택하거나 이름을 입력해주세요.")
 
+    # 이미 다른 시장으로 설정돼 있던 계정이 바꾸는 경우 — 점포/상품의 market_id를 같이
+    # 옮겨야 새 시장 기준 조회에서 안 사라진다. 예전엔 이 마이그레이션 없이 아예 재설정
+    # 자체를 막았는데, 실제로 상인이 시장을 옮기거나 처음에 잘못 고른 경우를 고려하면
+    # 너무 과한 제약이라 — 데이터를 같이 옮겨주는 쪽으로 바꿨다.
+    if old_market_id and old_market_id != new_market_id:
+        store = (
+            db.query(Store)
+            .filter(Store.market_id == old_market_id, Store.name == shop_name)
+            .first()
+        )
+        if store:
+            store.market_id = new_market_id
+            db.query(Product).filter(Product.store_id == store.id).update({"market_id": new_market_id})
+
+    current_user.market_id = new_market_id
     db.commit()
     return {"success": True, "marketId": current_user.market_id}
 

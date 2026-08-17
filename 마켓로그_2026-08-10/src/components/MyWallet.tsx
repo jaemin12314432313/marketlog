@@ -399,10 +399,18 @@ export const MyWallet: React.FC<MyWalletProps> = ({
   );
   const [pendingCustomName, setPendingCustomName] = useState("");
   const [isSavingMarket, setIsSavingMarket] = useState(false);
+  // 이미 시장이 설정된 계정은 기본적으로 읽기 전용 표시만 보여주다가, "변경" 버튼을
+  // 눌러야 선택 폼이 펼쳐진다 — 실수로 건드리는 걸 막기 위한 한 단계 확인.
+  const [isChangingMarket, setIsChangingMarket] = useState(false);
 
   const handleConfirmMarket = async () => {
     if (pendingMarketId === "custom" && !pendingCustomName.trim()) {
       alert("소속 전통시장 이름을 입력해주세요.");
+      return;
+    }
+    // 이미 시장이 있는 상태에서 바꾸는 거면(초기 설정이 아니라 변경이면) 한 번 더 확인 —
+    // 점포/상품이 새 시장 기준으로 옮겨지는 눈에 띄는 변화라서.
+    if (userMarketId && !window.confirm("소속 전통시장을 바꾸면 등록된 점포와 상품이 새 시장 기준으로 옮겨집니다. 계속할까요?")) {
       return;
     }
     setIsSavingMarket(true);
@@ -413,6 +421,7 @@ export const MyWallet: React.FC<MyWalletProps> = ({
           : { marketId: pendingMarketId }
       );
       onMarketSelected?.(res.marketId);
+      setIsChangingMarket(false);
     } catch (err) {
       console.error("소속 전통시장 저장 실패", err);
       alert("소속 전통시장 저장에 실패했습니다. 잠시 후 다시 시도해주세요.");
@@ -1101,19 +1110,94 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                 />
               </div>
 
-              {/* 소속 전통시장 — 이 폼까지 왔다는 건 이미 점포(Store 레코드)가 있다는
-                  뜻이고(hasStoreProfile !== false일 때만 이 폼이 보임), 백엔드의
-                  merchant_market_id()가 그런 계정은 market_id가 비어 있어도 항상
-                  "yangdong"(광주 양동시장) 기준으로 점포를 저장/조회하고 있다. 여기서
-                  다른 시장으로 바꾸는 걸 허용하면 그 점포/상품이 새 시장 기준 조회에 안
-                  걸려서 통째로 사라져 보이는 문제가 실제로 있었다(백엔드도 같은 이유로
-                  set_merchant_market에서 이 경우를 막는다) — 그래서 여기서는 고르게 하지
-                  않고 항상 읽기 전용으로만 보여준다. */}
-              <div className="space-y-1">
+              {/* 소속 전통시장 — 이미 골랐으면 기본은 읽기 전용으로 보여주고 "변경"을
+                  눌러야 선택 폼이 펼쳐진다. 시장을 바꾸면 백엔드(set_merchant_market)가
+                  기존 점포/상품의 market_id도 같이 새 시장으로 옮겨준다 — 예전엔 이
+                  마이그레이션이 없어서 재설정 자체를 막았었는데, 실제로 시장을 옮기거나
+                  잘못 고른 걸 고치고 싶은 경우가 있어서 데이터를 같이 옮기는 쪽으로 바꿨다. */}
+              <div className="space-y-1.5">
                 <label className="font-bold text-[#334155] block">소속 전통시장</label>
-                <p className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-emerald-700">
-                  {shopInfo.marketName || "광주 양동시장"}
-                </p>
+                {userMarketId && !isChangingMarket ? (
+                  <div className="flex items-center gap-2">
+                    <p className="flex-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-emerald-700">
+                      {shopInfo.marketName || "광주 양동시장"}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setIsChangingMarket(true)}
+                      className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-600 hover:bg-slate-50 shrink-0 cursor-pointer"
+                    >
+                      변경
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2 bg-emerald-50/70 border border-emerald-200 rounded-xl p-3">
+                    {userMarketId && (
+                      <p className="text-[11px] text-amber-700 font-bold leading-relaxed flex items-start gap-1">
+                        <span className="material-symbols-outlined text-sm shrink-0">warning</span>
+                        시장을 바꾸면 등록된 점포/상품이 새 시장 기준으로 옮겨집니다.
+                      </p>
+                    )}
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        value={pendingRegion}
+                        onChange={(e) => {
+                          const region = e.target.value;
+                          setPendingRegion(region);
+                          const firstInRegion = MARKETS_DATA.find((m) => m.region === region);
+                          setPendingMarketId(firstInRegion?.id || "custom");
+                        }}
+                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 bg-white text-xs font-semibold"
+                      >
+                        {MERCHANT_REGIONS.map((region) => (
+                          <option key={region} value={region}>
+                            {region}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={pendingMarketId}
+                        onChange={(e) => setPendingMarketId(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 bg-white text-xs font-semibold"
+                      >
+                        {marketsInPendingRegion.map((market) => (
+                          <option key={market.id} value={market.id}>
+                            {market.name}
+                          </option>
+                        ))}
+                        <option value="custom">목록에 없음 (직접 입력)</option>
+                      </select>
+                    </div>
+                    {pendingMarketId === "custom" && (
+                      <input
+                        type="text"
+                        value={pendingCustomName}
+                        onChange={(e) => setPendingCustomName(e.target.value)}
+                        placeholder="시장 이름을 입력해주세요 (예: OO전통시장)"
+                        className="w-full px-3 py-2 rounded-xl border border-emerald-300 bg-white text-xs font-semibold"
+                      />
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleConfirmMarket}
+                        disabled={isSavingMarket}
+                        className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-bold transition-all cursor-pointer"
+                      >
+                        {isSavingMarket ? "저장 중..." : userMarketId ? "변경 완료" : "소속 전통시장 설정"}
+                      </button>
+                      {userMarketId && (
+                        <button
+                          type="button"
+                          onClick={() => setIsChangingMarket(false)}
+                          className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                        >
+                          취소
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 주요 품목 — 타이핑 대신 소비자 홈 피드와 같은 5개 카테고리를 체크 버튼으로 고른다 */}
