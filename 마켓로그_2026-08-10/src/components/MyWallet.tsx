@@ -201,6 +201,11 @@ export const MyWallet: React.FC<MyWalletProps> = ({
   const [isHoursDailyMode, setIsHoursDailyMode] = useState(true);
   const [hoursClosedDayMode, setHoursClosedDayMode] = useState<string>(HOURS_CLOSED_DAY_PRESETS[0]);
 
+  // 점포 상세정보 수정 폼의 주요 품목/영업시간 편집 영역이 세부 품목 체크박스·시간
+  // 드롭다운 때문에 세로로 길어서, 기본은 접어두고 필요할 때만 펼치게 한다.
+  const [isEditCategoryOpen, setIsEditCategoryOpen] = useState(false);
+  const [isEditHoursOpen, setIsEditHoursOpen] = useState(false);
+
   // Customer Profile & Nickname Editable State
   const [customerNickname, setCustomerNickname] = useState(
     userDisplayName || "스마트 장보기 회원"
@@ -454,6 +459,8 @@ export const MyWallet: React.FC<MyWalletProps> = ({
     setHoursClosedDayMode(
       HOURS_CLOSED_DAY_PRESETS.includes(loadedHours.note) ? loadedHours.note : HOURS_CLOSED_DAY_PRESETS[0]
     );
+    setIsEditCategoryOpen(false);
+    setIsEditHoursOpen(false);
     setIsEditingShopInfo(true);
   };
 
@@ -1200,9 +1207,27 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                 )}
               </div>
 
-              {/* 주요 품목 — 타이핑 대신 소비자 홈 피드와 같은 5개 카테고리를 체크 버튼으로 고른다 */}
+              {/* 주요 품목 — 세부 품목 체크박스까지 펼치면 세로로 길어져서, 기본은 접어두고
+                  헤더에 지금 고른 값 요약만 보여준다. 타이핑 대신 소비자 홈 피드와 같은
+                  5개 카테고리를 체크 버튼으로 고른다. */}
               <div className="space-y-1.5">
-                <label className="font-bold text-[#334155] block">주요 품목</label>
+                <button
+                  type="button"
+                  onClick={() => setIsEditCategoryOpen((v) => !v)}
+                  className="w-full flex items-center justify-between gap-2 cursor-pointer"
+                >
+                  <span className="font-bold text-[#334155]">주요 품목</span>
+                  <span className="flex items-center gap-1 min-w-0">
+                    <span className="text-[11px] font-bold text-slate-500 truncate">
+                      {selectedShopCategories.length > 0 ? selectedShopCategories.join(", ") : "미선택"}
+                    </span>
+                    <span className="material-symbols-outlined text-slate-400 text-base shrink-0">
+                      {isEditCategoryOpen ? "expand_less" : "expand_more"}
+                    </span>
+                  </span>
+                </button>
+                {isEditCategoryOpen && (
+                <>
                 <div className="flex flex-wrap gap-2">
                   {SHOP_CATEGORY_OPTIONS.map((cat) => {
                     const selected = selectedShopCategories.includes(cat);
@@ -1269,6 +1294,8 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
                   />
                 </div>
+                </>
+                )}
               </div>
 
               {/* 영업시간 — 시장 상인은 대부분 요일 구분 없이 매일 같은 시간에 열고 특정
@@ -1277,7 +1304,23 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                   케이스용 자유 텍스트로 바뀐다. 네이티브 타임 피커라 "HH:MM" 형식이 강제돼서
                   나중에 "지금 영업 중" 필터도 이 값 그대로 쓸 수 있다. */}
               <div className="space-y-1.5">
-                <label className="font-bold text-[#334155] block">영업시간</label>
+                <button
+                  type="button"
+                  onClick={() => setIsEditHoursOpen((v) => !v)}
+                  className="w-full flex items-center justify-between gap-2 cursor-pointer"
+                >
+                  <span className="font-bold text-[#334155]">영업시간</span>
+                  <span className="flex items-center gap-1 min-w-0">
+                    <span className="text-[11px] font-bold text-slate-500 truncate">
+                      {editForm.hours || "미등록"}
+                    </span>
+                    <span className="material-symbols-outlined text-slate-400 text-base shrink-0">
+                      {isEditHoursOpen ? "expand_less" : "expand_more"}
+                    </span>
+                  </span>
+                </button>
+                {isEditHoursOpen && (
+                <>
                 <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 cursor-pointer">
                   <input
                     type="checkbox"
@@ -1370,6 +1413,8 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                     placeholder="예: 평일 09:00-18:00, 주말 10:00-17:00"
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-emerald-500 text-xs font-semibold"
                   />
+                )}
+                </>
                 )}
               </div>
 
