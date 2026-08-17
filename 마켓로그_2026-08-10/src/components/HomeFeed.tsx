@@ -33,14 +33,16 @@ function discountPercent(product: ProductItem): number | null {
   return percent > 0 ? percent : null;
 }
 
-// 원산지/단위를 따로따로 뱃지로 흩어놓는 대신, "[국내산 해남] 알배기 배추 1포기"처럼
+// 원산지/단위를 따로따로 뱃지로 흩어놓는 대신, "[국내산] 해남 알배기 배추 1포기"처럼
 // 하나의 자연스러운 문장으로 합쳐서 보여준다 — 저장은 "국내산 · 완도"처럼 가운뎃점으로
-// 하지만 화면엔 공백으로 이어붙인다.
+// 구분하는데, 대분류(국내산/수입산)만 대괄호 태그로 남기고 상세 산지(완도 등)는
+// 상품명 앞에 자연스럽게 붙인다.
 function formatProductDisplayTitle(product: ProductItem): string {
-  const originLabel = product.origin ? product.origin.replace(" · ", " ") : "";
-  const originPart = originLabel ? `[${originLabel}] ` : "";
+  const [originType, originDetail] = (product.origin || "").split(" · ").map((s) => s.trim());
+  const typePart = originType ? `[${originType}] ` : "";
+  const detailPart = originDetail ? `${originDetail} ` : "";
   const unitPart = product.unit ? ` ${product.unit}` : "";
-  return `${originPart}${product.title}${unitPart}`;
+  return `${typePart}${detailPart}${product.title}${unitPart}`;
 }
 
 interface HomeFeedProps {
@@ -77,6 +79,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedItemTypes, setSelectedItemTypes] = useState<string[]>([]);
   const [selectedGrades, setSelectedGrades] = useState<string[]>([]);
+  const [selectedOrigins, setSelectedOrigins] = useState<string[]>([]);
   // [0, Infinity] = "가격 범위 미적용" — 필터 모달에서 실제 값으로 바뀌기 전까지는
   // 아무 상품도 걸러내지 않는다.
   const [priceRange, setPriceRange] = useState<[number, number]>([0, Infinity]);
@@ -94,6 +97,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
     selectedCategories.length +
     selectedItemTypes.length +
     selectedGrades.length +
+    selectedOrigins.length +
     (priceRange[1] !== Infinity ? 1 : 0);
 
   // 지역/검색어까지만 반영한 목록 — 필터 모달이 여기 기준으로 실시간 개수와 가격
@@ -140,9 +144,14 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
     const matchesGrade =
       selectedGrades.length === 0 ? true : selectedGrades.includes(displayGrade(p.grade));
 
+    const matchesOrigin =
+      selectedOrigins.length === 0
+        ? true
+        : selectedOrigins.includes(p.origin ? p.origin.split(" · ")[0].trim() : "");
+
     const matchesPrice = p.price >= priceRange[0] && p.price <= priceRange[1];
 
-    return matchesCategory && matchesItemType && matchesGrade && matchesPrice;
+    return matchesCategory && matchesItemType && matchesGrade && matchesOrigin && matchesPrice;
   });
 
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -519,11 +528,13 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
         selectedCategories={selectedCategories}
         selectedItemTypes={selectedItemTypes}
         selectedGrades={selectedGrades}
+        selectedOrigins={selectedOrigins}
         priceRange={priceRange}
-        onApply={({ categories: cats, itemTypes: items, grades, priceRange: range }) => {
+        onApply={({ categories: cats, itemTypes: items, grades, origins, priceRange: range }) => {
           setSelectedCategories(cats);
           setSelectedItemTypes(items);
           setSelectedGrades(grades);
+          setSelectedOrigins(origins);
           setPriceRange(range);
         }}
       />

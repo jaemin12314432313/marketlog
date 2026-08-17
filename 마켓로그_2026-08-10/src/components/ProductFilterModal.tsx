@@ -19,16 +19,24 @@ interface ProductFilterModalProps {
   selectedCategories: string[];
   selectedItemTypes: string[];
   selectedGrades: string[];
+  selectedOrigins: string[];
   priceRange: [number, number];
   onApply: (result: {
     categories: string[];
     itemTypes: string[];
     grades: string[];
+    origins: string[];
     priceRange: [number, number];
   }) => void;
 }
 
 const GRADE_OPTIONS = ["특상", "보통"];
+const ORIGIN_OPTIONS = ["국내산", "수입산"];
+
+// 저장 형식 "국내산 · 완도"에서 대분류(국내산/수입산)만 뽑는다.
+function originType(origin: string | undefined): string {
+  return origin ? origin.split(" · ")[0].trim() : "";
+}
 
 export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
   isOpen,
@@ -39,6 +47,7 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
   selectedCategories,
   selectedItemTypes,
   selectedGrades,
+  selectedOrigins,
   priceRange,
   onApply,
 }) => {
@@ -51,6 +60,7 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
   const [draftCategories, setDraftCategories] = useState<string[]>(selectedCategories);
   const [draftItemTypes, setDraftItemTypes] = useState<string[]>(selectedItemTypes);
   const [draftGrades, setDraftGrades] = useState<string[]>(selectedGrades);
+  const [draftOrigins, setDraftOrigins] = useState<string[]>(selectedOrigins);
   const [draftMin, setDraftMin] = useState<number>(priceRange[0]);
   const [draftMax, setDraftMax] = useState<number>(priceRange[1]);
 
@@ -61,6 +71,7 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
     setDraftCategories(selectedCategories);
     setDraftItemTypes(selectedItemTypes);
     setDraftGrades(selectedGrades);
+    setDraftOrigins(selectedOrigins);
     setDraftMin(priceRange[0]);
     setDraftMax(priceRange[1]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -84,6 +95,12 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
     );
   };
 
+  const toggleOrigin = (origin: string) => {
+    setDraftOrigins((prev) =>
+      prev.includes(origin) ? prev.filter((o) => o !== origin) : [...prev, origin]
+    );
+  };
+
   const matchesDraftCategory = (p: ProductItem) => {
     if (draftCategories.length === 0) return true;
     if (draftCategories.includes(p.category)) return true;
@@ -97,16 +114,18 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
       const matchesItemType =
         draftItemTypes.length === 0 || draftItemTypes.some((item) => p.title.includes(item));
       const matchesGrade = draftGrades.length === 0 || draftGrades.includes(displayGrade(p.grade));
+      const matchesOrigin = draftOrigins.length === 0 || draftOrigins.includes(originType(p.origin));
       const matchesPrice = p.price >= draftMin && p.price <= draftMax;
-      return matchesCategory && matchesItemType && matchesGrade && matchesPrice;
+      return matchesCategory && matchesItemType && matchesGrade && matchesOrigin && matchesPrice;
     }).length;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [products, draftCategories, draftItemTypes, draftGrades, draftMin, draftMax]);
+  }, [products, draftCategories, draftItemTypes, draftGrades, draftOrigins, draftMin, draftMax]);
 
   const handleReset = () => {
     setDraftCategories([]);
     setDraftItemTypes([]);
     setDraftGrades([]);
+    setDraftOrigins([]);
     setDraftMin(bounds.min);
     setDraftMax(bounds.max);
   };
@@ -116,6 +135,7 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
       categories: draftCategories,
       itemTypes: draftItemTypes,
       grades: draftGrades,
+      origins: draftOrigins,
       priceRange: [draftMin, draftMax],
     });
     onClose();
@@ -220,6 +240,30 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
                     }`}
                   >
                     {grade}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Origin type multi-select (국내산/수입산) */}
+          <div className="space-y-2.5">
+            <h4 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">원산지</h4>
+            <div className="flex flex-wrap gap-2">
+              {ORIGIN_OPTIONS.map((origin) => {
+                const isActive = draftOrigins.includes(origin);
+                return (
+                  <button
+                    key={origin}
+                    type="button"
+                    onClick={() => toggleOrigin(origin)}
+                    className={`px-3.5 py-2 rounded-full text-sm font-bold transition-all active:scale-95 ${
+                      isActive
+                        ? "bg-emerald-600 text-white shadow-sm"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    {origin}
                   </button>
                 );
               })}

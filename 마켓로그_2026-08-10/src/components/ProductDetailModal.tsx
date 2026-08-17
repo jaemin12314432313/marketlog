@@ -32,13 +32,15 @@ function discountPercent(product: ProductItem): number | null {
   return percent > 0 ? percent : null;
 }
 
-// 원산지/단위를 따로따로 뱃지로 흩어놓는 대신, "[국내산 해남] 알배기 배추 1포기"처럼
-// 하나의 자연스러운 문장으로 합쳐서 보여준다 (HomeFeed와 동일 규칙).
+// 원산지/단위를 따로따로 뱃지로 흩어놓는 대신, "[국내산] 해남 알배기 배추 1포기"처럼
+// 하나의 자연스러운 문장으로 합쳐서 보여준다 (HomeFeed와 동일 규칙) — 대분류(국내산/
+// 수입산)만 대괄호 태그로 남기고 상세 산지는 상품명 앞에 자연스럽게 붙인다.
 function formatProductDisplayTitle(product: ProductItem): string {
-  const originLabel = product.origin ? product.origin.replace(" · ", " ") : "";
-  const originPart = originLabel ? `[${originLabel}] ` : "";
+  const [originType, originDetail] = (product.origin || "").split(" · ").map((s) => s.trim());
+  const typePart = originType ? `[${originType}] ` : "";
+  const detailPart = originDetail ? `${originDetail} ` : "";
   const unitPart = product.unit ? ` ${product.unit}` : "";
-  return `${originPart}${product.title}${unitPart}`;
+  return `${typePart}${detailPart}${product.title}${unitPart}`;
 }
 
 interface ProductDetailModalProps {
