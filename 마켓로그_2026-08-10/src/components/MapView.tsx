@@ -503,10 +503,16 @@ export const MapView: React.FC<MapViewProps> = ({
   // 컨벡스 헐을 계산해서 그린다. 줌 레벨과 무관하게 항상 표시(마커와 달리 시장
   // 전체 범위를 인지하는 용도라 확대해야만 보일 필요가 없다).
   useEffect(() => {
-    if (!naverLoaded || !mapRef.current || stores.length < 3) return;
+    // 상인이 "점포 위치 등록"으로 직접 찍은 핀(category === "merchant")은 실수로 시장과
+    // 멀리 떨어진 곳에 찍힐 수 있는데, 컨벡스 헐은 이상치 하나에도 극도로 민감해서 그
+    // 점 하나 때문에 경계선 전체가 그쪽으로 늘어나 버린다(실제로 겪은 문제 — 실기기
+    // 테스트 계정 핀 하나가 시장에서 4.6km 떨어져 있어서 경계가 거기까지 뻗어나갔다).
+    // 경계는 실측 공공데이터 점포로만 그려서 안정적인 시장 부지 모양을 유지한다.
+    const boundaryStores = stores.filter((s) => s.category !== "merchant");
+    if (!naverLoaded || !mapRef.current || boundaryStores.length < 3) return;
 
     const naver = (window as any).naver;
-    const hull = computeConvexHull(stores.map((s) => ({ lat: s.lat, lng: s.lng })));
+    const hull = computeConvexHull(boundaryStores.map((s) => ({ lat: s.lat, lng: s.lng })));
     const path = hull.map((p) => new naver.maps.LatLng(p.lat, p.lng));
 
     if (marketBoundaryRef.current) {
