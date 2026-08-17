@@ -943,12 +943,12 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 ) : (
                   <>
                     {/* 필드 순서/이름을 마이 탭의 "점포 상세 정보"(MyWallet.tsx)와 맞춘다 —
-                        상호명→위치→소속 전통시장→전화번호→영업시간→주요 품목. 사장님이
-                        보는 화면과 소비자가 보는 화면이 같은 순서라야 "이대로 저장한 게
-                        맞나" 헷갈리지 않는다. 골목(alley)은 지도 CSV로 들어온 옛 데이터에만
-                        남아있는 필드라 사장님이 직접 관리하는 값이 아니다 — 실제 주소가
-                        비어있는 옛 점포에서 골목만 대신 보여주면 오히려 헷갈리므로 빼고,
-                        다른 필드들처럼 없으면 "정보 없음"으로 정직하게 보여준다. */}
+                        상호명→위치→전화번호→영업시간→주요 품목. 소속 전통시장은 바로 위
+                        "OO시장 내 위치" 캡션에 이미 나오므로 여기서 또 보여주면 중복이라
+                        뺐다. 골목(alley)은 지도 CSV로 들어온 옛 데이터에만 남아있는 필드라
+                        사장님이 직접 관리하는 값이 아니다 — 실제 주소가 비어있는 옛 점포에서
+                        골목만 대신 보여주면 오히려 헷갈리므로 빼고, 다른 필드들처럼 없으면
+                        "정보 없음"으로 정직하게 보여준다. */}
                     <div className="space-y-2 text-xs divide-y divide-[#F1F5F9]">
                       <div className="flex justify-between py-1.5">
                         <span className="text-[#64748B] font-medium">상호명</span>
@@ -959,10 +959,6 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         <span className="font-bold text-[#334155] text-right max-w-[240px]">
                           {storeInfo?.address || "정보 없음"}
                         </span>
-                      </div>
-                      <div className="flex justify-between py-1.5">
-                        <span className="text-[#64748B] font-medium">소속 전통시장</span>
-                        <span className="font-extrabold text-emerald-600">{displayMarketName}</span>
                       </div>
                       <div className="flex justify-between py-1.5">
                         <span className="text-[#64748B] font-medium">전화번호</span>
