@@ -78,9 +78,17 @@ export const ProductFilterModal: React.FC<ProductFilterModalProps> = ({
   }, [isOpen]);
 
   const toggleCategory = (cat: string) => {
-    setDraftCategories((prev) =>
-      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
-    );
+    const isRemoving = draftCategories.includes(cat);
+    setDraftCategories((prev) => (isRemoving ? prev.filter((c) => c !== cat) : [...prev, cat]));
+    // 카테고리를 빼면 그 밑에 펼쳐져 있던 품종 칩도 화면에서 같이 사라지는데, draftItemTypes
+    // 자체는 안 지워지면 화면엔 안 보이는 선택이 계속 필터링에 걸려서 "카테고리를 뺐는데도
+    // 결과가 그대로"인 것처럼 보인다 — 카테고리를 뺄 때 그 하위 품종 선택도 같이 지운다.
+    if (isRemoving) {
+      const subItems = itemTypesByCategory[cat] || [];
+      if (subItems.length > 0) {
+        setDraftItemTypes((prev) => prev.filter((i) => !subItems.includes(i)));
+      }
+    }
   };
 
   const toggleItemType = (item: string) => {
