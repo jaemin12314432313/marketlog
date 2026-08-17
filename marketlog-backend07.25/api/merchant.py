@@ -1,12 +1,15 @@
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+import asyncio
+import json
 import os
 import uuid
 
 from db import get_db
 from models import Market, Product, Store, User, product_to_dict, resolve_merchant_market_id
 from api.auth import get_current_user
+from api.consumer import get_gemini_client
 
 router = APIRouter(tags=["Merchant"])
 os.makedirs("uploads", exist_ok=True)
@@ -175,6 +178,75 @@ def delete_product(
     db.delete(product)
     db.commit()
     return {"success": True}
+
+
+def _generate_product_copy(title: str, category: str, store: "Store | None", market: "Market | None") -> "dict | None":
+    """상품명/카테고리와 점포 정보(주요 품목, 소속 시장)를 참고해 홍보 문구 3개와
+    해시태그를 Gemini로 생성한다. 실패 시 None을 반환해 프론트의 기존 정적 템플릿이
+    그대로 폴백으로 쓰이게 한다."""
+    client = get_gemini_client()
+    if client is None:
+        return None
+    try:
+        from google.genai import types
+
+        highlight = store.subtitle if store else ""
+        market_name = market.name if market else ""
+        prompt = (
+            f"당신은 전통시장 상인을 돕는 카피라이터입니다. 상인이 등록하는 상품 정보를 참고해 "
+            f"소비자에게 어필할 한 줄 홍보 문구 3개와 해시태그 5개를 한국어로 작성하세요.\n"
+            f"상품명: {title}\n"
+            f"상품 카테고리: {category or '정보 없음'}\n"
+            f"점포 주요 품목: {highlight or '정보 없음'}\n"
+            f"소속 전통시장: {market_name or '정보 없음'}\n\n"
+            f"홍보 문구는 각각 30자 내외로, 과장·허위 표현 없이 신선함과 산지·정성을 강조하는 "
+            f"자연스러운 문장 3개를 서로 다른 느낌으로 작성하세요. 해시태그는 '#'로 시작하고 "
+            f"공백 없이 작성하세요."
+        )
+        response = client.models.generate_content(
+            model="gemini-3.6-flash",
+            contents=[prompt],
+            config=types.GenerateContentConfig(
+                temperature=1.0,
+                response_mime_type="application/json",
+                response_schema={
+                    "type": "OBJECT",
+                    "properties": {
+                        "descriptions": {"type": "ARRAY", "items": {"type": "STRING"}},
+                        "hashtags": {"type": "ARRAY", "items": {"type": "STRING"}},
+                    },
+                    "required": ["descriptions", "hashtags"],
+                },
+            ),
+        )
+        data = json.loads(response.text)
+        if data.get("descriptions") and data.get("hashtags"):
+            return data
+        return None
+    except Exception as e:
+        print(f"Gemini 상품 카피 생성 실패: {e}")
+        return None
+
+
+class ProductCopyRequest(BaseModel):
+    title: str
+    category: str = ""
+
+
+@router.post("/api/v1/merchant/product-copy")
+async def generate_product_copy(
+    payload: ProductCopyRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    shop_name = require_merchant(current_user)
+    market_id = merchant_market_id(db, current_user)
+    store = db.query(Store).filter(Store.market_id == market_id, Store.name == shop_name).first()
+    market = db.query(Market).filter(Market.id == market_id).first()
+    result = await asyncio.to_thread(_generate_product_copy, payload.title, payload.category, store, market)
+    if not result:
+        return {"success": False}
+    return {"success": True, "descriptions": result["descriptions"], "hashtags": result["hashtags"]}
 
 
 # 소속 전통시장 선택 — 가입 절차를 짧게 하려고 회원가입 때는 안 받고, 로그인 후 마이

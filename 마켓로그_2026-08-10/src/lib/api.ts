@@ -146,6 +146,18 @@ export function reverseGeocode(
   return apiFetch(`/api/v1/map/reverse-geocode?lat=${lat}&lng=${lng}`);
 }
 
+// 상품명/카테고리 + 점포 정보(주요 품목, 소속 시장)를 근거로 Gemini가 생성한 홍보
+// 문구/해시태그. 실패(success:false) 시 프론트가 기존 정적 템플릿으로 폴백한다.
+export function generateProductCopy(
+  title: string,
+  category: string
+): Promise<{ success: boolean; descriptions?: string[]; hashtags?: string[] }> {
+  return apiFetch(`/api/v1/merchant/product-copy`, {
+    method: "POST",
+    body: JSON.stringify({ title, category }),
+  });
+}
+
 export interface StoreInfo {
   name: string;
   subtitle: string;

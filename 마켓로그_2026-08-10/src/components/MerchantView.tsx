@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { ProductItem } from "../types";
-import { getStoreLocation, getStoreProfile, analyzeProduct } from "../lib/api";
+import { getStoreLocation, getStoreProfile, analyzeProduct, generateProductCopy } from "../lib/api";
 import { MerchantAiScanModal } from "./MerchantAiScanModal";
 
 function formatRegisteredDate(isoString: string): string {
@@ -169,6 +169,30 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
   // AI Recommendation for Description state
   const [recommendationSetIndex, setRecommendationSetIndex] = useState(0);
   const [tagSetIndex, setTagSetIndex] = useState(0);
+  // 스캔 직후 우리 점포 정보(주요 품목/소속 시장)를 근거로 Gemini가 실제로 생성한
+  // 문구/해시태그. null이면 아직 안 왔거나 실패한 것 — 그 경우 아래 getAiRecommendations/
+  // getAiRecommendedTags 정적 템플릿이 그대로 폴백으로 쓰인다.
+  const [aiDescriptions, setAiDescriptions] = useState<string[] | null>(null);
+  const [aiHashtags, setAiHashtags] = useState<string[] | null>(null);
+  const [isGeneratingCopy, setIsGeneratingCopy] = useState(false);
+
+  const requestAiCopy = async (scanTitle: string, scanCategory: string) => {
+    setIsGeneratingCopy(true);
+    try {
+      const res = await generateProductCopy(scanTitle, scanCategory);
+      if (res.success && res.descriptions?.length) {
+        setAiDescriptions(res.descriptions);
+        setDescription(res.descriptions[0]);
+      }
+      if (res.success && res.hashtags?.length) {
+        setAiHashtags(res.hashtags);
+      }
+    } catch (err) {
+      console.error("AI 문구 생성 실패 (정적 추천으로 대체됨)", err);
+    } finally {
+      setIsGeneratingCopy(false);
+    }
+  };
 
   const getAiRecommendations = (rawTitle: string, rawCategory: string, index: number) => {
     const name = rawTitle.trim() || `${rawCategory || "인기"} 상품`;
@@ -235,6 +259,8 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     if (isStale) {
       showToast("이 상품은 오늘 등록된 게 아니라서, 수정하려면 AI 스캔을 다시 해야 합니다.");
     }
+    setAiDescriptions(null);
+    setAiHashtags(null);
 
     setIsFormOpen(true);
 
@@ -260,6 +286,8 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     setUniformityScore(95);
     setImageUrl("");
     setAiSummary(undefined);
+    setAiDescriptions(null);
+    setAiHashtags(null);
   };
 
   const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
@@ -296,6 +324,9 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         // 텍스트를 직접 고쳐도 된다.
         setDescription(getAiRecommendations(data.productName, data.category, 0)[0]);
         setSelectedTags([]);
+        setAiDescriptions(null);
+        setAiHashtags(null);
+        requestAiCopy(data.productName, data.category);
       } catch (err) {
         console.error(err);
         alert("AI 분석에 실패했습니다. 잠시 후 다시 시도해주세요.");
@@ -796,13 +827,17 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
             ) : (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-slate-500">
+                  <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
                     AI 추천 태그 (최대 {MAX_SELECTED_TAGS}개 선택, {selectedTags.length}/{MAX_SELECTED_TAGS})
+                    {isGeneratingCopy && (
+                      <span className="material-symbols-outlined text-xs text-emerald-600 animate-spin">progress_activity</span>
+                    )}
                   </span>
                   <button
                     type="button"
-                    onClick={() => setTagSetIndex((prev) => prev + 1)}
-                    className="text-[10px] font-bold text-slate-500 hover:text-emerald-700 flex items-center gap-0.5 cursor-pointer"
+                    onClick={() => (aiDescriptions ? requestAiCopy(title, category) : setTagSetIndex((prev) => prev + 1))}
+                    disabled={isGeneratingCopy}
+                    className="text-[10px] font-bold text-slate-500 hover:text-emerald-700 flex items-center gap-0.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     title="다른 태그 보기"
                   >
                     <span className="material-symbols-outlined text-xs">refresh</span>
@@ -813,7 +848,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                   {/* 이미 골라둔 태그는 새로고침으로 화면에서 밀려나도 계속 보이게, 이번에
                       새로 뜬 추천 태그 앞에 고정으로 붙여준다 — 안 그러면 골라놓고 새로고침
                       했을 때 "방금 고른 게 없어졌나?" 하고 헷갈리게 된다. */}
-                  {[...selectedTags, ...getAiRecommendedTags(category, tagSetIndex)]
+                  {[...selectedTags, ...(aiHashtags && aiHashtags.length ? aiHashtags : getAiRecommendedTags(category, tagSetIndex))]
                     .filter((tag, idx, arr) => arr.indexOf(tag) === idx)
                     .map((tag) => {
                     const isSelected = selectedTags.includes(tag);
@@ -843,11 +878,17 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                   <span className="text-[11px] font-extrabold text-emerald-900 flex items-center gap-1">
                     <span className="material-symbols-outlined text-xs text-emerald-600">auto_awesome</span>
                     AI 추천 설명 (클릭 시 자동 입력)
+                    {isGeneratingCopy && (
+                      <span className="material-symbols-outlined text-xs text-emerald-600 animate-spin">progress_activity</span>
+                    )}
                   </span>
                   <button
                     type="button"
-                    onClick={() => setRecommendationSetIndex((prev) => prev + 1)}
-                    className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-white hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-md flex items-center gap-1 cursor-pointer active:scale-95 transition-all shadow-2xs"
+                    onClick={() =>
+                      aiDescriptions ? requestAiCopy(title, category) : setRecommendationSetIndex((prev) => prev + 1)
+                    }
+                    disabled={isGeneratingCopy}
+                    className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-white hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-md flex items-center gap-1 cursor-pointer active:scale-95 transition-all shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
                     title="다른 추천 멘트 보기"
                   >
                     <span className="material-symbols-outlined text-xs">refresh</span>
@@ -856,7 +897,10 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                 </div>
 
                 <div className="space-y-1.5">
-                  {getAiRecommendations(title, category, recommendationSetIndex).map((recText, idx) => {
+                  {(aiDescriptions && aiDescriptions.length
+                    ? aiDescriptions
+                    : getAiRecommendations(title, category, recommendationSetIndex)
+                  ).map((recText, idx) => {
                     const isSelected = description === recText;
                     return (
                       <button
@@ -1099,6 +1143,9 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
           setDefectScore(scannedProduct.defectScore ?? 2);
           setUniformityScore(scannedProduct.uniformityScore ?? 95);
           setAiSummary(scannedProduct.aiSummary);
+          setAiDescriptions(null);
+          setAiHashtags(null);
+          requestAiCopy(scannedProduct.title, scannedProduct.category);
           setIsFormOpen(true);
           showToast(`'${scannedProduct.title}' AI 스캔 완료! 하단의 '상품 등록 완료'를 눌러 등록하세요.`);
 
