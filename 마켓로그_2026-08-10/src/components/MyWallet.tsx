@@ -183,10 +183,9 @@ export const MyWallet: React.FC<MyWalletProps> = ({
   const [hasStoreProfile, setHasStoreProfile] = useState<boolean | null>(null); // null = 로딩 중
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [locationVersion, setLocationVersion] = useState(0);
-  // 주요 품목/영업시간 값이 길면 요약 화면 한 줄을 넘어가서 지저분해지므로 기본은
-  // 한 줄로 잘라 보여주고 눌러서 펼칠 수 있게 한다.
+  // 주요 품목 값이 길면 요약 화면 한 줄을 넘어가서 지저분해지므로 기본은 한 줄로
+  // 잘라 보여주고 눌러서 펼칠 수 있게 한다.
   const [isShopCategoryExpanded, setIsShopCategoryExpanded] = useState(false);
-  const [isShopHoursExpanded, setIsShopHoursExpanded] = useState(false);
   const [shopInfo, setShopInfo] = useState({
     storeName: userShopName || initialShopName,
     marketName,
@@ -1064,33 +1063,9 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                   <span className="text-[#64748B] font-medium">전화번호</span>
                   <span className="font-bold text-[#334155]">{shopInfo.phone || "미등록"}</span>
                 </div>
-                <div className="py-1.5">
-                  {shopInfo.hours.length > 14 ? (
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[#64748B] font-medium shrink-0">영업시간</span>
-                      <button
-                        type="button"
-                        onClick={() => setIsShopHoursExpanded((v) => !v)}
-                        className="flex items-center gap-1 min-w-0 cursor-pointer"
-                      >
-                        <span
-                          className={`font-bold text-[#334155] text-right ${
-                            isShopHoursExpanded ? "whitespace-normal break-words" : "truncate"
-                          }`}
-                        >
-                          {shopInfo.hours}
-                        </span>
-                        <span className="material-symbols-outlined text-slate-400 text-base shrink-0">
-                          {isShopHoursExpanded ? "expand_less" : "expand_more"}
-                        </span>
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex justify-between">
-                      <span className="text-[#64748B] font-medium">영업시간</span>
-                      <span className="font-bold text-[#334155]">{shopInfo.hours || "미등록"}</span>
-                    </div>
-                  )}
+                <div className="flex justify-between py-1.5 gap-3">
+                  <span className="text-[#64748B] font-medium shrink-0">영업시간</span>
+                  <span className="font-bold text-[#334155] text-right">{shopInfo.hours || "미등록"}</span>
                 </div>
                 <div className="py-1.5">
                   {/* 값이 짧으면(한 줄에 다 들어가면) 화살표 없이 다른 행들처럼 평범하게
