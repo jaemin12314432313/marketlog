@@ -49,7 +49,7 @@ function formatPriceInput(raw: string): string {
 }
 
 // 원산지도 상품명에 "완도산"처럼 수식어로 섞어 쓰지 않고 별도 필드로 받는다 —
-// 대분류(국내산/수입산) + 상세 지역(선택)을 "국내산 · 완도" 형태 문자열로 합쳐 저장한다.
+// 대분류(국내산/수입산) + 상세 지역(필수)을 "국내산 · 완도" 형태 문자열로 합쳐 저장한다.
 const PRODUCT_ORIGIN_OPTIONS = ["국내산", "수입산"];
 
 function parseProductOrigin(origin: string): { type: string; detail: string } {
@@ -373,6 +373,10 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
       alert("상품명과 판매 가격(1원 이상)을 입력해 주세요.");
       return;
     }
+    if (!originDetail.trim()) {
+      alert("원산지 상세 지역(예: 완도)을 입력해 주세요.");
+      return;
+    }
     // 등급/신선도/공공시세는 전부 AI 스캔에서만 채워진다 — 스캔 없이 등록되면 이 값들이
     // 전부 기본값(A+/95점/판매가×1.2)으로 그냥 박혀버려서 신뢰할 수 없는 정보가 된다.
     // 신규 등록은 물론, 오늘이 아닌 날 등록된 상품을 수정할 때도(handleEditProduct에서
@@ -495,8 +499,9 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         </div>
       )}
 
-      {/* Main Action Section: Store Item Registration */}
-      <div className="space-y-3">
+      {/* Main Action Section: Store Item Registration — 헤더 바로 밑에 너무 바짝 붙어
+          보여서(content-pt-safe만으로는 좁음) 살짝 더 내려준다. */}
+      <div className="space-y-3 mt-3">
         <div className="flex justify-between items-center">
           <h3 className="text-xs font-bold text-[#64748B] uppercase tracking-wider flex items-center gap-1">
             <span className="material-symbols-outlined text-base text-emerald-600">add_circle</span>
@@ -764,6 +769,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                 value={originDetail}
                 onChange={(e) => setOriginDetail(e.target.value)}
                 className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                required
               />
             </div>
           </div>
