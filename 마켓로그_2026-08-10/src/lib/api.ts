@@ -167,6 +167,9 @@ export interface StoreInfo {
   hours: string;
   storyText: string;
   address: string;
+  // Store.market_id 기준 실시간 값 — 상품 자체의 marketId(생성 시점 스냅샷)와 달리
+  // 상인이 마이 탭에서 시장을 바꾸면 바로 반영된다.
+  marketName: string;
 }
 
 export function fetchStoreByName(

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Browser } from "@capacitor/browser";
 import { ProductItem, MarketInfo } from "../types";
 import { fetchStoreByName, StoreInfo } from "../lib/api";
+import { MARKETS_DATA } from "../data/initialData";
 
 // 비전 파이프라인이 2단계(특상/보통) 등급으로 바뀌어서, 화면에도 A+/B 같은 영문 등급
 // 대신 실제 판정 체계와 맞는 한글 표기를 쓴다 (HomeFeed/ProductFilterModal과 동일 규칙).
@@ -608,6 +609,16 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     onToggleBookmark(product);
   };
 
+  // marketInfo prop은 "소비자가 지금 지도에서 둘러보고 있는 시장"(App.tsx의 selectedMarket,
+  // 기본값 양동시장)이라 이 상품이 실제 어느 시장 소속인지와 무관하다 — 그대로 쓰면 다른
+  // 시장 상인의 상품인데도 매장 정보 탭에 "광주 양동시장"처럼 엉뚱한 시장이 뜬다.
+  // product.marketId(상품 생성 시점 스냅샷)도 상인이 나중에 시장을 바꾸면 안 갱신되므로
+  // 최종 표시는 storeInfo.marketName(Store.market_id 기준 실시간 값)을 최우선으로 쓰고,
+  // 아직 로딩 전이거나 점포 자체가 없는 경우에만 product.marketId → marketInfo 순으로
+  // 대체한다.
+  const productMarket = MARKETS_DATA.find((m) => m.id === product.marketId) || marketInfo;
+  const displayMarketName = storeInfo?.marketName || productMarket.name;
+
   const recipes = getRecipeRecommendations(product);
   const recipe = recipes[Math.min(selectedRecipeIndex, recipes.length - 1)];
   const qualityMetrics = getQualityMetrics(product);
@@ -636,22 +647,28 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5">
-          <button
-            onClick={handleToggle}
-            className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors border ${
-              isBookmarked
-                ? "bg-blue-50 border-[#BFDBFE] text-[#0052FF]"
-                : "bg-white border-[#E2E8F0] text-[#64748B] hover:bg-slate-50"
-            }`}
-            title={isBookmarked ? "저장 취소" : "관심 상품 저장"}
-          >
-            <span
-              className="material-symbols-outlined text-lg"
-              style={{ fontVariationSettings: isBookmarked ? "'FILL' 1" : "'FILL' 0" }}
+          {/* 상인 점포에 딸린 상품일 때만 "찜하기"가 의미가 있다 — 스캔 상품 저장(개인이
+              직접 찍어 분석만 해본 기록, shopName 없음)은 실제 판매 상품이 아니라서 찜
+              대상이 아니다. 여기서 눌러도 뒷단은 정상 상품 id로 착각해 토글을 시도하게
+              되므로, 아예 안 보여주고 닫기 버튼만 남긴다. */}
+          {product.shopName && (
+            <button
+              onClick={handleToggle}
+              className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors border ${
+                isBookmarked
+                  ? "bg-blue-50 border-[#BFDBFE] text-[#0052FF]"
+                  : "bg-white border-[#E2E8F0] text-[#64748B] hover:bg-slate-50"
+              }`}
+              title={isBookmarked ? "저장 취소" : "관심 상품 저장"}
             >
-              bookmark
-            </span>
-          </button>
+              <span
+                className="material-symbols-outlined text-lg"
+                style={{ fontVariationSettings: isBookmarked ? "'FILL' 1" : "'FILL' 0" }}
+              >
+                bookmark
+              </span>
+            </button>
+          )}
           <button
             onClick={onClose}
             className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-[#64748B] flex items-center justify-center transition-colors"
@@ -733,19 +750,23 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           </div>
         </div>
 
-        {/* Detail Sections Container */}
-        <div className="max-w-2xl mx-auto p-4 sm:p-6 space-y-5">
+        {/* Detail Sections Container — 위쪽 여백을 줄여서 탭 바로 밑에 제목/등록일이
+            바짝 붙게 한다(스캔 상품 저장처럼 상호명이 없는 항목은 이 위 배지 줄
+            왼쪽이 통째로 비어 보여서 더 휑해 보였다). */}
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-3 sm:pt-4 pb-4 sm:pb-6 space-y-5">
           {/* TAB 1: 상품설명 (Product Description) */}
           {activeTab === "description" && (
             <div className="space-y-5 animate-in fade-in duration-200">
               {/* Product Title & Basic Info Section */}
-              <div className="space-y-2 px-1 pt-1 pb-1">
-                <div className="flex items-center justify-between text-xs font-bold text-[#64748B]">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[#0052FF] font-black text-sm">
-                      {product.shopName}
-                    </span>
-                  </div>
+              <div className="space-y-1.5 px-1">
+                <div className={`flex items-center text-xs font-bold text-[#64748B] ${product.shopName ? "justify-between" : "justify-end"}`}>
+                  {product.shopName && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[#0052FF] font-black text-sm">
+                        {product.shopName}
+                      </span>
+                    </div>
+                  )}
                   <span
                     className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border ${
                       product.grade?.startsWith("A")
@@ -904,7 +925,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       <h3 className="text-base font-extrabold text-[#0F172A]">{product.shopName}</h3>
                       <p className="text-xs text-[#64748B] flex items-center gap-1 font-medium">
                         <span className="material-symbols-outlined text-xs text-[#0052FF]">location_on</span>
-                        {marketInfo.name} 내 위치
+                        {displayMarketName} 내 위치
                       </p>
                     </div>
                   </div>
@@ -924,28 +945,24 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     {/* 필드 순서/이름을 마이 탭의 "점포 상세 정보"(MyWallet.tsx)와 맞춘다 —
                         상호명→위치→소속 전통시장→전화번호→영업시간→주요 품목. 사장님이
                         보는 화면과 소비자가 보는 화면이 같은 순서라야 "이대로 저장한 게
-                        맞나" 헷갈리지 않는다. 골목은 지도 CSV로 들어온 옛 데이터에만 있는
-                        필드라 마이 탭엔 없지만, 위치와 같은 성격이라 위치 바로 옆에 둔다. */}
+                        맞나" 헷갈리지 않는다. 골목(alley)은 지도 CSV로 들어온 옛 데이터에만
+                        남아있는 필드라 사장님이 직접 관리하는 값이 아니다 — 실제 주소가
+                        비어있는 옛 점포에서 골목만 대신 보여주면 오히려 헷갈리므로 빼고,
+                        다른 필드들처럼 없으면 "정보 없음"으로 정직하게 보여준다. */}
                     <div className="space-y-2 text-xs divide-y divide-[#F1F5F9]">
                       <div className="flex justify-between py-1.5">
                         <span className="text-[#64748B] font-medium">상호명</span>
                         <span className="font-extrabold text-[#0F172A]">{product.shopName}</span>
                       </div>
-                      {storeInfo?.address && (
-                        <div className="flex justify-between py-1.5 gap-3">
-                          <span className="text-[#64748B] font-medium shrink-0">위치</span>
-                          <span className="font-bold text-[#334155] text-right max-w-[240px]">{storeInfo.address}</span>
-                        </div>
-                      )}
-                      {storeInfo?.alley && (
-                        <div className="flex justify-between py-1.5">
-                          <span className="text-[#64748B] font-medium">골목</span>
-                          <span className="font-bold text-[#334155] text-right max-w-[240px]">{storeInfo.alley}</span>
-                        </div>
-                      )}
+                      <div className="flex justify-between py-1.5 gap-3">
+                        <span className="text-[#64748B] font-medium shrink-0">위치</span>
+                        <span className="font-bold text-[#334155] text-right max-w-[240px]">
+                          {storeInfo?.address || "정보 없음"}
+                        </span>
+                      </div>
                       <div className="flex justify-between py-1.5">
                         <span className="text-[#64748B] font-medium">소속 전통시장</span>
-                        <span className="font-extrabold text-emerald-600">{marketInfo.name}</span>
+                        <span className="font-extrabold text-emerald-600">{displayMarketName}</span>
                       </div>
                       <div className="flex justify-between py-1.5">
                         <span className="text-[#64748B] font-medium">전화번호</span>

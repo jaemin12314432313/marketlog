@@ -273,6 +273,12 @@ def get_store_by_name(name: str, market_id: str | None = None, db: Session = Dep
     store = query.first()
     if not store:
         return {"status": "success", "store": None}
+    # 소속 전통시장은 product.marketId(상품 생성 시점에 박제된 값)가 아니라 Store.market_id
+    # 기준으로 매번 새로 찾는다 — 상인이 나중에 마이 탭에서 시장을 바꿔도 Store 행은 그
+    # 즉시 갱신되지만, 예전에 등록된 Product 행의 marketId는 그대로 남아있어서(재등록 전엔
+    # 안 바뀜) 그걸 기준으로 하면 전화번호/영업시간처럼 실시간으로 안 바뀌고 계속 옛 시장이
+    # 보이는 문제가 있었다.
+    market = db.query(Market).filter(Market.id == store.market_id).first()
     return {
         "status": "success",
         "store": {
@@ -284,5 +290,6 @@ def get_store_by_name(name: str, market_id: str | None = None, db: Session = Dep
             "hours": store.hours,
             "storyText": store.story_text,
             "address": store.address,
+            "marketName": market.name if market else "",
         },
     }
