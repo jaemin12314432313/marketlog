@@ -2,14 +2,15 @@ import React, { useState, useRef, useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { ProductItem, InspectionResult } from "../types";
-import { analyzeProduct, fetchMapConfig } from "../lib/api";
-
-const NAVER_SCRIPT_ID = "naver-maps-sdk";
+import { analyzeProduct, reverseGeocode } from "../lib/api";
 
 // 저장 목록에 "몇 시에 어디서 스캔했는지" 보여주기 위해, 저장 시점에 딱 한 번 위치를
 // 조회해서 구/동 단위 라벨로 바꿔둔다(정확한 지번까지는 필요 없고, 오히려 노출 안 하는
 // 게 낫다). 위치 권한을 거부/실패해도 조용히 빈 값으로 남기고 저장 자체는 그대로
 // 진행한다 — 이 정보 하나 때문에 저장이 막히면 안 되므로 각 단계에 타임아웃을 둔다.
+// 역지오코딩은 클라이언트 사이드 naver.maps.Service가 이 계정에서 안 붙는 문제가 있어서
+// (지도 주소검색 때와 같은 원인) 백엔드 프록시(reverseGeocode)를 쓴다 — 예전엔 이 SDK를
+// 직접 불렀는데, 항상 조용히 실패해서 이 필드가 한 번도 채워진 적이 없었다.
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve(fallback), ms);
@@ -17,30 +18,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
       clearTimeout(timer);
       resolve(value);
     });
-  });
-}
-
-function loadNaverMapsSdk(): Promise<boolean> {
-  return new Promise((resolve) => {
-    if ((window as any).naver?.maps?.Service) {
-      resolve(true);
-      return;
-    }
-    const existing = document.getElementById(NAVER_SCRIPT_ID) as HTMLScriptElement | null;
-    if (existing) {
-      existing.addEventListener("load", () => resolve(!!(window as any).naver?.maps));
-      return;
-    }
-    fetchMapConfig()
-      .then((config) => {
-        const script = document.createElement("script");
-        script.id = NAVER_SCRIPT_ID;
-        script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${config.naver_client_id}&submodules=geocoding`;
-        script.onload = () => resolve(true);
-        script.onerror = () => resolve(false);
-        document.head.appendChild(script);
-      })
-      .catch(() => resolve(false));
   });
 }
 
@@ -58,48 +35,15 @@ function getCurrentPositionOnce(timeoutMs: number): Promise<{ lat: number; lng: 
   });
 }
 
-function reverseGeocodeToLabel(lat: number, lng: number): Promise<string | null> {
-  return new Promise((resolve) => {
-    const naver = (window as any).naver;
-    if (!naver?.maps?.Service) {
-      resolve(null);
-      return;
-    }
-    try {
-      naver.maps.Service.reverseGeocode(
-        {
-          coords: new naver.maps.LatLng(lat, lng),
-          orders: [naver.maps.Service.OrderType.ADDR].join(","),
-        },
-        (status: string, response: any) => {
-          if (status !== naver.maps.Service.Status.OK) {
-            resolve(null);
-            return;
-          }
-          try {
-            const region = response.v2.results[0].region;
-            const label = [region.area1?.name, region.area2?.name, region.area3?.name]
-              .filter(Boolean)
-              .join(" ");
-            resolve(label || null);
-          } catch {
-            resolve(null);
-          }
-        }
-      );
-    } catch {
-      resolve(null);
-    }
-  });
-}
-
 async function resolveScanLocationLabel(): Promise<string> {
   const pos = await withTimeout(getCurrentPositionOnce(6000), 6500, null);
   if (!pos) return "";
-  const sdkReady = await withTimeout(loadNaverMapsSdk(), 4000, false);
-  if (!sdkReady) return "";
-  const label = await withTimeout(reverseGeocodeToLabel(pos.lat, pos.lng), 4000, null);
-  return label || "";
+  try {
+    const res = await withTimeout(reverseGeocode(pos.lat, pos.lng), 6000, { status: "error", label: "" });
+    return res.label || "";
+  } catch {
+    return "";
+  }
 }
 
 function buildPriceTag(price: number, publicPrice: number): string {

@@ -9,6 +9,7 @@ from models import Market, Product, Store
 router = APIRouter(prefix="/api/v1/map", tags=["map"])
 
 GEOCODE_URL = "https://maps.apigw.ntruss.com/map-geocode/v2/geocode"
+REVERSE_GEOCODE_URL = "https://maps.apigw.ntruss.com/map-reversegeocode/v2/gc"
 
 DEFAULT_MARKET_ID = "yangdong"
 
@@ -66,6 +67,50 @@ def geocode_address(query: str):
             for a in addresses
         ],
     }
+
+
+# 1.6. 좌표 → 주소 (역지오코딩) — AI 스캔 후 저장목록에 "몇 시에 어디서 스캔했는지"
+# 표시하려고 쓴다. 얘도 geocode와 같은 이유(클라이언트 사이드 naver.maps.Service가 이
+# 계정에서 안 붙음)로 프론트에서 직접 못 부르길래, 여기서 서버사이드 REST로 대신한다.
+@router.get("/reverse-geocode")
+def reverse_geocode(lat: float, lng: float):
+    client_id = os.getenv("NAVER_CLIENT_ID")
+    client_secret = os.getenv("NAVER_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=500, detail="네이버 지도 인증 정보가 서버에 설정되어 있지 않습니다.")
+
+    try:
+        resp = httpx.get(
+            REVERSE_GEOCODE_URL,
+            params={"coords": f"{lng},{lat}", "orders": "admcode", "output": "json"},
+            headers={
+                "x-ncp-apigw-api-key-id": client_id,
+                "x-ncp-apigw-api-key": client_secret,
+            },
+            timeout=10,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"네이버 역지오코딩 서버 호출에 실패했습니다: {e}")
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"네이버 역지오코딩 API 오류 (status={resp.status_code}): {resp.text[:200]}")
+
+    data = resp.json()
+    results = data.get("results", [])
+    if not results:
+        return {"status": "success", "label": ""}
+
+    region = results[0].get("region", {})
+    # area1=시/도, area2=시/군/구, area3=읍/면/동 — 정확한 지번까지는 필요 없고
+    # (오히려 노출 안 하는 게 나음) 구/동 단위 라벨이면 충분하다.
+    label = " ".join(
+        filter(None, [
+            region.get("area1", {}).get("name", ""),
+            region.get("area2", {}).get("name", ""),
+            region.get("area3", {}).get("name", ""),
+        ])
+    )
+    return {"status": "success", "label": label}
 
 
 # 2. 지도 중심 좌표 및 점포 핀(Marker) 데이터 전달 (DB 기반)
