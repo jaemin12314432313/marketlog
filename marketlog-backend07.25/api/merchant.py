@@ -5,6 +5,7 @@ import asyncio
 import json
 import os
 import uuid
+from datetime import datetime
 
 from db import get_db
 from models import Market, Product, Store, User, product_to_dict, resolve_merchant_market_id
@@ -157,6 +158,11 @@ def update_product(
     product.description = payload.description
     product.ai_summary = payload.aiSummary
     product.is_scanned_product = payload.isScannedProduct
+    # 프론트의 "등록일이 오늘이 아니면 재스캔 전엔 수정 불가" 게이트가 이 값 기준이라,
+    # 수정이 실제로 저장될 때마다 오늘 날짜로 갱신해야 한다 — 안 그러면 오늘 막 재스캔해서
+    # 저장했는데도 created_at은 옛날 그대로 남아, 같은 날 안에 또 수정하려 할 때도 매번
+    # 다시 재스캔을 요구하게 된다.
+    product.created_at = datetime.utcnow()
     db.commit()
     db.refresh(product)
     return {"success": True, "product": product_to_dict(product)}

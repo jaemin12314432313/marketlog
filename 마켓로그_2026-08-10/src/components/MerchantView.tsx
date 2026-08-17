@@ -320,11 +320,16 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         const data = result.data;
         setImageUrl(base64);
         setTitle(data.productName);
-        setUnitAmount("1");
-        setOriginType(PRODUCT_ORIGIN_OPTIONS[0]);
-        setOriginDetail("");
+        // 재스캔은 어디까지나 "오늘 상태 재확인"이지 새 상품이 아니다 — 신규 등록일
+        // 때만 단위/원산지/가격을 기본값·AI 추정치로 초기화하고, 기존 상품을 수정하며
+        // 재스캔하는 거라면(editingProductId 있음) 이미 채워진 과거 값을 그대로 둔다.
+        if (!editingProductId) {
+          setUnitAmount("1");
+          setOriginType(PRODUCT_ORIGIN_OPTIONS[0]);
+          setOriginDetail("");
+          setPrice(data.sellingPrice || 0);
+        }
         setCategory(data.category as ProductItem["category"]);
-        setPrice(data.sellingPrice || 0);
         setPublicPrice(data.publicMarketPrice);
         setGrade((data.grade || "A+") as ProductItem["grade"]);
         setFreshnessScore(data.freshnessScore);
@@ -1177,11 +1182,16 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
           // 폼에 스캔된 상품 정보와 사진 채워넣기 (바로 등록하지 않고, 폼 확인 후 '상품 등록 완료' 시 등록)
           setImageUrl(scannedProduct.imageUrl);
           setTitle(scannedProduct.title);
-          setUnitAmount("1");
-          setOriginType(PRODUCT_ORIGIN_OPTIONS[0]);
-          setOriginDetail("");
+          // 재스캔은 "오늘 상태 재확인"이지 새 상품이 아니다 — 신규 등록일 때만 단위/
+          // 원산지/가격을 기본값·AI 추정치로 초기화하고, 기존 상품을 수정하며 재스캔하는
+          // 거라면(editingProductId 있음) 이미 채워진 과거 값을 그대로 둔다.
+          if (!editingProductId) {
+            setUnitAmount("1");
+            setOriginType(PRODUCT_ORIGIN_OPTIONS[0]);
+            setOriginDetail("");
+            setPrice(scannedProduct.price || "");
+          }
           setCategory(scannedProduct.category);
-          setPrice(scannedProduct.price || "");
           setPublicPrice(scannedProduct.publicPrice || "");
           // 스캔이 끝나면 추천 문구 중 하나를 바로 채워서 상인이 굳이 카드를 눌러
           // 고르지 않아도 되게 한다 — 마음에 안 들면 아래 카드에서 다른 걸 고르거나
