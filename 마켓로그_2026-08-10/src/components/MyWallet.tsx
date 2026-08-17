@@ -1013,8 +1013,15 @@ export const MyWallet: React.FC<MyWalletProps> = ({
               {/* 점포 위치 등록 — 지도의 실제 점포와 이름이 정확히 일치할 때만 상품이 지도에
                   뜨던 문제 때문에, 상인이 직접 자기 위치에 핀을 찍어 등록할 수 있게 한다.
                   전화번호/영업시간과 같은 곳에서 관리하도록 이 카드 안에 같이 둔다. 텍스트
-                  박스 대신 실제 지도 썸네일로 보여줘서 글씨를 안 읽어도 바로 확인되게 한다. */}
-              <StoreLocationThumbnail onEdit={() => setIsLocationPickerOpen(true)} refreshKey={locationVersion} />
+                  박스 대신 실제 지도 썸네일로 보여줘서 글씨를 안 읽어도 바로 확인되게 한다.
+                  이미 점포가 있으면 평소엔 안 보여주고 "정보 수정"을 눌렀을 때만 뜨게 한다
+                  (읽기 전용 화면에 지도 편집 버튼이 계속 떠 있는 게 불필요했음) — 다만
+                  아직 점포가 없는 신규 계정은 이게 유일한 최초 등록 경로라서(handleStartEdit이
+                  hasStoreProfile===false면 수정 모드 진입 자체를 막음) 그 경우는 예외로
+                  계속 보여준다. */}
+              {(isEditingShopInfo || hasStoreProfile === false) && (
+                <StoreLocationThumbnail onEdit={() => setIsLocationPickerOpen(true)} refreshKey={locationVersion} />
+              )}
 
               {hasStoreProfile === false && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
