@@ -755,7 +755,12 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
               <select
                 value={originType}
                 onChange={(e) => setOriginType(e.target.value)}
-                className="w-20 shrink-0 px-2 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium bg-white"
+                disabled={!aiSummary}
+                className={`w-20 shrink-0 px-2 py-2.5 rounded-xl border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                  aiSummary
+                    ? "border-slate-300 text-slate-900 bg-white"
+                    : "border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed"
+                }`}
               >
                 {PRODUCT_ORIGIN_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>
@@ -765,10 +770,15 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
               </select>
               <input
                 type="text"
-                placeholder="완도"
+                placeholder={aiSummary ? "완도" : "AI 스캔을 먼저 진행해주세요"}
                 value={originDetail}
                 onChange={(e) => setOriginDetail(e.target.value)}
-                className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                disabled={!aiSummary}
+                className={`flex-1 min-w-0 px-3 py-2.5 rounded-xl border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                  aiSummary
+                    ? "border-slate-300 text-slate-900"
+                    : "border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed"
+                }`}
                 required
               />
             </div>
@@ -786,7 +796,12 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                   placeholder="1"
                   value={unitAmount}
                   onChange={(e) => setUnitAmount(e.target.value.replace(/[^0-9.]/g, ""))}
-                  className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                  disabled={!aiSummary}
+                  className={`flex-1 min-w-0 px-3.5 py-2.5 rounded-xl border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                    aiSummary
+                      ? "border-slate-300 text-slate-900"
+                      : "border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed"
+                  }`}
                 />
                 <span className="w-12 shrink-0 text-center px-2 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-xs text-slate-600 font-bold">
                   kg
@@ -799,13 +814,18 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
               <input
                 type="text"
                 inputMode="numeric"
-                placeholder="예: 15,000"
+                placeholder={aiSummary ? "예: 15,000" : "AI 스캔을 먼저 진행해주세요"}
                 value={price === "" ? "" : price.toLocaleString()}
                 onChange={(e) => {
                   const digits = e.target.value.replace(/[^0-9]/g, "");
                   setPrice(digits === "" ? "" : Number(digits));
                 }}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                disabled={!aiSummary}
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                  aiSummary
+                    ? "border-slate-300 text-slate-900"
+                    : "border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed"
+                }`}
                 required
               />
             </div>
@@ -824,7 +844,12 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
               }
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium resize-none"
+              disabled={!aiSummary}
+              className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none ${
+                aiSummary
+                  ? "border-slate-300 text-slate-900"
+                  : "border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed"
+              }`}
             />
 
             {/* 스캔 전엔 눌러도 아무 반응 없는 회색 스켈레톤 태그로 "스캔하면 이런 게
