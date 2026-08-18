@@ -171,6 +171,10 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
   // 카메라 AI 스캔에서 실제로 받은 제미나이 종합의견 — 있을 때만 상세페이지에 "AI 스캔
   // 종합 의견"이 표시된다. "AI 추천 설명" 3개 중 고르는 홍보문구(description)와는 별개.
   const [aiSummary, setAiSummary] = useState<string | undefined>(undefined);
+  // attribute_quality_v3가 실측한 품목별 속성(착색도/신선도/손상 등)의 진짜 이름+등급 —
+  // AiScanModal 쪽엔 이미 있었는데 이 폼(사진 드래그&드롭으로 바로 등록)엔 빠져 있어서,
+  // 여기로 등록한 상품은 상세페이지에서 실측 라벨 대신 예전 방식 폴백 라벨로 보였다.
+  const [attributeLabels, setAttributeLabels] = useState<ProductItem["attributeLabels"]>(undefined);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -216,7 +220,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         `가성비와 신선함 모두 잡았습니다. ${name} 오늘 특별 할인가로 ${market}에서 만나보세요 ✨`,
       ],
       [
-        `산지 직송으로 밭/바다의 신선함을 그대로 담은 ${name}입니다. 선물용으로도 적극 추천합니다! 🎁`,
+        `산지에서 직송으로 가져온 신선함을 그대로 담은 ${name}입니다. 선물용으로도 적극 추천합니다! 🎁`,
         `오늘만 이 가격! 매일 조기 품절되는 아주 귀하고 신선한 ${name}입니다. 놓치지 마세요 ⚡`,
         `사장님이 직접 하나하나 까다롭게 엄선한 최상품 ${name}! 품질 백퍼센트 보증합니다 💯`,
       ],
@@ -226,7 +230,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         `신선함은 기본, 푸짐한 양과 특가 혜택까지! ${name} 수량 소진 시 조기 마감됩니다 ⏳`,
       ],
       [
-        `당도와 신선도 정밀 보장! ${name} 사장님이 품질만을 고집하여 정성껏 엄선하였습니다 👍`,
+        `품질과 신선도 정밀 보장! ${name} 사장님이 품질만을 고집하여 정성껏 엄선하였습니다 👍`,
         `온 가족이 함께 안심하고 즐길 수 있는 산뜻한 ${name}, 맛과 신선도 모두 자신있게 추천드립니다 ❤️`,
         `단골 고객들의 연이은 재구매 요청! ${name} 실물 보러 ${market} 매장으로 방문해 보세요 🛒`,
       ],
@@ -268,6 +272,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     const registeredDate = p.createdAt ? new Date(p.createdAt).toDateString() : null;
     const isStale = registeredDate !== new Date().toDateString();
     setAiSummary(isStale ? undefined : p.aiSummary);
+    setAttributeLabels(isStale ? undefined : p.attributeLabels);
     if (isStale) {
       showToast("이 상품은 오늘 등록된 게 아니라서, 수정하려면 AI 스캔을 다시 해야 합니다.");
     }
@@ -298,6 +303,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     setUniformityScore(95);
     setImageUrl("");
     setAiSummary(undefined);
+    setAttributeLabels(undefined);
     setAiDescriptions(null);
     setAiHashtags(null);
   };
@@ -336,6 +342,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         setDefectScore(data.defectScore);
         setUniformityScore(data.uniformityScore);
         setAiSummary(data.aiAnalysisSummary);
+        setAttributeLabels(data.attributeLabels);
         // 스캔이 끝나면 추천 문구 중 하나를 바로 채워서 상인이 굳이 카드를 눌러
         // 고르지 않아도 되게 한다 — 마음에 안 들면 아래 카드에서 다른 걸 고르거나
         // 텍스트를 직접 고쳐도 된다.
@@ -423,6 +430,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         freshnessScore: freshnessScore,
         defectScore: defectScore,
         uniformityScore: uniformityScore,
+        attributeLabels: attributeLabels,
         description: description.trim() || `${shopName}에서 정성껏 등록한 ${title.trim()}입니다.`,
         aiSummary: aiSummary,
         isScannedProduct: Boolean(aiSummary),
@@ -456,6 +464,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         freshnessScore: freshnessScore,
         defectScore: defectScore,
         uniformityScore: uniformityScore,
+        attributeLabels: attributeLabels,
         description: description.trim() || `${shopName}에서 정성껏 등록한 ${title.trim()}입니다.`,
         aiSummary: aiSummary,
         isScannedProduct: Boolean(aiSummary),
@@ -483,7 +492,22 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     <div className="w-full max-w-[600px] mx-auto content-pt-safe content-pb-safe px-4 space-y-6">
       {/* Toast Banner */}
       {toastMessage && (
-        <div className="toast-safe-top fixed left-1/2 -translate-x-1/2 z-50 bg-[#0F172A] text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-xl flex items-center gap-2 border border-slate-700 animate-in fade-in zoom-in duration-200">
+        <div
+          // Tailwind 유틸리티(fixed/left-1/2/-translate-x-1/2)로 위치를 잡으면 실기기
+          // 안드로이드 WebView에서 이따금 적용이 안 돼(정확한 원인 미상 — Tailwind Play
+          // CDN 스크립트와 Vite 빌드 CSS가 같이 로드되는 구조라 둘이 충돌하는 것으로
+          // 추정) 토스트가 fixed 없이 그냥 본문 맨 위 좌측에 눌러앉은 것처럼 보였다.
+          // 위치만큼은 클래스에 기대지 않고 인라인 style로 강제해서 파이프라인과
+          // 무관하게 항상 적용되게 한다.
+          style={{
+            position: "fixed",
+            top: "calc(5.5rem + env(safe-area-inset-top, 0px))",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 50,
+          }}
+          className="bg-[#0F172A] text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-xl flex items-center gap-2 border border-slate-700 animate-in fade-in zoom-in duration-200"
+        >
           <span className="material-symbols-outlined text-emerald-400 text-sm">check_circle</span>
           <span>{toastMessage}</span>
         </div>
@@ -1204,6 +1228,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
           setFreshnessScore(scannedProduct.freshnessScore || 95);
           setDefectScore(scannedProduct.defectScore ?? 2);
           setUniformityScore(scannedProduct.uniformityScore ?? 95);
+          setAttributeLabels(scannedProduct.attributeLabels);
           setAiSummary(scannedProduct.aiSummary);
           setAiDescriptions(null);
           setAiHashtags(null);
