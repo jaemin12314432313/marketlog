@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { ProductItem } from "../types";
-import { getStoreLocation, getStoreProfile, analyzeProduct, generateProductCopy } from "../lib/api";
+import { getStoreLocation, getStoreProfile, analyzeProduct } from "../lib/api";
 import { MerchantAiScanModal } from "./MerchantAiScanModal";
 
 function formatRegisteredDate(isoString: string): string {
@@ -182,33 +182,10 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     onFormDirtyChange?.(isDirty);
   }, [title, price, description, imageUrl, onFormDirtyChange]);
 
-  // AI Recommendation for Description state
+  // AI Recommendation for Description state — OpenAI/Gemini로 실제 생성해서 보여주던
+  // 기능은 빼고, 정적 템플릿(getAiRecommendations/getAiRecommendedTags)만 쓴다.
   const [recommendationSetIndex, setRecommendationSetIndex] = useState(0);
   const [tagSetIndex, setTagSetIndex] = useState(0);
-  // 스캔 직후 우리 점포 정보(주요 품목/소속 시장)를 근거로 Gemini가 실제로 생성한
-  // 문구/해시태그. null이면 아직 안 왔거나 실패한 것 — 그 경우 아래 getAiRecommendations/
-  // getAiRecommendedTags 정적 템플릿이 그대로 폴백으로 쓰인다.
-  const [aiDescriptions, setAiDescriptions] = useState<string[] | null>(null);
-  const [aiHashtags, setAiHashtags] = useState<string[] | null>(null);
-  const [isGeneratingCopy, setIsGeneratingCopy] = useState(false);
-
-  const requestAiCopy = async (scanTitle: string, scanCategory: string) => {
-    setIsGeneratingCopy(true);
-    try {
-      const res = await generateProductCopy(scanTitle, scanCategory);
-      if (res.success && res.descriptions?.length) {
-        setAiDescriptions(res.descriptions);
-        setDescription(res.descriptions[0]);
-      }
-      if (res.success && res.hashtags?.length) {
-        setAiHashtags(res.hashtags);
-      }
-    } catch (err) {
-      console.error("AI 문구 생성 실패 (정적 추천으로 대체됨)", err);
-    } finally {
-      setIsGeneratingCopy(false);
-    }
-  };
 
   const getAiRecommendations = (rawTitle: string, rawCategory: string, index: number) => {
     const name = rawTitle.trim() || `${rawCategory || "인기"} 상품`;
@@ -276,8 +253,6 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     if (isStale) {
       showToast("이 상품은 오늘 등록된 게 아니라서, 수정하려면 AI 스캔을 다시 해야 합니다.");
     }
-    setAiDescriptions(null);
-    setAiHashtags(null);
 
     setIsFormOpen(true);
 
@@ -304,8 +279,6 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     setImageUrl("");
     setAiSummary(undefined);
     setAttributeLabels(undefined);
-    setAiDescriptions(null);
-    setAiHashtags(null);
   };
 
   const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
@@ -343,14 +316,16 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         setUniformityScore(data.uniformityScore);
         setAiSummary(data.aiAnalysisSummary);
         setAttributeLabels(data.attributeLabels);
-        // 스캔이 끝나면 추천 문구 중 하나를 바로 채워서 상인이 굳이 카드를 눌러
-        // 고르지 않아도 되게 한다 — 마음에 안 들면 아래 카드에서 다른 걸 고르거나
-        // 텍스트를 직접 고쳐도 된다.
-        setDescription(getAiRecommendations(data.productName, data.category, 0)[0]);
-        setSelectedTags([]);
-        setAiDescriptions(null);
-        setAiHashtags(null);
-        requestAiCopy(data.productName, data.category);
+        // 위 origin/price와 같은 이유로, 설명/태그도 신규 등록일 때만 기본값으로 채운다 —
+        // 기존 상품을 "오늘 상태 재확인"하려고 재스캔한 거라면 상인이 이미 써둔 설명을
+        // 그대로 둔다.
+        if (!editingProductId) {
+          // 스캔이 끝나면 정적 추천 문구 중 하나를 바로 채워서 상인이 굳이 카드를 눌러
+          // 고르지 않아도 되게 한다 — 마음에 안 들면 아래 카드에서 다른 걸 고르거나
+          // 텍스트를 직접 고쳐도 된다.
+          setDescription(getAiRecommendations(data.productName, data.category, 0)[0]);
+          setSelectedTags([]);
+        }
       } catch (err) {
         console.error(err);
         alert("AI 분석에 실패했습니다. 잠시 후 다시 시도해주세요.");
@@ -532,8 +507,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
           보여서(content-pt-safe만으로는 좁음) 살짝 더 내려준다. */}
       <div className="space-y-3 mt-3">
         <div className="flex justify-between items-center">
-          <h3 className="text-xs font-bold text-[#64748B] uppercase tracking-wider flex items-center gap-1">
-            <span className="material-symbols-outlined text-base text-emerald-600">add_circle</span>
+          <h3 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">
             새 물건 등록
           </h3>
         </div>
@@ -563,7 +537,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
               <span className="material-symbols-outlined text-lg">storefront</span>
             </div>
             <div>
-              <h5 className="text-xs font-bold">
+              <h5 className="text-xs font-semibold">
                 {editingProductId ? "점포 물건 수동 수정 중" : "점포 물건 등록"}
               </h5>
               <p className={`text-[11px] mt-0.5 ${isFormOpen ? "text-slate-300" : "text-[#64748B]"}`}>
@@ -586,10 +560,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         >
           <div className="flex justify-between items-center border-b pb-3">
             <div className="flex items-center gap-2">
-              <h4 className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-emerald-600 text-base">
-                  {editingProductId ? "edit" : "edit_note"}
-                </span>
+              <h4 className="font-semibold text-sm text-slate-900">
                 {editingProductId ? "점포 물건 정보 수정" : "점포 물건 상세정보 입력"}
               </h4>
               {editingProductId && (
@@ -614,8 +585,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
           {/* Integrated AI Scan & Representative Photo Preview */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-sm text-emerald-600">photo_camera</span>
+              <label className="text-xs font-semibold text-[#0F172A]">
                 <span>스캔 사진</span>
               </label>
               {imageUrl && (
@@ -690,7 +660,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                     )}
                   </div>
 
-                  <p className="text-base sm:text-lg font-black text-slate-800 tracking-tight group-hover:text-emerald-900 transition-colors">
+                  <p className="text-base sm:text-lg font-bold text-slate-800 tracking-tight group-hover:text-emerald-900 transition-colors">
                     {isAnalyzingDrop ? "AI가 사진을 분석하는 중..." : "클릭하여 AI 스캔 실행"}
                   </p>
 
@@ -702,37 +672,27 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                 {/* Photo Guideline Section: "이렇게 사진을 찍으세요!" */}
                 <div className="w-full mt-3 pt-3.5 border-t border-slate-200/80">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-sm text-emerald-600">lightbulb</span>
-                      <span>📸 이렇게 사진을 찍으세요! (촬영 가이드)</span>
+                    <span className="text-xs font-bold text-slate-800">
+                      <span>이렇게 사진을 찍으세요! (촬영 가이드)</span>
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-left">
-                    <div className="bg-white p-2.5 rounded-xl border border-slate-200/90 flex items-start gap-2 shadow-2xs">
-                      <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
-                        <span className="material-symbols-outlined text-sm">wb_sunny</span>
-                      </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-slate-200/90 bg-white rounded-2xl border border-slate-200/90 text-left overflow-hidden shadow-[0_4px_10px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.95),inset_0_-1px_2px_rgba(15,23,42,0.03)]">
+                    <div className="p-4">
                       <div>
                         <p className="text-[11px] font-extrabold text-slate-800">1. 밝은 조명 아래</p>
                         <p className="text-[10px] text-slate-500 leading-tight mt-0.5">그림자 없이 상품 전체가 잘 보이도록 촬영</p>
                       </div>
                     </div>
 
-                    <div className="bg-white p-2.5 rounded-xl border border-slate-200/90 flex items-start gap-2 shadow-2xs">
-                      <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
-                        <span className="material-symbols-outlined text-sm">center_focus_strong</span>
-                      </div>
+                    <div className="p-4">
                       <div>
                         <p className="text-[11px] font-extrabold text-slate-800">2. 상품을 중앙에</p>
                         <p className="text-[10px] text-slate-500 leading-tight mt-0.5">상품 하나가 화면 중앙에 꽉 차게 촬영</p>
                       </div>
                     </div>
 
-                    <div className="bg-white p-2.5 rounded-xl border border-slate-200/90 flex items-start gap-2 shadow-2xs">
-                      <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
-                        <span className="material-symbols-outlined text-sm">crop_free</span>
-                      </div>
+                    <div className="p-4">
                       <div>
                         <p className="text-[11px] font-extrabold text-slate-800">3. 깔끔한 배경</p>
                         <p className="text-[10px] text-slate-500 leading-tight mt-0.5">주변 잡동사니 없이 상품만 선명하게</p>
@@ -741,13 +701,12 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                   </div>
 
                   {/* Large Sample Photo Banner */}
-                  <div className="mt-3 bg-white border border-emerald-200/90 rounded-2xl p-3 shadow-2xs text-left">
-                    <div className="flex items-center gap-1.5 text-xs font-extrabold text-emerald-900 mb-2 px-0.5">
-                      <span className="material-symbols-outlined text-sm text-emerald-600">check_circle</span>
+                  <div className="mt-3 text-left">
+                    <div className="text-xs font-extrabold text-emerald-900 mb-2 px-0.5">
                       <span>올바른 스캔 사진 예시</span>
                     </div>
 
-                    <div className="relative w-full h-44 sm:h-52 rounded-xl overflow-hidden border border-slate-200 shadow-inner group-hover:scale-[1.01] transition-transform">
+                    <div className="relative w-full h-48 sm:h-56 rounded-2xl overflow-hidden border border-slate-200 shadow-inner group-hover:scale-[1.01] transition-transform">
                       <img
                         src="https://plus.unsplash.com/premium_photo-1724249990837-f6dfcb7f3eaa?auto=format&fit=crop&w=800&q=80"
                         alt="올바른 촬영 예시 사진"
@@ -764,7 +723,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
               상인이 다르게 적어버리면 실제 사진과 등록 정보가 어긋날 수 있어서다. 무게/수량,
               원산지는 각각 아래 별도 필드로 받는다. */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-700">상품명 *</label>
+            <label className="text-xs font-semibold text-slate-700">상품명 *</label>
             <input
               type="text"
               placeholder="AI 스캔을 하면 자동으로 채워집니다"
@@ -779,7 +738,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
               뺐고(내부적으로는 그대로 쓰임), 원산지는 입력 항목이 둘(구분+상세)이라 한 줄을
               온전히 준다. */}
           <div className="space-y-1">
-            <label className="text-xs font-bold text-slate-700">원산지 *</label>
+            <label className="text-xs font-semibold text-slate-700">원산지 *</label>
             <div className="flex items-center gap-1.5">
               <select
                 value={originType}
@@ -817,7 +776,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
               단위를 kg 하나로 고정한다. 무게와 가격은 서로 짝을 이루는 값이라 한 줄에 뒀다. */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">단위/중량 * (kg 기준)</label>
+              <label className="text-xs font-semibold text-slate-700">단위/중량 * (kg 기준)</label>
               <div className="flex items-center gap-2">
                 <input
                   type="text"
@@ -839,7 +798,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700">판매 가격 (원) *</label>
+              <label className="text-xs font-semibold text-slate-700">판매 가격 (원) *</label>
               <input
                 type="text"
                 inputMode="numeric"
@@ -862,7 +821,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
 
           {/* Description */}
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-700 block">상품 설명 / 특이사항</label>
+            <label className="text-xs font-semibold text-slate-700 block">상품 설명 / 특이사항</label>
 
             <textarea
               rows={2}
@@ -901,15 +860,11 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
                     AI 추천 태그 (최대 {MAX_SELECTED_TAGS}개 선택, {selectedTags.length}/{MAX_SELECTED_TAGS})
-                    {isGeneratingCopy && (
-                      <span className="material-symbols-outlined text-xs text-emerald-600 animate-spin">progress_activity</span>
-                    )}
                   </span>
                   <button
                     type="button"
-                    onClick={() => (aiDescriptions ? requestAiCopy(title, category) : setTagSetIndex((prev) => prev + 1))}
-                    disabled={isGeneratingCopy}
-                    className="text-[10px] font-bold text-slate-500 hover:text-emerald-700 flex items-center gap-0.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => setTagSetIndex((prev) => prev + 1)}
+                    className="text-[10px] font-bold text-slate-500 hover:text-emerald-700 flex items-center gap-0.5 cursor-pointer"
                     title="다른 태그 보기"
                   >
                     <span className="material-symbols-outlined text-xs">refresh</span>
@@ -920,7 +875,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                   {/* 이미 골라둔 태그는 새로고침으로 화면에서 밀려나도 계속 보이게, 이번에
                       새로 뜬 추천 태그 앞에 고정으로 붙여준다 — 안 그러면 골라놓고 새로고침
                       했을 때 "방금 고른 게 없어졌나?" 하고 헷갈리게 된다. */}
-                  {[...selectedTags, ...(aiHashtags && aiHashtags.length ? aiHashtags : getAiRecommendedTags(category, tagSetIndex))]
+                  {[...selectedTags, ...getAiRecommendedTags(category, tagSetIndex)]
                     .filter((tag, idx, arr) => arr.indexOf(tag) === idx)
                     .map((tag) => {
                     const isSelected = selectedTags.includes(tag);
@@ -950,17 +905,11 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                   <span className="text-[11px] font-extrabold text-emerald-900 flex items-center gap-1">
                     <span className="material-symbols-outlined text-xs text-emerald-600">auto_awesome</span>
                     AI 추천 설명 (클릭 시 자동 입력)
-                    {isGeneratingCopy && (
-                      <span className="material-symbols-outlined text-xs text-emerald-600 animate-spin">progress_activity</span>
-                    )}
                   </span>
                   <button
                     type="button"
-                    onClick={() =>
-                      aiDescriptions ? requestAiCopy(title, category) : setRecommendationSetIndex((prev) => prev + 1)
-                    }
-                    disabled={isGeneratingCopy}
-                    className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-white hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-md flex items-center gap-1 cursor-pointer active:scale-95 transition-all shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => setRecommendationSetIndex((prev) => prev + 1)}
+                    className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 bg-white hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-md flex items-center gap-1 cursor-pointer active:scale-95 transition-all shadow-2xs"
                     title="다른 추천 멘트 보기"
                   >
                     <span className="material-symbols-outlined text-xs">refresh</span>
@@ -969,10 +918,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                 </div>
 
                 <div className="space-y-1.5">
-                  {(aiDescriptions && aiDescriptions.length
-                    ? aiDescriptions
-                    : getAiRecommendations(title, category, recommendationSetIndex)
-                  ).map((recText, idx) => {
+                  {getAiRecommendations(title, category, recommendationSetIndex).map((recText, idx) => {
                     const isSelected = description === recText;
                     return (
                       <button
@@ -1033,12 +979,11 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
           onClick={() => setIsProductListOpen((v) => !v)}
           className="w-full flex justify-between items-center cursor-pointer"
         >
-          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-            <span className="material-symbols-outlined text-base text-slate-700">inventory_2</span>
+          <h3 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">
             사장님 등록 상품 ({merchantProducts.length})
           </h3>
           <span className="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
-            {isProductListOpen && "클릭 시 상세정보 수정"}
+            {isProductListOpen && "클릭 시 미리보기"}
             <span className="material-symbols-outlined text-lg text-slate-500">
               {isProductListOpen ? "keyboard_arrow_up" : "keyboard_arrow_down"}
             </span>
@@ -1064,13 +1009,13 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
               return (
                 <div
                   key={p.id}
-                  onClick={() => handleEditProduct(p)}
+                  onClick={() => onSelectProduct(p)}
                   className={`bg-white rounded-2xl border p-3.5 shadow-sm hover:shadow-md transition-all flex gap-3.5 items-center relative overflow-hidden cursor-pointer ${
                     isSelectedForEdit
                       ? "border-emerald-600 ring-2 ring-emerald-500/20 bg-emerald-50/30"
                       : "border-slate-200 hover:border-slate-300"
                   }`}
-                  title="클릭 시 점포 물건 수동 등록(수정) 양식으로 이동"
+                  title="클릭 시 실제 이용자가 보는 화면 미리보기"
                 >
                   {/* Product Image Thumbnail — 소비자 피드 카드(HomeFeed)와 같은 톤(테두리 있는
                       rounded-2xl, 필 형태 등급 배지 + 아이콘)으로 맞춰서, 사장님이 자기 상품이
@@ -1112,9 +1057,9 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                         {formatRegisteredDate(p.createdAt)} 등록
                       </p>
                     )}
-                    <div className="text-lg font-black text-[#0F172A] tracking-tight">
+                    <div className="text-lg font-semibold text-[#0F172A] tracking-tight">
                       {p.price.toLocaleString()}
-                      <span className="text-xs font-bold text-[#0F172A] ml-0.5">원</span>
+                      <span className="text-xs font-semibold text-[#0F172A] ml-0.5">원</span>
                     </div>
                   </div>
 
@@ -1124,13 +1069,13 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onSelectProduct(p);
+                        handleEditProduct(p);
                       }}
                       className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-extrabold transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
-                      title="실제 이용자가 보는 화면 미리보기"
+                      title="점포 물건 수동 등록(수정) 양식으로 이동"
                     >
-                      <span className="material-symbols-outlined text-sm">visibility</span>
-                      <span>미리보기</span>
+                      <span className="material-symbols-outlined text-sm">edit</span>
+                      <span>수정하기</span>
                     </button>
                     <button
                       type="button"
@@ -1217,22 +1162,23 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
           }
           setCategory(scannedProduct.category);
           setPublicPrice(scannedProduct.publicPrice || "");
-          // 스캔이 끝나면 추천 문구 중 하나를 바로 채워서 상인이 굳이 카드를 눌러
-          // 고르지 않아도 되게 한다 — 마음에 안 들면 아래 카드에서 다른 걸 고르거나
-          // 텍스트를 직접 고쳐도 된다.
-          setDescription(
-            scannedProduct.description || getAiRecommendations(scannedProduct.title, scannedProduct.category, 0)[0]
-          );
-          setSelectedTags([]);
           setGrade(scannedProduct.grade || "A+");
           setFreshnessScore(scannedProduct.freshnessScore || 95);
           setDefectScore(scannedProduct.defectScore ?? 2);
           setUniformityScore(scannedProduct.uniformityScore ?? 95);
           setAttributeLabels(scannedProduct.attributeLabels);
           setAiSummary(scannedProduct.aiSummary);
-          setAiDescriptions(null);
-          setAiHashtags(null);
-          requestAiCopy(scannedProduct.title, scannedProduct.category);
+          // 설명/태그도 위 origin/price와 같은 이유로 신규 등록일 때만 기본값으로 채운다 —
+          // 기존 상품 재스캔이면 상인이 이미 써둔 설명을 그대로 둔다.
+          if (!editingProductId) {
+            // 스캔이 끝나면 정적 추천 문구 중 하나를 바로 채워서 상인이 굳이 카드를 눌러
+            // 고르지 않아도 되게 한다 — 마음에 안 들면 아래 카드에서 다른 걸 고르거나
+            // 텍스트를 직접 고쳐도 된다.
+            setDescription(
+              scannedProduct.description || getAiRecommendations(scannedProduct.title, scannedProduct.category, 0)[0]
+            );
+            setSelectedTags([]);
+          }
           setIsFormOpen(true);
           showToast(`'${scannedProduct.title}' AI 스캔 완료! 하단의 '상품 등록 완료'를 눌러 등록하세요.`);
 

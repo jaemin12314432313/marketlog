@@ -2,4 +2,8 @@
 
 * {
   font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+  /* 안드로이드 웹뷰가 탭한 요소에 기본으로 씌우는 반투명 파란 하이라이트 — 검색창처럼
+     둥근 pill 모양 위에 뜨면 네모난 하이라이트가 모서리 밖으로 삐져나와 "잘린" 것처럼
+     보인다. 우리가 직접 hover/active 스타일을 주고 있으니 기본 하이라이트는 끈다. */
+  -webkit-tap-highlight-color: transparent;
 }

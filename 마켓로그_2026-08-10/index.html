@@ -23,6 +23,12 @@
     <style>
       * {
         font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+        /* Pretendard 기본 자간이 살짝 헐렁해서, 화면이 빽빽한 모바일 앱에서는 글자가
+           또렷하게 붙어 보이지 않고 "성의 없어 보이는" 인상을 준다 — 살짝 좁혀서
+           본문/숫자가 더 다부지고 정돈돼 보이게 한다. 숫자(가격 등)는 자릿수가 맞춰
+           보이도록 고정폭 숫자(tabular-nums)로 통일한다. */
+        letter-spacing: -0.01em;
+        font-feature-settings: "tnum" 1, "case" 1;
       }
 
       /* overscroll-behavior: none을 앱 전체(html, body)에 걸었더니 실기기 안드로이드
@@ -37,6 +43,9 @@
         font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
         background-color: #F1F5F9;
         color: #1E293B;
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
         -webkit-tap-highlight-color: transparent;
       }
 

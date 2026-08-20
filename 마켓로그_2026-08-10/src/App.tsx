@@ -19,6 +19,7 @@ import {
   removeBookmark,
   addScannedProduct,
   removeScannedProduct,
+  updateScannedProductMemo,
   createMerchantProduct,
   updateMerchantProduct,
   deleteMerchantProduct,
@@ -66,6 +67,8 @@ export default function App() {
   // 상품 상세의 "상점 위치 지도에서 확인하기"에서 넘어왔을 때 지도가 바로 그 상점으로
   // 이동/포커스하도록 전달하는 값 — MapView가 처리하고 나면 다시 null로 비운다.
   const [mapFocusShopName, setMapFocusShopName] = useState<string | null>(null);
+  // "찍은 위치로 이동하기"용 — 점포가 아니라 좌표 하나라 mapFocusShopName과 분리된 상태로 둔다.
+  const [mapFocusCoordinate, setMapFocusCoordinate] = useState<{ lat: number; lng: number } | null>(null);
   // 위와 같은 흐름으로 지도에 왔을 때, 뒤로가기를 누르면 원래 보던 상품 상세로 돌아갈 수
   // 있도록 그 상품을 기억해둔다 — 예전엔 onNavigateToMap이 selectedProduct를 바로 지워서,
   // 지도까지 갔다가 다시 상품으로 돌아갈 방법이 하단 탭바로 홈에 가는 것뿐이었다.
@@ -76,6 +79,12 @@ export default function App() {
   // 상품 상세의 레시피 탭에서 "지도에서 재료 위치 확인"을 누르면 그 레시피 재료 목록을
   // 담아 지도 탭으로 넘어간다 — MapView가 실제 등록 상품/점포와 매칭해 마커를 표시한다.
   const [recipeIngredients, setRecipeIngredients] = useState<string[] | null>(null);
+  // 위와 같이 넘어갈 때, 지금 보던 상품(예: 양파)을 파는 점포 이름도 같이 넘긴다 —
+  // MapView가 장보기 동선의 출발점을 "내 위치"가 아니라 이 점포로 잡는다.
+  const [recipeStartShopName, setRecipeStartShopName] = useState<string | null>(null);
+  // 상품 상세의 해시태그를 누르면 홈 피드로 돌아가서 그 태그로 바로 검색된 상태를 보여준다
+  // — HomeFeed가 처리하고 나면 다시 null로 비운다(mapFocusShopName과 같은 1회성 트리거 패턴).
+  const [feedSearchTrigger, setFeedSearchTrigger] = useState<string | null>(null);
 
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [scannedProducts, setScannedProducts] = useState<ProductItem[]>([]);
@@ -167,6 +176,11 @@ export default function App() {
         setMapReturnProduct(null);
         setActiveTab(mapReturnTab ?? "home");
         setMapReturnTab(null);
+        // 레시피로 지도에 들어왔다가 상품 상세로 돌아가는 거라면 이 지도 방문은 끝난
+        // 것 — 안 지우면 이후 무관한 경로로 다시 지도에 들어왔을 때도 체크리스트가
+        // 계속 떠 있게 된다 (화면 위 뒤로가기 버튼과 동일하게 처리).
+        setRecipeIngredients(null);
+        setRecipeStartShopName(null);
       } else if (activeTab !== "home") {
         setActiveTab("home");
       } else if (isMerchantFormDirty) {
@@ -247,6 +261,19 @@ export default function App() {
     } catch (err) {
       console.error("AI 스캔 저장목록 삭제 실패", err);
     }
+  };
+
+  // 스캔 저장 상품의 개인 메모 저장 — scannedProducts 목록과, 지금 상세 모달에 열려있는
+  // selectedProduct(SavedView에서 넘길 때 새 객체로 복사되므로 목록과 별개 참조)를
+  // 둘 다 갱신해야 모달을 닫지 않고도 방금 저장한 메모가 바로 반영된다.
+  const handleUpdateScannedMemo = async (id: string, memo: string) => {
+    const res = await updateScannedProductMemo(id, memo);
+    // res.product는 백엔드가 그대로 내려준 값이라 isSavedScanRecord처럼 프론트에서만
+    // 붙여둔 표시용 플래그가 없다 — 통째로 갈아끼우면 그 플래그가 사라져서 저장 직후
+    // "내 메모" 섹션 자체가 사라지는(다시 저장 탭에서 들어와야만 보이는) 버그가 났다.
+    // 기존 객체 위에 새 값만 덮어써서 그 플래그를 보존한다.
+    setScannedProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...res.product } : p)));
+    setSelectedProduct((prev) => (prev && prev.id === id ? { ...prev, ...res.product } : prev));
   };
 
   // 북마크 아이콘을 빠르게 여러 번 누르면, 첫 요청이 끝나기 전엔 bookmarkedProducts가
@@ -399,6 +426,8 @@ export default function App() {
               onToggleBookmark={handleToggleBookmarkProduct}
               isLoading={isFeedLoading}
               onRefresh={refreshFeed}
+              searchTrigger={feedSearchTrigger}
+              onSearchTriggerHandled={() => setFeedSearchTrigger(null)}
             />
           ))}
 
@@ -409,22 +438,13 @@ export default function App() {
             onOpenAiScan={() => setIsAiScanOpen(true)}
             focusShopName={mapFocusShopName}
             onFocusHandled={() => setMapFocusShopName(null)}
+            focusCoordinate={mapFocusCoordinate}
+            onFocusCoordinateHandled={() => setMapFocusCoordinate(null)}
             recipeIngredients={recipeIngredients}
-            onBack={
-              mapReturnProduct
-                ? () => {
-                    setSelectedProduct(mapReturnProduct);
-                    setMapReturnProduct(null);
-                    setActiveTab(mapReturnTab ?? "home");
-                    setMapReturnTab(null);
-                    // 레시피 재료 목록으로 온 게 아니었으면 이미 null이라 상관없고,
-                    // 레시피로 왔었다면 상품 상세로 돌아가는 순간 이 지도 방문은 끝난
-                    // 것이므로 같이 지운다 — 남겨두면 이후 무관한 경로로 다시 지도에
-                    // 들어왔을 때도 체크리스트가 계속 떠 있게 된다.
-                    setRecipeIngredients(null);
-                  }
-                : undefined
-            }
+            recipeStartShopName={recipeStartShopName}
+            // 화면 위 뒤로가기 버튼은 없앴다 — 하드웨어/제스처 뒤로가기가 이미 위
+            // backButton 리스너에서 같은 동작(mapReturnProduct로 복귀 + 레시피 상태
+            // 정리)을 처리하므로 중복이었다.
           />
         )}
 
@@ -515,7 +535,15 @@ export default function App() {
           onClose={() => setSelectedProduct(null)}
           isBookmarked={bookmarkedProducts.some((p) => p.id === selectedProduct.id)}
           onToggleBookmark={handleToggleBookmarkProduct}
+          userRole={userRole}
           onNavigateToMap={() => {
+            // MapView는 selectedMarket 기준으로 불러온 점포 목록에서만 focusShopName을
+            // 찾는다 — 이 상품의 실제 시장으로 안 바꾸고 넘어가면(예: 지금 양동시장을
+            // 보고 있는데 상품은 말바우시장 소속) 그 목록엔 이 점포가 없어서 "위치가
+            // 등록되지 않았다"는 엉뚱한 알림이 뜬다. 상품의 marketId로 실제 시장을 찾아
+            // 먼저 전환해준다.
+            const productMarket = MARKETS_DATA.find((m) => m.id === selectedProduct.marketId);
+            if (productMarket) setSelectedMarket(productMarket);
             setMapFocusShopName(selectedProduct.shopName);
             setMapReturnProduct(selectedProduct);
             setMapReturnTab(activeTab);
@@ -524,14 +552,35 @@ export default function App() {
             // 레시피 경로가 아닌 일반 "지도에서 위치 확인"이므로, 이전에 레시피로
             // 들어왔을 때 남아있던 체크리스트가 여기서도 계속 뜨지 않게 지운다.
             setRecipeIngredients(null);
+            setRecipeStartShopName(null);
           }}
           onNavigateToRecipeMap={(ingredients) => {
+            const productMarket = MARKETS_DATA.find((m) => m.id === selectedProduct.marketId);
+            if (productMarket) setSelectedMarket(productMarket);
             setRecipeIngredients(ingredients);
+            setRecipeStartShopName(selectedProduct.shopName);
             setMapReturnProduct(selectedProduct);
             setMapReturnTab(activeTab);
             setSelectedProduct(null);
             setActiveTab("map");
           }}
+          onNavigateToScanLocation={(lat, lng) => {
+            // 특정 점포가 아니라 좌표 하나라 시장을 바꿀 필요는 없다 — 지금 지도가
+            // 보고 있던 시장 그대로, 그 지점으로만 이동시킨다.
+            setMapFocusCoordinate({ lat, lng });
+            setMapReturnProduct(selectedProduct);
+            setMapReturnTab(activeTab);
+            setSelectedProduct(null);
+            setActiveTab("map");
+            setRecipeIngredients(null);
+            setRecipeStartShopName(null);
+          }}
+          onSearchTag={(tag) => {
+            setSelectedProduct(null);
+            setActiveTab("home");
+            setFeedSearchTrigger(tag);
+          }}
+          onUpdateMemo={handleUpdateScannedMemo}
         />
       )}
 

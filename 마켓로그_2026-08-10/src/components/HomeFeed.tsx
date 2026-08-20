@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { ProductItem, MarketInfo } from "../types";
 import { UserRole } from "./LoginModal";
 import { ProductFilterModal } from "./ProductFilterModal";
+import { MARKETS_DATA } from "../data/initialData";
 
 // 비전 파이프라인이 2단계(특상/보통) 등급으로 바뀌어서, 화면에도 A+/B 같은 영문 등급
 // 대신 실제 판정 체계와 맞는 한글 표기를 쓴다 (데이터 자체는 여전히 A+/B 등 문자로 저장됨).
@@ -37,12 +38,12 @@ function discountPercent(product: ProductItem): number | null {
 // 하나의 자연스러운 문장으로 합쳐서 보여준다 — 저장은 "국내산 · 완도"처럼 가운뎃점으로
 // 구분하는데, 대분류(국내산/수입산)만 대괄호 태그로 남기고 상세 산지(완도 등)는
 // 상품명 앞에 자연스럽게 붙인다.
-function formatProductDisplayTitle(product: ProductItem): string {
+function formatProductDisplayTitle(product: ProductItem): React.ReactNode {
   const [originType, originDetail] = (product.origin || "").split(" · ").map((s) => s.trim());
   const typePart = originType ? `[${originType}] ` : "";
   const detailPart = originDetail ? `${originDetail} ` : "";
   const unitPart = product.unit ? ` ${product.unit}` : "";
-  return `${typePart}${detailPart}${product.title}${unitPart}`;
+  return <>{typePart}{detailPart}{product.title}{unitPart}</>;
 }
 
 interface HomeFeedProps {
@@ -60,6 +61,11 @@ interface HomeFeedProps {
   // 상인이 방금 물건을 새로 등록/수정했을 때, 탭을 나갔다 들어오지 않고도 바로 최신
   // 목록을 받아올 수 있게 하는 수동 새로고침. 없으면 버튼 자체를 숨긴다.
   onRefresh?: () => Promise<void>;
+  // 상품 상세의 해시태그를 눌러서 넘어온 경우, 그 태그를 검색창에 바로 채워준다 —
+  // 값이 오면 한 번 반영하고 onSearchTriggerHandled로 부모의 트리거 상태를 비운다
+  // (mapFocusShopName과 같은 1회성 트리거 패턴).
+  searchTrigger?: string | null;
+  onSearchTriggerHandled?: () => void;
 }
 
 export const HomeFeed: React.FC<HomeFeedProps> = ({
@@ -75,8 +81,17 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
   onToggleBookmark,
   isLoading = false,
   onRefresh,
+  searchTrigger,
+  onSearchTriggerHandled,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    if (!searchTrigger) return;
+    setSearchQuery(searchTrigger);
+    onSearchTriggerHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTrigger]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const handleRefresh = async () => {
     if (!onRefresh || isRefreshing) return;
@@ -121,27 +136,38 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
   const regionAndSearchFiltered = products.filter((p) => {
     let matchesRegion = true;
     if (selectedRegion && selectedRegion !== "전체") {
-      const regionShort = selectedRegion
-        .replace("특별자치시", "")
-        .replace("특별자치도", "")
-        .replace("통합특별시", "")
-        .replace("광역시", "")
-        .replace("특별시", "")
-        .replace("도", "");
-      matchesRegion = Boolean(
-        p.region === selectedRegion ||
-        (p.region && p.region.includes(regionShort)) ||
-        // 양동시장 데이터는 region이 옛 행정구역명("광주광역시")으로 저장돼 있어서, 통합
-        // 이후 명칭("전남광주통합특별시")을 골라도 그대로 매칭되게 해준다.
-        (selectedRegion === "전남광주통합특별시" &&
-          (p.marketId === "yangdong" || p.region === "광주광역시" || p.region === "전라남도")) ||
-        (selectedRegion === "서울특별시" && p.marketId === "mangwon") ||
-        (selectedRegion === "부산광역시" && p.marketId === "jagalchi")
-      );
+      // 예전엔 시장 3곳(양동/망원/자갈치)만 marketId로 하드코딩 매칭하고 나머지 40여 개
+      // 시장은 걸러지는 조건 자체가 없어서, 그 지역을 골라도 상품이 하나도 안 걸러지는
+      // 버그가 있었다. MARKETS_DATA에 이미 시장마다 정확한 region이 있으니 marketId로
+      // 찾아서 그 값을 기준으로 삼는 게 맞다 — REGIONS_DATA 드롭다운과 같은 소스.
+      const market = MARKETS_DATA.find((m) => m.id === p.marketId);
+      if (market) {
+        matchesRegion = market.region === selectedRegion;
+      } else {
+        // marketId가 없는 옛 데이터/개인 스캔 기록은 저장된 region 문자열로 대략 매칭한다.
+        const regionShort = selectedRegion
+          .replace("특별자치시", "")
+          .replace("특별자치도", "")
+          .replace("통합특별시", "")
+          .replace("광역시", "")
+          .replace("특별시", "")
+          .replace("도", "");
+        matchesRegion = Boolean(
+          p.region === selectedRegion ||
+          (p.region && p.region.includes(regionShort)) ||
+          // 양동시장 데이터는 region이 옛 행정구역명("광주광역시")으로 저장돼 있어서, 통합
+          // 이후 명칭("전남광주통합특별시")을 골라도 그대로 매칭되게 해준다.
+          (selectedRegion === "전남광주통합특별시" && (p.region === "광주광역시" || p.region === "전라남도"))
+        );
+      }
     }
+    // "#양파"처럼 #으로 검색하면 해시태그(예: "#신선한양파,#광주양동시장")도 걸리게 한다 —
+    // 태그 자체가 이미 #을 포함해서 저장되므로 그냥 부분 문자열로 비교하면 된다.
+    const query = searchQuery.toLowerCase();
     const matchesSearch =
-      p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.shopName.toLowerCase().includes(searchQuery.toLowerCase());
+      p.title.toLowerCase().includes(query) ||
+      p.shopName.toLowerCase().includes(query) ||
+      (p.tags || "").toLowerCase().includes(query);
     return matchesRegion && matchesSearch;
   });
 
@@ -198,15 +224,16 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
       className="w-full max-w-[600px] mx-auto content-pb-safe px-4 flex flex-col gap-5"
       style={{ paddingTop: "calc(5.5rem + env(safe-area-inset-top, 0px))" }}
     >
-      {/* Search Input Bar */}
-      <div className="relative w-full">
+      {/* Search Input Bar — 헤더 바로 밑에 너무 바짝 붙어 보여서 SavedView/MerchantView와
+          같은 이유로 살짝 더 내려준다. */}
+      <div className="relative w-full mt-6">
         <div className="bg-surface-white rounded-xl border border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.05)] flex items-center px-4 h-12 transition-all focus-within:border-trust-blue focus-within:ring-1 focus-within:ring-trust-blue">
           <span className="material-symbols-outlined text-outline mr-2">search</span>
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="상품명/점포명 검색"
+            placeholder="상품명/점포명/#해시태그 검색"
             className="flex-1 min-w-0 bg-transparent border-none focus:outline-none text-sm text-on-surface placeholder-outline font-medium overflow-hidden text-ellipsis"
           />
           {searchQuery && (
@@ -222,7 +249,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
         <button
           type="button"
           onClick={() => setIsFilterModalOpen(true)}
-          className={`px-4 py-2 rounded-full text-sm font-extrabold flex items-center gap-1.5 transition-all active:scale-95 border ${
+          className={`px-4 py-2 rounded-full text-sm font-normal flex items-center gap-1.5 transition-all active:scale-95 border ${
             activeFilterCount > 0
               ? "bg-blue-50 border-[#0052FF] text-[#0052FF]"
               : "bg-white border-[#E2E8F0] text-[#334155] hover:border-[#CBD5E1]"
@@ -243,7 +270,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
           <button
             type="button"
             onClick={() => setIsSortDropdownOpen(!isSortDropdownOpen)}
-            className="px-4 py-2 rounded-full text-sm font-extrabold flex items-center gap-1.5 transition-all active:scale-95 border bg-white border-[#E2E8F0] text-[#334155] hover:border-[#CBD5E1]"
+            className="px-4 py-2 rounded-full text-sm font-normal flex items-center gap-1.5 transition-all active:scale-95 border bg-white border-[#E2E8F0] text-[#334155] hover:border-[#CBD5E1]"
           >
             <span className="material-symbols-outlined text-lg">swap_vert</span>
             <span>
@@ -306,7 +333,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
       {/* Live Product Feed Container */}
       <section className="flex flex-col gap-3.5">
         <div className="flex justify-between items-center px-1 mb-0.5 relative">
-          <h2 className="text-xl sm:text-2xl font-extrabold text-[#0F172A] tracking-tight flex items-center gap-2">
+          <h2 className="text-xl sm:text-2xl font-bold text-[#0F172A] tracking-tight flex items-center gap-2">
             <span>AI 스캔 인증 상품</span>
             <span className="text-xs bg-[#0052FF] text-white px-2 py-0.5 rounded-full font-bold">
               {sortedProducts.length}
@@ -362,10 +389,10 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
                 <article
                   key={product.id}
                   onClick={() => onSelectProduct(product)}
-                  className="flex flex-col cursor-pointer group relative transition-all"
+                  className="flex flex-col cursor-pointer group relative bg-white rounded-2xl overflow-hidden border border-[#E2E8F0] shadow-[0_2px_10px_rgba(15,23,42,0.08)] hover:shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition-all"
                 >
                   {/* Top Image Container with Badges */}
-                  <div className="relative aspect-[4/3] sm:aspect-square w-full bg-slate-100 rounded-2xl overflow-hidden border border-[#E2E8F0]">
+                  <div className="relative aspect-[5/4] sm:aspect-square w-full bg-slate-100 overflow-hidden">
                     <img
                       src={product.imageUrl}
                       alt={product.title}
@@ -374,7 +401,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
 
                     {/* Badge: Top Right - Grade */}
                     <div
-                      className={`absolute top-2 right-2 text-white px-2 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1 shadow-md z-10 border border-white/20 ${
+                      className={`absolute top-2 right-2 text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.35),0_-1px_0_rgba(255,255,255,0.18)] px-2 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1 shadow-md z-10 border border-white/20 ${
                         product.grade.startsWith("A") ? "bg-[#00C875]" : "bg-[#0052FF]"
                       }`}
                     >
@@ -386,11 +413,11 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
                   </div>
 
                   {/* Card Content Below Image */}
-                  <div className="pt-2.5 pb-1 px-0.5 flex flex-col space-y-0.5">
+                  <div className="pt-2.5 pb-3 px-3 flex flex-col space-y-0.5">
                     {/* Shop Name (top line) + Title (below) */}
                     <div>
-                      <p className="text-[11px] font-black text-[#0052FF] truncate leading-tight">{product.shopName}</p>
-                      <h3 className="text-xs sm:text-sm font-extrabold text-[#0F172A] leading-snug line-clamp-2 group-hover:text-[#0052FF] transition-colors mt-0.5">
+                      <p className="text-[11px] font-bold text-[#0052FF] truncate leading-tight">{product.shopName}</p>
+                      <h3 className="text-xs sm:text-sm font-semibold text-[#0F172A] leading-snug line-clamp-2 group-hover:text-[#0052FF] transition-colors mt-1">
                         {formatProductDisplayTitle(product)}
                       </h3>
                       {relativeTime && (
@@ -403,16 +430,16 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
                       <div className="min-w-0">
                         <div className="flex items-baseline gap-1 whitespace-nowrap leading-none">
                           {discountPercent(product) !== null && (
-                            <span className="text-[#0052FF] font-black text-sm sm:text-base">
+                            <span className="text-[#0052FF] font-bold text-sm sm:text-base">
                               {discountPercent(product)}%
                             </span>
                           )}
-                          <span className="text-base sm:text-lg font-black text-[#0F172A] tracking-tight">
+                          <span className="text-base sm:text-lg font-semibold text-[#0F172A] tracking-tight">
                             {product.price.toLocaleString()}원
                           </span>
                         </div>
                         {discountPercent(product) !== null && (
-                          <span className="block text-[10px] font-bold text-[#94A3B8] mt-0.5 leading-tight">
+                          <span className="block text-[10px] font-bold text-[#94A3B8] mt-1 leading-tight">
                             공공시세 대비 저렴
                           </span>
                         )}
@@ -426,7 +453,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
                             e.stopPropagation();
                             onToggleBookmark(product);
                           }}
-                          className={`w-7 h-7 rounded-full border border-[#E2E8F0] flex items-center justify-center transition-colors flex-shrink-0 ${
+                          className={`w-7 h-7 rounded-full border border-[#E2E8F0] flex items-center justify-center translate-y-1 transition-colors flex-shrink-0 ${
                             isBookmarked
                               ? "bg-blue-50 border-[#BFDBFE] text-[#0052FF]"
                               : "bg-white text-[#94A3B8] hover:bg-slate-100 hover:text-[#0052FF]"
@@ -458,7 +485,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
                 <article
                   key={product.id}
                   onClick={() => onSelectProduct(product)}
-                  className="py-3 sm:py-3.5 border-b border-[#E2E8F0] last:border-b-0 transition-all flex gap-3.5 items-center cursor-pointer group"
+                  className="p-3 sm:p-3.5 bg-white rounded-2xl border border-[#E2E8F0] shadow-[0_2px_10px_rgba(15,23,42,0.08)] hover:shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition-all flex gap-3.5 items-center cursor-pointer group"
                 >
                   {/* Left Thumbnail Container */}
                   <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden flex-shrink-0 border border-[#E2E8F0] bg-slate-100">
@@ -469,7 +496,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
                     />
                     {/* AI Grade Badge Overlay */}
                     <div
-                      className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[11px] font-extrabold text-white flex items-center gap-1 shadow-sm z-10 ${
+                      className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[11px] font-extrabold text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.35),0_-1px_0_rgba(255,255,255,0.18)] flex items-center gap-1 shadow-sm z-10 ${
                         product.grade.startsWith("A") ? "bg-[#00C875]" : "bg-[#0052FF]"
                       }`}
                     >
@@ -489,8 +516,8 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
                       {/* Title and Bookmark options */}
                       <div className="flex justify-between items-start gap-1">
                         <div>
-                          <p className="text-xs font-black text-[#0052FF] truncate">{product.shopName}</p>
-                          <h3 className="text-sm sm:text-base font-extrabold text-[#0F172A] leading-snug line-clamp-2 group-hover:text-[#0052FF] transition-colors mt-0.5">
+                          <p className="text-xs font-bold text-[#0052FF] truncate">{product.shopName}</p>
+                          <h3 className="text-sm sm:text-base font-semibold text-[#0F172A] leading-snug line-clamp-2 group-hover:text-[#0052FF] transition-colors mt-1">
                             {formatProductDisplayTitle(product)}
                           </h3>
                           {relativeTime && (
@@ -526,17 +553,17 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
                     <div className="mt-2">
                       <div className="flex items-baseline gap-1 whitespace-nowrap">
                         {discountPercent(product) !== null && (
-                          <span className="text-[#0052FF] font-black text-lg sm:text-xl">
+                          <span className="text-[#0052FF] font-bold text-lg sm:text-xl">
                             {discountPercent(product)}%
                           </span>
                         )}
-                        <div className="text-xl sm:text-2xl font-black text-[#0F172A] tracking-tight">
+                        <div className="text-xl sm:text-2xl font-semibold text-[#0F172A] tracking-tight">
                           {product.price.toLocaleString()}
-                          <span className="text-base font-bold text-[#0F172A] ml-0.5">원</span>
+                          <span className="text-base font-semibold text-[#0F172A] ml-0.5">원</span>
                         </div>
                       </div>
                       {discountPercent(product) !== null && (
-                        <span className="block text-[11px] font-bold text-[#94A3B8] mt-0.5">
+                        <span className="block text-[11px] font-bold text-[#94A3B8] mt-1">
                           공공시세 대비 저렴
                         </span>
                       )}

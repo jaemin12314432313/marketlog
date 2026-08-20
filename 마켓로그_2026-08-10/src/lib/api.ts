@@ -99,6 +99,18 @@ export function fetchMapStores(marketName?: string): Promise<MapStoresResponse> 
   return apiFetch<MapStoresResponse>(`/api/v1/map/stores${query}`);
 }
 
+export interface MarketBoundary {
+  marketId: string;
+  marketName: string;
+  points: { lat: number; lng: number }[];
+}
+
+// 지도를 줌아웃했을 때 현재 선택된 시장 말고도 근처 여러 시장의 경계선을 같이 보여주기
+// 위한 원좌표 목록 — 컨벡스 헐 계산은 프론트(computeConvexHull)가 한다.
+export function fetchMarketBoundaries(): Promise<{ status: string; boundaries: MarketBoundary[] }> {
+  return apiFetch("/api/v1/map/market-boundaries");
+}
+
 export interface MapConfig {
   status: string;
   naver_client_id: string;
@@ -326,6 +338,16 @@ export function addScannedProduct(
 
 export function removeScannedProduct(id: string): Promise<{ success: boolean }> {
   return apiFetch(`/api/v1/saved/scanned/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export function updateScannedProductMemo(
+  id: string,
+  memo: string
+): Promise<{ success: boolean; product: ProductItem }> {
+  return apiFetch(`/api/v1/saved/scanned/${encodeURIComponent(id)}/memo`, {
+    method: "PUT",
+    body: JSON.stringify({ memo }),
+  });
 }
 
 // ---------- 상인 상품 등록/수정/삭제 ----------

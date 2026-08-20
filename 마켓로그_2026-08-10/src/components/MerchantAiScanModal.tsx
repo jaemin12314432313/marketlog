@@ -154,6 +154,7 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
         freshnessScore: data.freshnessScore,
         defectScore: data.defectScore,
         uniformityScore: data.uniformityScore,
+        attributeLabels: data.attributeLabels,
         // AI 스캔 종합의견(실제 제미나이 분석)과 상품설명(상인이 쓰는 홍보문구)은 서로
         // 다른 값이다 — description은 비워두고, 상인이 직접 입력하거나 "AI 추천 설명"
         // 중 하나를 고르게 한다.
@@ -252,7 +253,7 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
           <div className="bg-black/80 backdrop-blur-md rounded-2xl p-6 text-center space-y-3 border border-white/20 shadow-2xl">
             <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto"></div>
             <p className="text-xs font-bold text-white">
-              AI가 신선도, 표면 결함 및 시세를 분석하여 내 점포 DB로 등록 중입니다...
+              스캔 중입니다...
             </p>
           </div>
         )}

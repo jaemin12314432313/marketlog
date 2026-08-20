@@ -578,7 +578,22 @@ export const MyWallet: React.FC<MyWalletProps> = ({
     <div className="w-full max-w-[600px] mx-auto content-pt-safe content-pb-safe px-4 space-y-6">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="toast-safe-top fixed left-1/2 -translate-x-1/2 z-50 bg-[#0F172A] text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-xl flex items-center gap-2 border border-slate-700 animate-in fade-in zoom-in duration-200">
+        <div
+          // Tailwind 유틸리티(fixed/left-1/2/-translate-x-1/2)로 위치를 잡으면 실기기
+          // 안드로이드 WebView에서 이따금 적용이 안 돼(정확한 원인 미상 — Tailwind Play
+          // CDN 스크립트와 Vite 빌드 CSS가 같이 로드되는 구조라 둘이 충돌하는 것으로
+          // 추정) 토스트가 fixed 없이 그냥 본문 맨 위 좌측에 눌러앉은 것처럼 보였다.
+          // 위치만큼은 클래스에 기대지 않고 인라인 style로 강제해서 파이프라인과
+          // 무관하게 항상 적용되게 한다.
+          style={{
+            position: "fixed",
+            top: "calc(5.5rem + env(safe-area-inset-top, 0px))",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 50,
+          }}
+          className="bg-[#0F172A] text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-xl flex items-center gap-2 border border-slate-700 animate-in fade-in zoom-in duration-200"
+        >
           <span className="material-symbols-outlined text-base text-emerald-400">check_circle</span>
           <span>{toastMessage}</span>
         </div>
@@ -640,7 +655,7 @@ export const MyWallet: React.FC<MyWalletProps> = ({
               </div>
               {/* 계정 표시 이름만 보여준다 — 상호명은 아래 "점포 상세 정보" 카드에서 따로 관리한다 */}
               <div className="min-w-0 flex-1">
-                <h2 className="text-base sm:text-lg font-extrabold text-[#0F172A] truncate">{initialShopName}</h2>
+                <h2 className="text-base sm:text-lg font-semibold text-[#0F172A] truncate">{initialShopName}</h2>
               </div>
             </div>
 
@@ -770,7 +785,7 @@ export const MyWallet: React.FC<MyWalletProps> = ({
               <span className="material-symbols-outlined text-lg">manage_accounts</span>
             </div>
             <div>
-              <h3 className="font-extrabold text-slate-900 text-sm">계정 정보</h3>
+              <h3 className="font-bold text-slate-900 text-sm">계정 정보</h3>
             </div>
           </div>
           {!isEditingPersonalInfo && (
@@ -926,8 +941,7 @@ export const MyWallet: React.FC<MyWalletProps> = ({
       {userRole === "merchant" && (
         <section className="bg-white rounded-2xl p-5 border border-[#E2E8F0] shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-[#F1F5F9]">
-            <h3 className="text-xs font-extrabold text-[#64748B] uppercase tracking-wider flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-base text-emerald-600">edit_note</span>
+            <h3 className="text-sm font-extrabold text-[#0F172A] uppercase tracking-wider">
               점포 상세 정보
             </h3>
             {!isEditingShopInfo ? (
@@ -1044,27 +1058,27 @@ export const MyWallet: React.FC<MyWalletProps> = ({
             <div className="space-y-3">
               <div className="space-y-2 text-xs divide-y divide-[#F1F5F9]">
                 <div className="flex justify-between py-1.5">
-                  <span className="text-[#64748B] font-medium">상호명</span>
-                  <span className="font-extrabold text-[#0F172A]">{shopInfo.storeName}</span>
+                  <span className="text-[#0F172A] font-medium">상호명</span>
+                  <span className="font-bold text-[#0F172A]">{shopInfo.storeName}</span>
                 </div>
                 <div className="flex justify-between py-1.5 gap-3">
-                  <span className="text-[#64748B] font-medium shrink-0">위치</span>
+                  <span className="text-[#0F172A] font-medium shrink-0">위치</span>
                   <span className="font-bold text-[#334155] text-right truncate">
                     {shopInfo.address || "지도에 핀을 찍으면 자동으로 채워져요"}
                   </span>
                 </div>
                 <div className="flex justify-between py-1.5">
-                  <span className="text-[#64748B] font-medium">소속 전통시장</span>
-                  <span className="font-extrabold text-emerald-600">
+                  <span className="text-[#0F172A] font-medium">소속 전통시장</span>
+                  <span className="font-bold text-emerald-600">
                     {shopInfo.marketName || (hasStoreProfile ? "광주 양동시장" : "미선택")}
                   </span>
                 </div>
                 <div className="flex justify-between py-1.5">
-                  <span className="text-[#64748B] font-medium">전화번호</span>
+                  <span className="text-[#0F172A] font-medium">전화번호</span>
                   <span className="font-bold text-[#334155]">{shopInfo.phone || "미등록"}</span>
                 </div>
                 <div className="flex justify-between py-1.5 gap-3">
-                  <span className="text-[#64748B] font-medium shrink-0">영업시간</span>
+                  <span className="text-[#0F172A] font-medium shrink-0">영업시간</span>
                   <span className="font-bold text-[#334155] text-right">{shopInfo.hours || "미등록"}</span>
                 </div>
                 <div className="py-1.5">
@@ -1072,14 +1086,14 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                       보여준다 — 안 그러면 접었다 펼 것도 없는데 화살표만 붙어서 어색하다. */}
                   {shopInfo.category.length > 14 ? (
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[#64748B] font-medium shrink-0">주요 품목</span>
+                      <span className="text-[#0F172A] font-medium shrink-0">주요 품목</span>
                       <button
                         type="button"
                         onClick={() => setIsShopCategoryExpanded((v) => !v)}
                         className="flex items-center gap-1 min-w-0 cursor-pointer"
                       >
                         <span
-                          className={`font-extrabold text-[#0F172A] text-right ${
+                          className={`font-bold text-[#0F172A] text-right ${
                             isShopCategoryExpanded ? "whitespace-normal break-words" : "truncate"
                           }`}
                         >
@@ -1092,8 +1106,8 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                     </div>
                   ) : (
                     <div className="flex justify-between">
-                      <span className="text-[#64748B] font-medium">주요 품목</span>
-                      <span className="font-extrabold text-[#0F172A]">{shopInfo.category || "미등록"}</span>
+                      <span className="text-[#0F172A] font-medium">주요 품목</span>
+                      <span className="font-bold text-[#0F172A]">{shopInfo.category || "미등록"}</span>
                     </div>
                   )}
                 </div>
@@ -1498,6 +1512,3 @@ export const MyWallet: React.FC<MyWalletProps> = ({
     </div>
   );
 };
-
-
-

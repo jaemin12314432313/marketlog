@@ -89,8 +89,9 @@ export const SavedView: React.FC<SavedViewProps> = ({
 
   return (
     <div className="w-full max-w-[600px] mx-auto content-pt-safe content-pb-safe px-4 space-y-5">
-      {/* Page Title Header */}
-      <div className="flex justify-between items-center">
+      {/* Page Title Header — 헤더 바로 밑에 너무 바짝 붙어 보여서(content-pt-safe만으로는
+          좁음) MerchantView와 같은 이유로 살짝 더 내려준다. */}
+      <div className="flex justify-between items-center mt-6">
         <div>
           <h1 className="text-xl font-extrabold text-on-surface flex items-center gap-2">
             <span className="material-symbols-outlined text-trust-blue" style={{ fontVariationSettings: "'FILL' 1" }}>
@@ -152,8 +153,8 @@ export const SavedView: React.FC<SavedViewProps> = ({
                 return (
                   <article
                     key={product.id}
-                    onClick={() => onSelectProduct({ ...product, isScannedProduct: true })}
-                    className="py-3 sm:py-3.5 border-b border-[#E2E8F0] last:border-b-0 transition-all flex gap-3.5 items-center cursor-pointer group"
+                    onClick={() => onSelectProduct({ ...product, isScannedProduct: true, isSavedScanRecord: true })}
+                    className="p-3 sm:p-3.5 bg-white rounded-2xl border border-[#E2E8F0] shadow-[0_2px_10px_rgba(15,23,42,0.08)] hover:shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition-all flex gap-3.5 items-center cursor-pointer group"
                   >
                     {/* Left Thumbnail Container */}
                     <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden flex-shrink-0 border border-[#E2E8F0] bg-slate-100">
@@ -184,20 +185,12 @@ export const SavedView: React.FC<SavedViewProps> = ({
                           <div className="min-w-0">
                             {/* 특정 점포에 등록된 상품이 아니라 내가 직접 스캔한 개인 기록이라
                                 가게명 대신, 실제로 있는 데이터인 카테고리를 라벨로 보여준다. */}
-                            <p className="text-xs font-black text-[#0052FF] truncate">{product.category}</p>
-                            <h3 className="text-sm sm:text-base font-extrabold text-[#0F172A] leading-snug line-clamp-2 group-hover:text-[#0052FF] transition-colors mt-0.5">
+                            <p className="text-xs font-bold text-[#0052FF] truncate">{product.category}</p>
+                            <h3 className="text-sm sm:text-base font-semibold text-[#0F172A] leading-snug line-clamp-2 group-hover:text-[#0052FF] transition-colors mt-1">
                               {formatProductDisplayTitle(product)}
                             </h3>
                             {relativeTime && (
                               <p className="text-[11px] text-[#94A3B8] font-medium mt-0.5">{relativeTime}</p>
-                            )}
-                            {/* 스캔 당시 위치 — 저장 시점에 위치 권한을 거부/실패했으면
-                                비어있으니 그때는 아무것도 표시하지 않는다. */}
-                            {product.distance && (
-                              <p className="flex items-center gap-0.5 text-[11px] text-[#94A3B8] font-medium mt-0.5">
-                                <span className="material-symbols-outlined text-[13px]">location_on</span>
-                                {product.distance}
-                              </p>
                             )}
                           </div>
                           {onRemoveScannedProduct && (
@@ -220,17 +213,17 @@ export const SavedView: React.FC<SavedViewProps> = ({
                       <div className="mt-2">
                         <div className="flex items-baseline gap-1 whitespace-nowrap">
                           {discountPercent(product) !== null && (
-                            <span className="text-[#0052FF] font-black text-lg sm:text-xl">
+                            <span className="text-[#0052FF] font-bold text-lg sm:text-xl">
                               {discountPercent(product)}%
                             </span>
                           )}
-                          <div className="text-xl sm:text-2xl font-black text-[#0F172A] tracking-tight">
+                          <div className="text-xl sm:text-2xl font-semibold text-[#0F172A] tracking-tight">
                             {product.price.toLocaleString()}
-                            <span className="text-base font-bold text-[#0F172A] ml-0.5">원</span>
+                            <span className="text-base font-semibold text-[#0F172A] ml-0.5">원</span>
                           </div>
                         </div>
                         {discountPercent(product) !== null && (
-                          <span className="block text-[11px] font-bold text-[#94A3B8] mt-0.5">
+                          <span className="block text-[11px] font-bold text-[#94A3B8] mt-1">
                             공공시세 대비 저렴
                           </span>
                         )}
@@ -263,7 +256,7 @@ export const SavedView: React.FC<SavedViewProps> = ({
                   <article
                     key={product.id}
                     onClick={() => onSelectProduct(product)}
-                    className="py-3 sm:py-3.5 border-b border-[#E2E8F0] last:border-b-0 transition-all flex gap-3.5 items-center cursor-pointer group"
+                    className="p-3 sm:p-3.5 bg-white rounded-2xl border border-[#E2E8F0] shadow-[0_2px_10px_rgba(15,23,42,0.08)] hover:shadow-[0_6px_18px_rgba(15,23,42,0.12)] transition-all flex gap-3.5 items-center cursor-pointer group"
                   >
                     {/* Left Thumbnail Container */}
                     <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden flex-shrink-0 border border-[#E2E8F0] bg-slate-100">
@@ -293,9 +286,9 @@ export const SavedView: React.FC<SavedViewProps> = ({
                         <div className="flex justify-between items-start gap-1">
                           <div className="min-w-0">
                             {product.shopName && (
-                              <p className="text-xs font-black text-[#0052FF] truncate">{product.shopName}</p>
+                              <p className="text-xs font-bold text-[#0052FF] truncate">{product.shopName}</p>
                             )}
-                            <h3 className="text-sm sm:text-base font-extrabold text-[#0F172A] leading-snug line-clamp-2 group-hover:text-[#0052FF] transition-colors mt-0.5">
+                            <h3 className="text-sm sm:text-base font-semibold text-[#0F172A] leading-snug line-clamp-2 group-hover:text-[#0052FF] transition-colors mt-1">
                               {formatProductDisplayTitle(product)}
                             </h3>
                             {relativeTime && (
@@ -327,17 +320,17 @@ export const SavedView: React.FC<SavedViewProps> = ({
                       <div className="mt-2">
                         <div className="flex items-baseline gap-1 whitespace-nowrap">
                           {discountPercent(product) !== null && (
-                            <span className="text-[#0052FF] font-black text-lg sm:text-xl">
+                            <span className="text-[#0052FF] font-bold text-lg sm:text-xl">
                               {discountPercent(product)}%
                             </span>
                           )}
-                          <div className="text-xl sm:text-2xl font-black text-[#0F172A] tracking-tight">
+                          <div className="text-xl sm:text-2xl font-semibold text-[#0F172A] tracking-tight">
                             {product.price.toLocaleString()}
-                            <span className="text-base font-bold text-[#0F172A] ml-0.5">원</span>
+                            <span className="text-base font-semibold text-[#0F172A] ml-0.5">원</span>
                           </div>
                         </div>
                         {discountPercent(product) !== null && (
-                          <span className="block text-[11px] font-bold text-[#94A3B8] mt-0.5">
+                          <span className="block text-[11px] font-bold text-[#94A3B8] mt-1">
                             공공시세 대비 저렴
                           </span>
                         )}

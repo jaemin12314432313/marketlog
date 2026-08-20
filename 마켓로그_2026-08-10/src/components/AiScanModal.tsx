@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
-import { ProductItem, InspectionResult } from "../types";
+import { ProductItem, InspectionResult, AttributeGradeLabel } from "../types";
 import { analyzeProduct, reverseGeocode } from "../lib/api";
 
 // 저장 목록에 "몇 시에 어디서 스캔했는지" 보여주기 위해, 저장 시점에 딱 한 번 위치를
@@ -35,14 +35,17 @@ function getCurrentPositionOnce(timeoutMs: number): Promise<{ lat: number; lng: 
   });
 }
 
-async function resolveScanLocationLabel(): Promise<string> {
+// distance(라벨)뿐 아니라 원좌표도 같이 돌려준다 — "찍은 위치로 이동하기"에서 지도를
+// 그 지점으로 정확히 이동시키려면 대략적인 구/동 라벨 문자열만으로는 안 되고 실제
+// 위도/경도가 필요하다.
+async function resolveScanLocation(): Promise<{ label: string; lat?: number; lng?: number }> {
   const pos = await withTimeout(getCurrentPositionOnce(6000), 6500, null);
-  if (!pos) return "";
+  if (!pos) return { label: "" };
   try {
     const res = await withTimeout(reverseGeocode(pos.lat, pos.lng), 6000, { status: "error", label: "", roadAddress: "" });
-    return res.label || "";
+    return { label: res.label || "", lat: pos.lat, lng: pos.lng };
   } catch {
-    return "";
+    return { label: "", lat: pos.lat, lng: pos.lng };
   }
 }
 
@@ -62,14 +65,26 @@ function displayGrade(grade: string): string {
 
 interface QualityMetric {
   label: string;
-  value: number;
+  grade: AttributeGradeLabel;
 }
 
 // ProductDetailModal의 getQualityMetrics/getMetricColor와 동일한 기준 — 저장 후 상품
 // 상세페이지에서 보는 지표와 스캔 직후 여기서 보는 지표가 서로 달라선 안 되므로 그대로
-// 맞춘다. 사진 한 장으로 정직하게 판단 가능한 항목만 남기고(당도·균일도 등은 제외),
-// 라벨은 전부 "높을수록 좋음"으로 통일해 임계치 색상이 항상 같은 뜻(초록=우수)이 되게 한다.
-function getQualityMetrics(productName: string, freshnessScore?: number, defectScore?: number, uniformityScore?: number): QualityMetric[] {
+// 맞춘다. attributeLabels(attribute_quality_v3가 실제로 측정한 착색도/신선도/손상 등)이
+// 있으면 그 진짜 속성명+등급을 그대로 쓰고, 없으면(감자 등 미지원 품목, 모델 로드
+// 실패로 Mock 데이터를 쓴 경우) freshness/defect/uniformity 3개 숫자로 근사한 예전
+// 방식 라벨로 대체한다.
+function getQualityMetrics(
+  productName: string,
+  freshnessScore?: number,
+  defectScore?: number,
+  uniformityScore?: number,
+  attributeLabels?: Record<string, { grade: AttributeGradeLabel; confidence: number }>
+): QualityMetric[] {
+  if (attributeLabels) {
+    return Object.entries(attributeLabels).map(([label, info]) => ({ label, grade: info.grade }));
+  }
+
   const title = productName;
 
   const fresh = freshnessScore ?? 90;
@@ -79,7 +94,7 @@ function getQualityMetrics(productName: string, freshnessScore?: number, defectS
   const values = [fresh, integrity, uniform, avg];
 
   const withLabels = (labels: readonly string[]): QualityMetric[] =>
-    labels.map((label, i) => ({ label, value: values[i] }));
+    labels.map((label, i) => ({ label, grade: getMetricGrade(values[i]) }));
 
   if (title.includes("무")) {
     return withLabels(["표면 상태 (매끈함)", "표면 무결성 (흠집 · 갈라짐 없음)", "표피 색상", "형태 온전성 (곧은 정도)"]);
@@ -124,10 +139,28 @@ function getQualityMetrics(productName: string, freshnessScore?: number, defectS
   return withLabels(["표면 무결성 (손상 없음)", "색상 / 광택", "전체 외관"]);
 }
 
-function getMetricColor(value: number): string {
-  if (value >= 80) return "#10B981";
-  if (value >= 50) return "#F59E0B";
-  return "#EF4444";
+// attribute_quality_v3(2026-08-18 인계분)는 속성마다 어휘가 다르다(특상/상/중 또는
+// 많음/보통/적음) — ProductDetailModal과 동일한 등급 순위표로 통일해서 색/막대를 정한다.
+const GRADE_RANK: Record<AttributeGradeLabel, 0 | 1 | 2> = {
+  특상: 0, 적음: 0,
+  상: 1, 보통: 1,
+  중: 2, 많음: 2,
+};
+const RANK_COLOR = ["#10B981", "#F59E0B", "#F87171"];
+
+function getMetricColor(grade: AttributeGradeLabel): string {
+  return RANK_COLOR[GRADE_RANK[grade]];
+}
+
+function getMetricLabelColor(label: string): string {
+  return /(모양|형태|손상|흠집)/.test(label) ? "#0F172A" : "#334155";
+}
+
+// ProductDetailModal과 동일 — attributeLabels 없는 폴백 경로의 점수(0~100)를 같은 어휘로 접는다.
+function getMetricGrade(value: number): AttributeGradeLabel {
+  if (value >= 80) return "특상";
+  if (value >= 50) return "상";
+  return "중";
 }
 
 interface AiScanModalProps {
@@ -366,6 +399,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
         freshnessScore: inspectionResult.freshnessScore,
         defectScore: inspectionResult.defectScore,
         uniformityScore: inspectionResult.uniformityScore,
+        attributeLabels: inspectionResult.attributeLabels,
         description: "",
         aiSummary: inspectionResult.aiAnalysisSummary,
         isScannedProduct: true,
@@ -396,8 +430,8 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
       }
       const price = parseInt(sellingPriceInput, 10) || 0;
       setIsSavingResult(true);
-      // 위치 권한을 거부/실패하면 빈 문자열로 남는다 — 저장 자체는 막지 않는다.
-      const scanLocationLabel = await resolveScanLocationLabel();
+      // 위치 권한을 거부/실패하면 빈 값으로 남는다 — 저장 자체는 막지 않는다.
+      const scanLocation = await resolveScanLocation();
       // 이건 특정 점포에 등록하는 게 아니라 사용자가 직접 촬영해서 개인 저장목록에
       // 남기는 기록이라, 실제로 없는 점포 정보를 지어내지 않는다(예전엔 카테고리별로
       // "양동수산"/"양동정육"/"싱싱청과"를 무작정 붙였는데, 실제로 그 점포에서 산 게
@@ -409,7 +443,9 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
         origin: "",
         tags: "",
         shopName: "",
-        distance: scanLocationLabel,
+        distance: scanLocation.label,
+        scanLat: scanLocation.lat,
+        scanLng: scanLocation.lng,
         timeAgo: "방금 스캔",
         price,
         publicPrice: inspectionResult.publicMarketPrice,
@@ -420,6 +456,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
         freshnessScore: inspectionResult.freshnessScore,
         defectScore: inspectionResult.defectScore,
         uniformityScore: inspectionResult.uniformityScore,
+        attributeLabels: inspectionResult.attributeLabels,
         description: "",
         aiSummary: inspectionResult.aiAnalysisSummary,
         isScannedProduct: true,
@@ -555,7 +592,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
           <div className="bg-black/80 backdrop-blur-md rounded-2xl p-6 text-center space-y-3 border border-white/20 shadow-2xl">
             <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto"></div>
             <p className="text-xs font-bold text-white">
-              AI가 신선도, 표면 결함 및 시세를 분석 중입니다...
+              스캔 중입니다...
             </p>
           </div>
         )}
@@ -563,7 +600,13 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
 
       {/* Toast Notification when saved */}
       {saveSuccessToast && (
-        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 bg-[#00C875] text-white px-5 py-2.5 rounded-full shadow-2xl font-bold text-xs flex items-center gap-2 border border-white/20 animate-bounce">
+        <div
+          // MyWallet/MerchantView 토스트와 같은 이유로 위치는 인라인 style로 고정한다 —
+          // fixed/left-1/2/-translate-x-1/2 클래스가 실기기 WebView에서 안 먹혀 좌상단에
+          // 눌러앉는 문제가 있었다.
+          style={{ position: "fixed", top: "3.5rem", left: "50%", transform: "translateX(-50%)", zIndex: 50 }}
+          className="bg-[#00C875] text-white px-5 py-2.5 rounded-full shadow-2xl font-bold text-xs flex items-center gap-2 border border-white/20 animate-bounce"
+        >
           <span className="material-symbols-outlined text-base">bookmark_check</span>
           <span>스캔 결과가 저장목록에 저장되었습니다!</span>
         </div>
@@ -621,77 +664,85 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
               </div>
             </div>
 
-            {/* Price Details: 공공시세 */}
-            <div className="bg-[#F8FAFC] rounded-xl p-3.5 border border-[#E2E8F0] flex items-center justify-between">
-              <span className="text-xs font-bold text-[#64748B] flex items-center gap-1.5">
-                공공시세{inspectionResult?.publicPriceUnit === "kg" ? " (1kg 기준)" : ""}
-              </span>
-              <div className="text-lg font-black text-[#0F172A]">
-                {inspectionResult?.publicMarketPrice ? `${inspectionResult.publicMarketPrice.toLocaleString()}원` : "-"}
-              </div>
-            </div>
+            {/* 공공시세 · 이 매대 판매가 · AI 정밀 분석 지표 · AI 스캔 종합 의견 — 상품
+                상세페이지(ProductDetailModal)와 같은 기준으로 한 카드에 합친다. 스캔 직후
+                여기서 보는 지표와, 저장 후 피드에 올라간 뒤 보는 지표가 서로 다르면 안
+                되므로 동일한 getQualityMetrics/getMetricColor를 그대로 쓴다. */}
+            <div className="space-y-3 bg-[#F8FAFC] p-3 rounded-xl border border-[#E2E8F0] text-xs">
+              <div className="grid grid-cols-2 gap-3 pb-3 border-b border-[#D1D1D1]">
+                <div>
+                  <span className="text-xs font-bold text-[#0F172A] flex items-center gap-1.5">
+                    공공시세{inspectionResult?.publicPriceUnit === "kg" ? " (1kg 기준)" : ""}
+                  </span>
+                  <div className="text-lg font-semibold text-[#0F172A] mt-0.5">
+                    {inspectionResult?.publicMarketPrice ? `${inspectionResult.publicMarketPrice.toLocaleString()}원` : "-"}
+                  </div>
+                </div>
 
-            {/* 이 매대 판매가 — AI는 카메라만으로 실제 판매가를 알 수 없어 직접 입력받는다 */}
-            <div className="bg-white rounded-xl p-3.5 border border-[#0052FF]/30 flex items-center justify-between gap-3">
-              <span className="text-xs font-bold text-[#64748B] flex items-center gap-1.5 shrink-0">
-                이 매대 판매가
-              </span>
-              <div className="flex items-center gap-1">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={sellingPriceInput}
-                  onChange={(e) => setSellingPriceInput(e.target.value)}
-                  placeholder="가격 입력"
-                  className="w-24 text-right text-lg font-black text-[#0F172A] bg-transparent border-b border-slate-300 focus:outline-none focus:border-[#0052FF]"
-                />
-                <span className="text-sm font-bold text-[#64748B]">원</span>
+                {/* 이 매대 판매가 — AI는 카메라만으로 실제 판매가를 알 수 없어 직접 입력받는다 */}
+                <div>
+                  <span className="text-xs font-bold text-[#0F172A] flex items-center gap-1.5">
+                    이 매대 판매가
+                  </span>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={sellingPriceInput}
+                      onChange={(e) => setSellingPriceInput(e.target.value)}
+                      placeholder="가격 입력"
+                      className="w-full min-w-0 text-lg font-semibold text-[#0F172A] bg-transparent border-b border-slate-300 focus:outline-none focus:border-[#0052FF]"
+                    />
+                    <span className="text-sm font-bold text-[#64748B] shrink-0">원</span>
+                  </div>
+                </div>
               </div>
-            </div>
 
-            {/* AI 정밀 분석 지표 — 상품 상세페이지(ProductDetailModal)와 완전히 같은 기준.
-                스캔 직후 여기서 보는 지표와, 저장 후 피드에 올라간 뒤 보는 지표가 서로
-                다르면 안 되므로 동일한 getQualityMetrics/getMetricColor를 그대로 쓴다. */}
-            <div className="space-y-2.5">
               <div className="text-xs font-extrabold text-[#0F172A] flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm text-[#0052FF]">analytics</span>
                 AI 정밀 분석 지표
               </div>
-              <div className="space-y-2 bg-[#F8FAFC] p-3 rounded-xl border border-[#E2E8F0] text-xs">
+              <div className="space-y-2">
                 {getQualityMetrics(
                   inspectionResult?.productName || "",
                   inspectionResult?.freshnessScore,
                   inspectionResult?.defectScore,
-                  inspectionResult?.uniformityScore
-                ).map((metric) => {
-                  const color = getMetricColor(metric.value);
+                  inspectionResult?.uniformityScore,
+                  inspectionResult?.attributeLabels
+                ).map((metric, index) => {
+                  const color = getMetricColor(metric.grade);
                   return (
-                    <div key={metric.label}>
+                    <div key={metric.label} className={index > 0 ? "border-t border-[#D1D1D1] pt-2" : ""}>
                       <div className="flex justify-between items-center text-[11px] mb-1">
-                        <span className="font-bold text-[#334155]">{metric.label}</span>
-                        <span className="font-black" style={{ color }}>{metric.value}점</span>
+                        <span className="font-bold" style={{ color: getMetricLabelColor(metric.label) }}>{metric.label}</span>
+                        <span className="text-sm font-black" style={{ color }}>{metric.grade}</span>
                       </div>
-                      <div className="w-full h-2 bg-slate-200/80 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{ width: `${metric.value}%`, backgroundColor: color }}
-                        ></div>
+                      <div className="grid grid-cols-3 gap-1">
+                        {[0, 1, 2].map((rank) => {
+                          const isActive = rank <= 2 - GRADE_RANK[metric.grade];
+                          return (
+                            <div
+                              key={rank}
+                              className="relative h-2.5 rounded-md overflow-hidden border border-slate-300 border-t-white/70 bg-slate-200 shadow-[inset_0_2px_4px_rgba(15,23,42,0.16),inset_0_-1px_1px_rgba(255,255,255,0.75)]"
+                              style={isActive ? { backgroundColor: color } : undefined}
+                            >
+                              <div aria-hidden="true" className="pointer-events-none absolute inset-x-1 top-px h-px rounded-full bg-white/60" />
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );
                 })}
               </div>
-            </div>
 
-            {/* AI 스캔 종합 의견 */}
-            <div className="bg-blue-50/70 rounded-xl p-3 border border-blue-100 space-y-1">
-              <div className="text-xs font-extrabold text-[#0052FF] flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">psychology</span>
-                AI 스캔 종합 의견
+              <div className="border-t border-[#D1D1D1] pt-3 space-y-1">
+                <div className="text-xs font-extrabold text-[#0052FF] flex items-center gap-1">
+                  AI 스캔 종합 의견
+                </div>
+                <p className="text-xs text-[#334155] font-medium leading-relaxed">
+                  {inspectionResult?.aiAnalysisSummary || "당도와 색택이 우수하며 표면 무름이 없는 최상급 신선 상품입니다."}
+                </p>
               </div>
-              <p className="text-xs text-[#334155] font-medium leading-relaxed">
-                {inspectionResult?.aiAnalysisSummary || "당도와 색택이 우수하며 표면 무름이 없는 최상급 신선 상품입니다."}
-              </p>
             </div>
 
             {/* Action Buttons */}

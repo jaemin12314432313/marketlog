@@ -1,4 +1,6 @@
 import React, { useImperativeHandle, useState } from "react";
+import logoIcon from "../assets/logo-icon.png";
+import logoIconMerchant from "../assets/logo-icon-merchant.png";
 import {
   ApiError,
   findUsername,
@@ -274,15 +276,12 @@ export const LoginModal = React.forwardRef<LoginModalHandle, LoginModalProps>(({
 
       {/* 1. Header Logo & Title Block */}
       <div className="text-center pt-2 sm:pt-4 space-y-2">
-        {/* Blue Wallet App Icon */}
-        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-[#0052FF] rounded-[22px] flex items-center justify-center text-white shadow-xl shadow-blue-500/30 mx-auto relative group transition-transform hover:scale-105">
-          <span
-            className="material-symbols-outlined text-3xl sm:text-4xl font-bold"
-            style={{ fontVariationSettings: "'FILL' 1" }}
-          >
-            account_balance_wallet
-          </span>
-        </div>
+        {/* App Icon — Header.tsx와 동일하게 역할(소비자/상인 탭)에 따라 색만 다른 로고를 쓴다. */}
+        <img
+          src={selectedRole === "merchant" ? logoIconMerchant : logoIcon}
+          alt="MarketLog"
+          className="w-20 h-20 sm:w-24 sm:h-24 mx-auto object-contain drop-shadow-xl transition-transform hover:scale-105"
+        />
 
         {/* App Title */}
         <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F172A] tracking-tight pt-1">

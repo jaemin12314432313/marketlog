@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { UserRole } from "./LoginModal";
+import logoIcon from "../assets/logo-icon.png";
+import logoIconMerchant from "../assets/logo-icon-merchant.png";
 
 interface HeaderProps {
   selectedRegion: string;
@@ -17,6 +19,7 @@ export const Header: React.FC<HeaderProps> = ({
   allRegions,
   onSelectRegion,
   onOpenNotifications,
+  activeTab,
   userRole = "customer",
   userDisplayName,
   onOpenLogin,
@@ -35,32 +38,27 @@ export const Header: React.FC<HeaderProps> = ({
           content-pt-safe는 "헤더가 안전영역만큼 커진다"고 가정하고 여백을 계산해서,
           안전영역이 클수록 헤더-콘텐츠 사이 빈 공간이 점점 커지는 버그였다. min-height
           자체에 안전영역을 더해 헤더가 실제로 그만큼 커지도록 고쳤다. */}
-      {/* Left: App Logo */}
+      {/* Left: App Logo — 소비자는 파란색, 상인은 초록색 버전을 쓴다(둘 다 같은 장바구니+M
+          그라디언트 마크, 색만 역할별로 다름). src/assets/logo-icon(-merchant).png. */}
       <div className="flex items-center gap-2 shrink-0">
-        <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-white shrink-0 transition-colors ${
-          userRole === "merchant"
-            ? "bg-emerald-600 shadow-md shadow-emerald-500/20"
-            : "bg-[#0052FF] shadow-md shadow-blue-500/20"
-        }`}>
-          <span
-            className="material-symbols-outlined text-lg sm:text-xl font-bold"
-            style={{ fontVariationSettings: "'FILL' 1" }}
-          >
-            {userRole === "merchant" ? "storefront" : "account_balance_wallet"}
-          </span>
-        </div>
+        <img
+          src={userRole === "merchant" ? logoIconMerchant : logoIcon}
+          alt="MarketLog"
+          className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 object-contain"
+        />
         <div className="flex items-center gap-1.5">
-          <span className="text-lg sm:text-xl font-black tracking-tight text-[#0F172A] select-none">
+          <span className="text-lg sm:text-xl font-bold tracking-tight text-[#0F172A] select-none">
             MarketLog
           </span>
         </div>
       </div>
 
-      {/* Right controls: Region Selector & Notifications */}
+      {/* Right controls: Region Selector & Notifications — 알림은 탭과 무관하게 항상
+          보여준다. 지역 선택만 마이/저장 탭에서는 안 쓰는 기능이라 홈 탭에서만 보여준다. */}
       <div className="flex items-center space-x-1 sm:space-x-2 shrink-0">
         {/* Region Selector — 소비자 홈피드 지역 필터용이라 상인 화면에서는 아무 기능도
-            안 하면서 자리만 차지한다. 상인 로그인일 땐 숨긴다. */}
-        {userRole !== "merchant" && (
+            안 하면서 자리만 차지한다. 상인 로그인일 땐 숨기고, 홈 탭이 아닐 때도 숨긴다. */}
+        {userRole !== "merchant" && activeTab === "home" && (
         <div className="relative flex items-center shrink-0">
           {/* Region Selector Button */}
           <button
