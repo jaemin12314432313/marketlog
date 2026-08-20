@@ -27,6 +27,7 @@ _pending_columns = {
         ("unit", "VARCHAR NOT NULL DEFAULT ''"),
         ("origin", "VARCHAR NOT NULL DEFAULT ''"),
         ("tags", "VARCHAR NOT NULL DEFAULT ''"),
+        ("attribute_labels", "TEXT"),
     ],
     "users": [
         ("avatar_icon", "VARCHAR"),
@@ -34,7 +35,10 @@ _pending_columns = {
         ("profile_image", "TEXT"),
         ("market_id", "VARCHAR"),
     ],
-    "scanned_products": [("ai_summary", "VARCHAR")],
+    "scanned_products": [
+        ("ai_summary", "VARCHAR"), ("scan_lat", "REAL"), ("scan_lng", "REAL"),
+        ("attribute_labels", "TEXT"), ("memo", "TEXT"),
+    ],
     "stores": [("address", "VARCHAR NOT NULL DEFAULT ''")],
 }
 for _table, _columns in _pending_columns.items():

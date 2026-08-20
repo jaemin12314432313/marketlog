@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import datetime
 
@@ -70,6 +71,17 @@ class ScannedProduct(Base):
     uniformity_score = Column(Integer, nullable=False, default=0)
     description = Column(String, nullable=False, default="")
     ai_summary = Column(String, nullable=True)
+    # 촬영 당시 GPS 좌표 — "찍은 위치로 이동하기"에서 지도를 그 지점으로 이동시키는 용도.
+    # Product의 scan_lat/scan_lng와 같은 목적이지만 이 표는 상인 상품이 아니라 소비자
+    # 개인 스캔 기록이라 별도 테이블에 둔다.
+    scan_lat = Column(Float, nullable=True)
+    scan_lng = Column(Float, nullable=True)
+    # attribute_quality_v3(2026-08-18~)가 실측한 품목별 속성(착색도/신선도/손상 등)의
+    # {속성명: {grade, confidence}} JSON — 감자 등 미지원 품목/구형 스캔은 비어 있다.
+    attribute_labels = Column(Text, nullable=True)
+    # 소비자가 스캔해서 저장해둔 상품에 직접 남기는 개인 메모(예: "가격 괜찮았음",
+    # "여기서 또 사지 말기") — 상인이 아니라 이 스캔을 저장한 소비자 본인만 보고 쓴다.
+    memo = Column(Text, nullable=True)
 
     user = relationship("User", back_populates="scanned_products")
 
@@ -162,6 +174,9 @@ class Product(Base):
     freshness_score = Column(Integer, nullable=False, default=0)
     defect_score = Column(Integer, nullable=False, default=0)
     uniformity_score = Column(Integer, nullable=False, default=0)
+    # attribute_quality_v3(2026-08-18~)가 실측한 품목별 속성(착색도/신선도/손상 등)의
+    # {속성명: {grade, confidence}} JSON — 감자 등 미지원 품목/구형 스캔/수동 등록은 비어 있다.
+    attribute_labels = Column(Text, nullable=True)
     description = Column(String, nullable=False, default="")
     is_merchant_uploaded = Column(Boolean, nullable=False, default=False)
     # 카메라 AI 스캔이 실제로(Gemini 등을 통해) 생성한 종합의견 — 상인이 직접 입력하거나
@@ -190,6 +205,7 @@ def product_to_dict(product: Product) -> dict:
         "freshnessScore": product.freshness_score,
         "defectScore": product.defect_score,
         "uniformityScore": product.uniformity_score,
+        "attributeLabels": json.loads(product.attribute_labels) if product.attribute_labels else None,
         "description": product.description,
         "aiSummary": product.ai_summary,
         "isScannedProduct": product.is_scanned_product,

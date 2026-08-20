@@ -20,7 +20,12 @@ LOCAL_SEARCH_URL = "https://naverapihub.apigw.ntruss.com/search/v1/local"
 
 DEFAULT_MARKET_ID = "yangdong"
 
-# 지도가 너무 빽빽해지는 일반 도소매/소매 점포는 지도 핀에서는 제외 (DB에는 그대로 유지).
+# "store"(분류 불명/일반 도소매) 점포는 지도 핀에서 제외한다(DB에는 유지) — 아직
+# 식품 여부로 걸러지지 않은 시장(예: 말바우시장) 데이터엔 부동산/미용실/한의원처럼
+# 식품과 무관한 잡화점이 이 카테고리에 섞여 있다. 2026-08-18 양동시장은 CSV 자체를
+# 주력상품이 식품/식재료인 점포만 남기도록 미리 걸러서 gwangju_market_data.py의
+# CATEGORY_MAP에서 "도소매"를 "store"가 아니라 "vegetable"로 매핑해뒀다 — 그래서
+# 이 목록을 안 건드려도 양동시장 점포는 정상적으로 지도/레시피 매칭에 나온다.
 MAP_EXCLUDED_CATEGORIES = ["store"]
 
 
@@ -208,22 +213,30 @@ def get_map_stores(market_name: str = "양동시장", db: Session = Depends(get_
     if not market:
         market = db.query(Market).filter(Market.id == DEFAULT_MARKET_ID).first()
 
-    stores = (
-        db.query(Store)
-        .filter(Store.market_id == market.id, Store.category.notin_(MAP_EXCLUDED_CATEGORIES))
-        .all()
-        if market
-        else []
-    )
-
-    # 점포에 연결된 상인 등록 상품 (있으면 핀에 같이 표시할 수 있도록)
-    store_ids = [s.id for s in stores]
+    stores: list[Store] = []
     products_by_store: dict = {}
-    if store_ids:
-        for p in db.query(Product).filter(Product.store_id.in_(store_ids)).all():
-            products_by_store.setdefault(p.store_id, []).append(
-                {"id": p.id, "title": p.title, "price": p.price, "image_url": p.image_url}
-            )
+    if market:
+        # 점포 목록 + 각 점포에 연결된 상인 등록 상품을 예전엔 쿼리 두 번(왕복 두 번)으로
+        # 나눠 가져왔는데, DB(Neon, ap-southeast-1)가 서버(asia-northeast3)와 물리적으로
+        # 떨어져 있어서 왕복 하나하나가 그대로 지연으로 쌓인다 — 시장 검색해서 전환할 때
+        # 느리다고 체감되는 지연의 상당 부분이 여기였다. LEFT JOIN으로 한 번에 가져온다.
+        rows = (
+            db.query(Store, Product)
+            .outerjoin(Product, Product.store_id == Store.id)
+            .filter(Store.market_id == market.id, Store.category.notin_(MAP_EXCLUDED_CATEGORIES))
+            .all()
+        )
+        stores_by_id: dict[str, Store] = {}
+        store_order: list[str] = []
+        for store, product in rows:
+            if store.id not in stores_by_id:
+                stores_by_id[store.id] = store
+                store_order.append(store.id)
+            if product is not None:
+                products_by_store.setdefault(store.id, []).append(
+                    {"id": product.id, "title": product.title, "price": product.price, "image_url": product.image_url}
+                )
+        stores = [stores_by_id[sid] for sid in store_order]
 
     return {
         "status": "success",
@@ -252,6 +265,37 @@ def get_map_stores(market_name: str = "양동시장", db: Session = Depends(get_
                 "products": products_by_store.get(s.id, []),
             }
             for s in stores
+        ],
+    }
+
+
+# 2-1. 지도를 줌아웃했을 때 여러 시장의 경계선을 한꺼번에 보여주기 위한 좌표 목록.
+# 컨벡스 헐 계산 자체는 프론트(MapView.tsx의 computeConvexHull)가 그대로 하므로, 여기서는
+# 시장별로 "이상치 없는" 원좌표만 묶어서 내려준다 — 상인이 찍은 핀(category=="merchant")은
+# get_map_stores의 단일 시장 경계선과 같은 이유로 여기서도 제외한다. 점 3개 미만인
+# 시장(아직 공공데이터가 없는 곳)은 컨벡스 헐 자체가 안 되므로 아예 뺀다.
+@router.get("/market-boundaries")
+def get_market_boundaries(db: Session = Depends(get_db)):
+    stores = (
+        db.query(Store)
+        .filter(Store.category.notin_(MAP_EXCLUDED_CATEGORIES), Store.category != "merchant")
+        .all()
+    )
+    points_by_market: dict[str, list[dict]] = {}
+    for s in stores:
+        points_by_market.setdefault(s.market_id, []).append({"lat": s.lat, "lng": s.lng})
+
+    markets = {m.id: m for m in db.query(Market).all()}
+    return {
+        "status": "success",
+        "boundaries": [
+            {
+                "marketId": market_id,
+                "marketName": markets[market_id].name if market_id in markets else market_id,
+                "points": points,
+            }
+            for market_id, points in points_by_market.items()
+            if len(points) >= 3
         ],
     }
 

@@ -46,12 +46,17 @@ ITEM_CONFIG = {
 
 # 등급 -> KAMIS 소매가격의 2단계 등급(상품/중품) 근사 매핑.
 # KAMIS 소매가는 상품(고급)/중품(중급) 두 단계만 제공해서 완전히 대응되진 않는다.
-# SCAN_MOCK 경로는 여전히 3단계(특/상/보통)를 쓰고, mlv2 실측 스캔 경로는 2단계
-# (특상/보통)를 쓰므로 둘 다 매핑해 둔다.
-GRADE_TO_RANK = {"특": "상품", "상": "상품", "특상": "상품", "보통": "중품"}
+# SCAN_MOCK 경로는 3단계(특/상/보통), mlv2 실측 스캔의 옛 그레이더는 2단계(특상/보통),
+# attribute_quality_v3(2026-08-18~)는 3단계(상/중/하)를 쓰므로 전부 매핑해 둔다.
+# "하"는 KAMIS에 대응 등급이 없어 둘 중 낮은 "중품"으로 근사한다.
+GRADE_TO_RANK = {"특": "상품", "상": "상품", "특상": "상품", "보통": "중품", "중": "중품", "하": "중품"}
 
-_cache: dict = {"date": None, "prices": {}, "retry_after": None}
+_cache: dict = {"date": None, "regday": None, "prices": {}, "retry_after": None}
 _RETRY_COOLDOWN = timedelta(minutes=5)
+# KAMIS가 당일 데이터를 아직 안 올려서 며칠 전 걸로 대체했을 때, 그걸 "오늘치 완료"로
+# 착각하고 자정까지 안 쳐다보면 실제로는 최신 데이터가 낮/오후에 올라와도 하루 종일
+# 오래된 가격을 보여주게 된다. 이런 경우엔 짧게(1시간) 쉬었다가 다시 확인한다.
+_STALE_DATA_RECHECK_COOLDOWN = timedelta(hours=1)
 _refresh_lock = threading.Lock()
 
 
@@ -121,22 +126,32 @@ def _build_prices_for_date(regday: str) -> "tuple[dict, bool]":
 
 def _refresh_cache() -> None:
     today = date.today()
+    today_iso = today.isoformat()
     prices: dict = {}
+    regday_used: "str | None" = None
     had_failure = False
     for days_back in range(5):
         regday = (today - timedelta(days=days_back)).isoformat()
         prices, ok = _build_prices_for_date(regday)
         had_failure = had_failure or not ok
         if prices:
+            regday_used = regday
             break
     _cache["prices"] = prices
+    _cache["regday"] = regday_used
     if had_failure:
         # 일시적 실패 — 오늘 날짜로 확정 짓지 않고, 쿨다운 후 같은 날 안에도 다시 시도한다.
         _cache["date"] = None
         _cache["retry_after"] = datetime.now() + _RETRY_COOLDOWN
-    else:
+    elif regday_used == today_iso:
+        # 오늘자 데이터를 실제로 받았다 — 내일까지는 다시 확인할 필요 없음.
         _cache["date"] = today
         _cache["retry_after"] = None
+    else:
+        # 실패는 아니지만 오늘자 데이터가 아직 없어서 예전 날짜로 대체했다 — "오늘치
+        # 완료"로 착각해 자정까지 방치하면 안 되므로 stale로 남겨두고 짧게 재확인한다.
+        _cache["date"] = None
+        _cache["retry_after"] = datetime.now() + _STALE_DATA_RECHECK_COOLDOWN
 
 
 async def auto_refresh_loop() -> None:

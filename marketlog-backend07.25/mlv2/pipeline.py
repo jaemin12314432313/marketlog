@@ -76,6 +76,11 @@ def _resolve(path):
 
 DEFAULT_DETECTOR = "checkpoints/yolo11s_synth_v1.pt"
 DEFAULT_GRADER = "checkpoints/quality_grading_effv2s_v2.pt"
+# 2026-08-18: 비전팀이 attribute_quality_v3(품목별 속성 상/중/하 + 가중합산 최종등급)를
+# 인계했다. 기존 quality_grading_effv2s_v2(CORAL 2단계, grade_reliable=False로 항상
+# 경고가 붙던 모델)를 대체한다. 감자는 이 모델의 학습 대상이 아니라서(9종만 지원)
+# analyze()가 감자일 때만 옛 그레이더로 폴백한다.
+DEFAULT_ATTRIBUTE_MODEL = "checkpoints/attribute_quality_convnextv2_tiny_v3.pt"
 
 # ---------------------------------------------------------------------------
 # 품목 분류기는 `item_crop_v1` **단독**이다 (2026-08-12, 마늘 제외 결정 반영).
@@ -173,7 +178,8 @@ def missing_checkpoints(detector=DEFAULT_DETECTOR, classifier=None,
 class Pipeline(object):
     def __init__(self, detector=DEFAULT_DETECTOR, classifier=None,
                  grader=DEFAULT_GRADER, device=None, conf=0.25, imgsz=768,
-                 grade_threshold=GRADE_THRESHOLD, classifier_weights=None):
+                 grade_threshold=GRADE_THRESHOLD, classifier_weights=None,
+                 attribute_model=DEFAULT_ATTRIBUTE_MODEL):
         """`classifier` 는 경로 하나 또는 여러 개다. 여러 개면 확률을 가중평균한다."""
         import torch
 
@@ -257,8 +263,22 @@ class Pipeline(object):
         self.clf, self.clf_size = self.clfs[0], self.clf_sizes[0]
 
         self.grader, self.grade_order, self.grader_size = self._load_grader(grader)
+        self.attribute_predictor = self._load_attribute_model(attribute_model)
 
     # ---------- 로딩 ----------
+    def _load_attribute_model(self, path):
+        """없어도(체크포인트 안 받은 배포 등) 조용히 None으로 두고, analyze()가 옛
+        2단계 그레이더로 폴백하게 한다 — 등급 모델과 동일한 관용 규칙."""
+        if not path:
+            return None
+        resolved = _resolve(path)
+        if not Path(resolved).is_file():
+            print("경고: attribute_quality 체크포인트를 찾지 못해 2단계 그레이더로만 판정한다: {}".format(resolved))
+            return None
+        from mlv2.attribute_quality import AttributeQualityPredictor
+
+        return AttributeQualityPredictor(resolved, device=self.device)
+
     def _load_classifier(self, path):
         from mlv2.model import build_model
 
@@ -361,10 +381,47 @@ class Pipeline(object):
         box = boxes[sel[0]]
         crop = _crop(pil, box, pad)
         item, item_conf = self.classify(crop)
-        grade, p_high = self.grade(crop)
         return {
             "ok": True,
             "item": item, "item_conf": round(item_conf, 4),
+            **self._grade_result(crop, item),
+            "box": [int(v) for v in box],
+            "det_conf": round(float(confs[sel[0]]), 4),
+            "n_detected": len(boxes),
+        }
+
+    def _grade_result(self, crop, item) -> dict:
+        """등급 판정 결과 필드 묶음. attribute_quality_v3가 지원하는 품목(9종, 감자
+        제외)은 속성 기반 상/중/하를 쓰고, 아니면 기존 2단계 CORAL 그레이더로 폴백한다.
+
+        item은 item_crop_v1(10종, 감자 포함)이 이미 정한 품목명을 그대로 넘긴다 —
+        attribute_quality_v3에게 다시 고르게 하면 9종 중 하나를 무조건 골라버려서
+        감자를 다른 채소로 조용히 오분류할 수 있어서다(attribute_quality.py 참고).
+        """
+        from mlv2.attribute_final_grade import ITEM_POLICIES
+
+        if self.attribute_predictor is not None and item in ITEM_POLICIES:
+            try:
+                result = self.attribute_predictor.predict(crop, item=item)
+            except ValueError:
+                pass  # 방어적 폴백 — 이론상 위 in ITEM_POLICIES 체크로 여기 안 옴
+            else:
+                return {
+                    "grade": result["final_grade"],
+                    "grade_reason": result["final_reason"],
+                    "grade_score": result["final_score"],
+                    # 내부적으로는 상/중/하 3단계로 계산하지만, 2026-08-18 비전팀 인계분부터
+                    # 구매자 화면엔 특상/보통 2단계로 표시한다(display_final_grade).
+                    "grade_scheme": "속성기반(표시: 특상/보통)",
+                    "grade_reliable": True,
+                    "attribute_item": result["item"],
+                    "attribute_item_confidence": result["item_confidence"],
+                    "attribute_labels": result["labels"],
+                    "ai_scan_summary": result["ai_scan_summary"],
+                }
+
+        grade, p_high = self.grade(crop)
+        return {
             "grade": grade,
             "grade_p_high": round(p_high, 4),
             "grade_display": "{} ({:.0%})".format(grade, p_high if grade == GRADE_HIGH
@@ -373,9 +430,6 @@ class Pipeline(object):
             "grade_scheme": "2단계({} / {})".format(GRADE_HIGH, GRADE_LOW),
             "grade_reliable": False,
             "grade_warning": GRADE_WARNING,
-            "box": [int(v) for v in box],
-            "det_conf": round(float(confs[sel[0]]), 4),
-            "n_detected": len(boxes),
         }
 
     def analyze_all(self, image, pad=0.0):

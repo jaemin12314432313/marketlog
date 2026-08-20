@@ -8,42 +8,33 @@
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     
-    <!-- Google Fonts & Material Symbols -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />   
+    <!-- Google Fonts & Material Symbols — 아이콘 폰트가 늦게 로드되면(특히 모바일 데이터)
+         display=block의 대기시간을 넘겨버려서 아이콘 대신 "storefront", "notifications" 같은
+         원래 리게이처 이름이 그냥 텍스트로 보여버린다(레이아웃이 통째로 밀려서 "화면이 안
+         맞는" 것처럼 보이는 원인이었다). preconnect로 DNS/TLS 핸드셰이크를 미리 끝내두면
+         실제 폰트 파일을 더 빨리 받기 시작해서 이 타임아웃에 걸릴 확률이 줄어든다. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block" rel="stylesheet" />
-    <!-- 📍 네이버 지도 API SDK (NCP Client ID 적용) -->
-     <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=8iw3o3ksqx&submodules=geocoding"></script>
     
-
-    <!-- Pretendard Web Font -->
+    <!-- Pretendard Web Font CDN -->
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    
     <style>
-      @font-face {
-        font-family: 'Pretendard';
-        font-weight: 400;
-        font-display: swap;
-        src: local('Pretendard Regular'), url('https://cdn.jsdelivr.net/gh/Project-Noonnu/noonfonts_2107@1.1/Pretendard-Regular.woff') format('woff');
+      * {
+        font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
       }
-      @font-face {
-        font-family: 'Pretendard';
-        font-weight: 600;
-        font-display: swap;
-        src: local('Pretendard SemiBold'), url('https://cdn.jsdelivr.net/gh/Project-Noonnu/noonfonts_2107@1.1/Pretendard-SemiBold.woff') format('woff');
-      }
-      @font-face {
-        font-family: 'Pretendard';
-        font-weight: 700;
-        font-display: swap;
-        src: local('Pretendard Bold'), url('https://cdn.jsdelivr.net/gh/Project-Noonnu/noonfonts_2107@1.1/Pretendard-Bold.woff') format('woff');
-      }
-      @font-face {
-        font-family: 'Pretendard';
-        font-weight: 800;
-        font-display: swap;
-        src: local('Pretendard ExtraBold'), url('https://cdn.jsdelivr.net/gh/Project-Noonnu/noonfonts_2107@1.1/Pretendard-ExtraBold.woff') format('woff');
+
+      /* overscroll-behavior: none을 앱 전체(html, body)에 걸었더니 실기기 안드로이드
+         웹뷰에서 스크롤 자체가 전부 안 되는 심각한 부작용이 있어서 되돌렸다 — 지도
+         드래그 시 옆으로 밀리는 문제는 지도 화면 자체의 컨테이너(MapView.tsx)에만
+         국소적으로 걸어둔 것으로 충분하다. */
+      html, body {
+        overflow-x: hidden;
       }
 
       body {
-        font-family: 'Pretendard', 'Helvetica Neue', Arial, sans-serif;
+        font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
         background-color: #F1F5F9;
         color: #1E293B;
         -webkit-tap-highlight-color: transparent;
@@ -51,6 +42,69 @@
 
       .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
       .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+
+      /* 상단/하단 고정바(Header, BottomNav)가 안전영역만큼 늘어나므로, 그 밑에 깔리는
+         페이지 콘텐츠도 고정된 pt-20/pb-28(80px/112px) 대신 같은 만큼 여유를 더해야
+         겹치지 않는다. 헤더 실제 높이는 5rem(min-height, Header.tsx의 style 참고) +
+         안전영역이므로, 그보다 0.5rem(8px) 더 여유를 둔다 — 예전엔 헤더가 min-h-20
+         (고정 80px)만 쓰고 있어서 안전영역이 클수록 헤더는 그대로인데 이 여백만
+         계속 커져 실기기에서 위쪽이 텅 비어 보이는 문제가 있었다. */
+      .content-pt-safe { padding-top: calc(5.5rem + env(safe-area-inset-top, 0px)); }
+
+      /* 상단 토스트 배너용 — 예전엔 top-20(고정 80px)을 썼는데, 헤더 실제 높이가
+         5rem + 안전영역(env(safe-area-inset-top))이라 안전영역이 있는 기기(엣지투엣지
+         안드로이드 WebView 등)에서는 헤더가 그만큼 더 늘어나는데 토스트는 그대로라
+         헤더 위에 겹쳐 보였다(좌상단에 붕 뜬 것처럼 보이는 원인). content-pt-safe와
+         같은 기준으로 헤더 바로 밑에 오도록 맞춘다. */
+      .toast-safe-top { top: calc(5.5rem + env(safe-area-inset-top, 0px)); }
+      .content-pb-safe { padding-bottom: calc(7rem + env(safe-area-inset-bottom, 20px)); }
+
+      /* 가격 범위 필터용 이중 슬라이더 — <input type="range"> 두 개를 겹쳐서 만든다.
+         트랙은 투명하게 하고 손잡이(thumb)만 보이게 해서, 아래 색칠된 바(track-fill)
+         위에 두 손잡이가 각자 움직이는 것처럼 보이게 한다. */
+      .range-slider {
+        -webkit-appearance: none;
+        appearance: none;
+        background: transparent;
+        pointer-events: none;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+      .range-slider::-webkit-slider-runnable-track {
+        -webkit-appearance: none;
+        background: transparent;
+        height: 100%;
+      }
+      .range-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        pointer-events: auto;
+        width: 20px;
+        height: 20px;
+        border-radius: 9999px;
+        background: #ffffff;
+        border: 3px solid #0052FF;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+        cursor: pointer;
+        margin-top: 0;
+      }
+      .range-slider::-moz-range-track {
+        background: transparent;
+        height: 100%;
+      }
+      .range-slider::-moz-range-thumb {
+        pointer-events: auto;
+        width: 20px;
+        height: 20px;
+        border-radius: 9999px;
+        background: #ffffff;
+        border: 3px solid #0052FF;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+        cursor: pointer;
+      }
 
       /* Scanning animation */
       @keyframes scanline {
@@ -106,6 +160,9 @@
         darkMode: "class",
         theme: {
           extend: {
+            fontFamily: {
+              sans: ['"Pretendard Variable"', 'Pretendard', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'Roboto', 'sans-serif'],
+            },
             colors: {
               "trust-blue": "#3B82F6",
               "safe-emerald": "#10B981",
@@ -125,8 +182,8 @@
         }
       }
     </script>
-    <script type="module" crossorigin src="/assets/index-C0I2XVvs.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-BuxOuwKI.css">
+    <script type="module" crossorigin src="/assets/index-r37lM9QM.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-2iDeSh88.css">
   </head>
   <body class="bg-background-slate min-h-screen text-on-surface antialiased">
     <div id="root"></div>

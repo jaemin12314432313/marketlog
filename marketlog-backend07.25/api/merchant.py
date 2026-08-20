@@ -10,7 +10,8 @@ from datetime import datetime
 from db import get_db
 from models import Market, Product, Store, User, product_to_dict, resolve_merchant_market_id
 from api.auth import get_current_user
-from api.consumer import get_gemini_client
+from api.consumer import get_gemini_client, get_openai_client, OPENAI_MODEL
+from image_storage import upload_base64_image
 
 router = APIRouter(tags=["Merchant"])
 os.makedirs("uploads", exist_ok=True)
@@ -78,6 +79,7 @@ class ProductIn(BaseModel):
     freshnessScore: int = 0
     defectScore: int = 0
     uniformityScore: int = 0
+    attributeLabels: dict | None = None
     description: str = ""
     aiSummary: str | None = None
     isScannedProduct: bool = False
@@ -111,10 +113,11 @@ def create_product(
         price_tag=payload.priceTag,
         grade=payload.grade,
         category=payload.category,
-        image_url=payload.imageUrl,
+        image_url=upload_base64_image(payload.imageUrl, "products"),
         freshness_score=payload.freshnessScore,
         defect_score=payload.defectScore,
         uniformity_score=payload.uniformityScore,
+        attribute_labels=json.dumps(payload.attributeLabels, ensure_ascii=False) if payload.attributeLabels else None,
         description=payload.description,
         ai_summary=payload.aiSummary,
         is_scanned_product=payload.isScannedProduct,
@@ -151,10 +154,16 @@ def update_product(
     product.price_tag = payload.priceTag
     product.grade = payload.grade
     product.category = payload.category
-    product.image_url = payload.imageUrl
+    # 재스캔 없이 그냥 다른 필드만 고치는 수정이면 imageUrl은 이미 GCS URL(http로 시작)로
+    # 넘어오니 업로드를 다시 안 한다 — upload_base64_image가 data: 형식이 아니면
+    # 그대로 돌려주므로 이 호출 자체는 항상 안전하다.
+    product.image_url = upload_base64_image(payload.imageUrl, "products")
     product.freshness_score = payload.freshnessScore
     product.defect_score = payload.defectScore
     product.uniformity_score = payload.uniformityScore
+    product.attribute_labels = (
+        json.dumps(payload.attributeLabels, ensure_ascii=False) if payload.attributeLabels else None
+    )
     product.description = payload.description
     product.ai_summary = payload.aiSummary
     product.is_scanned_product = payload.isScannedProduct
@@ -188,27 +197,45 @@ def delete_product(
 
 def _generate_product_copy(title: str, category: str, store: "Store | None", market: "Market | None") -> "dict | None":
     """상품명/카테고리와 점포 정보(주요 품목, 소속 시장)를 참고해 홍보 문구 3개와
-    해시태그를 Gemini로 생성한다. 실패 시 None을 반환해 프론트의 기존 정적 템플릿이
-    그대로 폴백으로 쓰이게 한다."""
+    해시태그를 생성한다. OpenAI를 우선 쓰고, 실패하면 Gemini로 폴백한다. 둘 다 실패하면
+    None을 반환해 프론트의 기존 정적 템플릿이 그대로 폴백으로 쓰이게 한다."""
+    highlight = store.subtitle if store else ""
+    market_name = market.name if market else ""
+    prompt = (
+        f"당신은 전통시장 상인을 돕는 카피라이터입니다. 상인이 등록하는 상품 정보를 참고해 "
+        f"소비자에게 어필할 한 줄 홍보 문구 3개와 해시태그 5개를 한국어로 작성하세요.\n"
+        f"상품명: {title}\n"
+        f"상품 카테고리: {category or '정보 없음'}\n"
+        f"점포 주요 품목: {highlight or '정보 없음'}\n"
+        f"소속 전통시장: {market_name or '정보 없음'}\n\n"
+        f"홍보 문구는 각각 30자 내외로, 과장·허위 표현 없이 신선함과 산지·정성을 강조하는 "
+        f"자연스러운 문장 3개를 서로 다른 느낌으로 작성하세요. 해시태그는 '#'로 시작하고 "
+        f"공백 없이 작성하세요. 반드시 다음 키만 가진 JSON으로 응답하세요: "
+        'descriptions(문자열 배열 3개), hashtags(문자열 배열 5개).'
+    )
+
+    openai_client = get_openai_client()
+    if openai_client is not None:
+        try:
+            response = openai_client.chat.completions.create(
+                model=OPENAI_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=1.0,
+                response_format={"type": "json_object"},
+                max_tokens=400,
+            )
+            data = json.loads(response.choices[0].message.content)
+            if data.get("descriptions") and data.get("hashtags"):
+                return data
+        except Exception as e:
+            print(f"OpenAI 상품 카피 생성 실패 (Gemini로 폴백): {e}")
+
     client = get_gemini_client()
     if client is None:
         return None
     try:
         from google.genai import types
 
-        highlight = store.subtitle if store else ""
-        market_name = market.name if market else ""
-        prompt = (
-            f"당신은 전통시장 상인을 돕는 카피라이터입니다. 상인이 등록하는 상품 정보를 참고해 "
-            f"소비자에게 어필할 한 줄 홍보 문구 3개와 해시태그 5개를 한국어로 작성하세요.\n"
-            f"상품명: {title}\n"
-            f"상품 카테고리: {category or '정보 없음'}\n"
-            f"점포 주요 품목: {highlight or '정보 없음'}\n"
-            f"소속 전통시장: {market_name or '정보 없음'}\n\n"
-            f"홍보 문구는 각각 30자 내외로, 과장·허위 표현 없이 신선함과 산지·정성을 강조하는 "
-            f"자연스러운 문장 3개를 서로 다른 느낌으로 작성하세요. 해시태그는 '#'로 시작하고 "
-            f"공백 없이 작성하세요."
-        )
         response = client.models.generate_content(
             model="gemini-3.6-flash",
             contents=[prompt],

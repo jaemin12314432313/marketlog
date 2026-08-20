@@ -43,7 +43,10 @@ def ensure_models_loaded():
     except Exception as e:
         print(f"모델 로드 실패 (Mock 모드): {e}")
 
-# 등급 매핑 — mlv2는 3단계(특/상/보통)가 아니라 2단계(특상/보통)로 판정한다.
+# 등급 매핑 — mlv2 옛 그레이더(감자 등 폴백 경로)는 2단계(특상/보통)로 판정한다.
+# attribute_quality_v3(2026-08-18 인계분부터)도 내부적으로는 상/중/하 3단계로 계산하지만
+# mlv2/attribute_quality.py의 display_final_grade가 이미 "특상"/"보통"으로 바꿔서
+# 내려주므로, 두 경로 다 이 하나의 매핑을 그대로 쓰면 된다.
 GRADE_MAP = {"특상": "A+", "보통": "B"}
 
 # 품목 인식 모델의 실제 10개 클래스를 프론트(ProductItem.category: 야채/과일/수산물/정육/
@@ -223,6 +226,140 @@ def generate_ai_commentary(image: Image.Image, item_name: str, grade_kor: str) -
         return None
 
 
+_openai_client = None
+_openai_client_checked = False
+OPENAI_MODEL = "gpt-4o-mini"
+
+
+def get_openai_client():
+    """OpenAI 클라이언트를 지연 초기화한다. 키가 없거나 SDK 미설치 시 None."""
+    global _openai_client, _openai_client_checked
+    if _openai_client_checked:
+        return _openai_client
+    _openai_client_checked = True
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return None
+    try:
+        from openai import OpenAI
+        _openai_client = OpenAI(api_key=api_key)
+    except Exception as e:
+        print(f"OpenAI 클라이언트 초기화 실패: {e}")
+        _openai_client = None
+    return _openai_client
+
+
+def generate_openai_attribute_summary(image: Image.Image, item: str, grades: dict, final_grade: str) -> Optional[str]:
+    """attribute_quality_v3가 이미 확정한 품목별 실측 속성(착색도/신선도/손상 등)과 최종
+    등급은 절대 다시 매기지 않는다 — 이 함수는 그 확정된 판정을 바탕으로 사진을 참고해
+    구매자에게 도움이 되는 자연스러운 문장만 새로 쓴다. 실패하면 None을 돌려줘서 호출부가
+    모델이 만든 템플릿 요약(ai_scan_summary)으로 폴백하게 한다.
+
+    `grades`는 mlv2/attribute_quality.py의 display_grade가 이미 사람이 읽는 표현(특상/상/중,
+    손상·흠집은 많음/보통/적음)으로 바꿔둔 값이라 그대로 프롬프트에 써도 방향이 헷갈리지
+    않는다 — 예전엔 내부 상/중/하를 그대로 넘겨서 LLM이 "하"(=손상 없음, 좋음)를 나쁘게
+    서술하는 실제 오류가 있었는데, 그 번역을 이 함수가 아니라 모델 쪽에서 하도록 옮겼다.
+    """
+    client = get_openai_client()
+    if client is None:
+        return None
+    try:
+        buf = io.BytesIO()
+        image.save(buf, format="JPEG")
+        b64 = base64.b64encode(buf.getvalue()).decode()
+        grades_text = ", ".join(f"{name}: {grade}" for name, grade in grades.items())
+        prompt = (
+            f"이 사진 속 품목은 '{item}'입니다. 전용 비전 모델이 이미 아래처럼 속성별 상태를 "
+            f"판정해 최종 등급 '{final_grade}'를 확정했습니다.\n{grades_text}\n"
+            "이 판정은 이미 확정된 값이니 절대 바꾸거나 새로 매기지 말고, 그대로 반영해서 "
+            "사진을 참고해 구매자에게 도움이 되는 자연스러운 한국어 종합의견을 2문장 내외로만 "
+            "작성하세요. 다른 설명 없이 문장만 출력하세요."
+        )
+        response = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                ],
+            }],
+            max_tokens=200,
+        )
+        return (response.choices[0].message.content or "").strip() or None
+    except Exception as e:
+        print(f"OpenAI 종합의견 생성 실패 (템플릿 요약으로 폴백): {e}")
+        return None
+
+
+def generate_openai_commentary(image: Image.Image, item_name: str, grade_kor: str) -> Optional[dict]:
+    """attribute_quality_v3가 지원하지 않는 품목(감자 등, 2단계 폴백 경로)에서 신선도/결함/
+    균일도 세부 점수 + 종합의견을 OpenAI로 생성한다. generate_ai_commentary(Gemini)와
+    입출력 계약이 같다 — 이미 확정된 품목/등급은 바꾸지 않는다."""
+    client = get_openai_client()
+    if client is None:
+        return None
+    try:
+        buf = io.BytesIO()
+        image.save(buf, format="JPEG")
+        b64 = base64.b64encode(buf.getvalue()).decode()
+        prompt = (
+            f"이 사진 속 품목은 '{item_name}'이고, 별도의 전용 분류 모델이 이미 품질 등급을 "
+            f"'{grade_kor}'(특/상/보통 중 하나)로 판정했습니다. 등급 자체는 이미 확정된 값이니 "
+            f"바꾸지 말고, 이 사진을 시각적으로 근거로 삼아 신선도(freshnessScore)/표면 결함 없음"
+            f"(defectScore)/크기·색상 균일도(uniformityScore)를 각각 0~100 사이 정수로 추정하고, "
+            f"'{grade_kor}' 등급인 이유를 설명하는 2문장 내외의 종합의견(aiAnalysisSummary)을 "
+            "한국어로 작성하세요. 반드시 다음 키만 가진 JSON으로 응답하세요: "
+            'freshnessScore(정수), defectScore(정수), uniformityScore(정수), aiAnalysisSummary(문자열).'
+        )
+        response = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                ],
+            }],
+            response_format={"type": "json_object"},
+            max_tokens=300,
+        )
+        return json.loads(response.choices[0].message.content)
+    except Exception as e:
+        print(f"OpenAI 해설 생성 실패 (기존 방식으로 폴백): {e}")
+        return None
+
+
+# attribute_quality_v3가 내주는 품목별 속성(착색도/신선도/손상 등)을 프론트가 이미 쓰고
+# 있는 3개 숫자 슬롯(freshnessScore/defectScore/uniformityScore, 0~100)에 맞춰 넣는다.
+# 2026-08-18 비전팀 인계분부터 mlv2/attribute_quality.py가 내부 상/중/하를 구매자 화면용
+# 표현(특상/상/중, 손상·흠집은 많음/보통/적음)으로 바꿔서 내려주므로 그 어휘 기준으로 매핑한다.
+_GRADE_TO_SCORE = {"특상": 92, "상": 62, "중": 22}
+# 손상·흠집은 "많음"이 나쁨이라 방향이 반대다 — defectScore는 "결함이 얼마나 있는지"
+# 숫자라 많을수록 커야 한다.
+_DAMAGE_TO_DEFECT_SCORE = {"적음": 8, "보통": 45, "많음": 88}
+
+
+def map_attribute_labels_to_scores(item: str, labels: dict) -> tuple[int, int, int]:
+    """속성 라벨(특상/상/중, 많음/보통/적음) -> (freshnessScore, defectScore, uniformityScore).
+
+    품목마다 관련 속성 구성이 달라서(예: 무=표면상태·신선도, 마늘=모양상태), 손상은
+    항상 defectScore로 쓰고, 나머지 중 가중치가 큰 순으로 2개를 freshness/uniformity에
+    배정한다. 속성이 하나뿐이면(감말랭이류) 둘 다 같은 값을 쓴다.
+    """
+    from mlv2.attribute_final_grade import ITEM_POLICIES
+
+    weights = ITEM_POLICIES[item].weights
+    ranked = sorted((n for n in weights if n not in ("손상", "흠집")), key=lambda n: -weights[n])
+    freshness_attr = ranked[0] if ranked else None
+    uniformity_attr = ranked[1] if len(ranked) > 1 else freshness_attr
+
+    freshness = _GRADE_TO_SCORE[labels[freshness_attr]["grade"]] if freshness_attr else 70
+    uniformity = _GRADE_TO_SCORE[labels[uniformity_attr]["grade"]] if uniformity_attr else 70
+    defect = _DAMAGE_TO_DEFECT_SCORE[labels["손상"]["grade"]]
+    return freshness, defect, uniformity
+
+
 def run_ai_inference(image: Image.Image) -> dict:
     """성공/농산물 미검출 모두 dict로 돌려준다 — 호출부는 result["ok"]로 분기해야 한다.
     예외(모델 로드 실패 등 진짜 오류)일 때만 None을 돌려준다."""
@@ -238,7 +375,12 @@ def run_ai_inference(image: Image.Image) -> dict:
 @router.get("/api/v1/consumer/feed")
 async def get_feeds(db: Session = Depends(get_db)):
     products = db.query(Product).order_by(Product.created_at.desc()).all()
-    return [product_to_dict(p) for p in products]
+    # 상품 등록 폼 자체가 "AI 스캔 필수"로 잠겨 있긴 하지만, 실제로 ai_summary/
+    # attribute_labels가 둘 다 비어있는(=진짜로 스캔을 거치지 않았거나 스캔이 실패한)
+    # 상품이 섞여 들어온 사례가 있었다 — 소비자 피드는 "AI가 실측 검증한 상품"이라는
+    # 약속이 핵심이므로, 그 증거가 하나도 없는 상품은 여기서 한 번 더 걸러낸다.
+    scanned_products = [p for p in products if p.ai_summary or p.attribute_labels]
+    return [product_to_dict(p) for p in scanned_products]
 
 # AI 스캔 (base64 이미지)
 class ScanRequest(BaseModel):
@@ -271,10 +413,9 @@ async def analyze_product(request: ScanRequest):
 
             if result and result.get("ok"):
                 item_name = result["item"]
-                grade_kor = result["grade"]  # "특상" | "보통" (mlv2는 2단계)
-                grade = GRADE_MAP.get(grade_kor, "A")
+                grade_kor = result["grade"]  # attribute_quality_v3: "상"/"중"/"하". 폴백(감자 등): "특상"/"보통"
                 confidence = result["item_conf"]
-                p_high = result["grade_p_high"]  # "특상"일 확률 — 라벨보다 이 확률이 더 정직하다
+                attribute_labels = result.get("attribute_labels")
 
                 public_price = await get_kamis_price(item_name, grade_kor)
                 is_kamis_verified = public_price is not None
@@ -286,21 +427,43 @@ async def analyze_product(request: ScanRequest):
                     (v for k, v in CROSS_SELL_MAP.items() if k in item_name), DEFAULT_CROSS_SELL
                 )
 
-                # 세부 점수/종합의견은 Gemini에게 맡기고, 실패 시에만 기존 방식(등급확률/확신도 재활용)으로 폴백
-                commentary = await asyncio.to_thread(generate_ai_commentary, image, item_name, grade_kor)
-                if commentary:
-                    freshness = commentary["freshnessScore"]
-                    defect = commentary["defectScore"]
-                    uniformity = commentary["uniformityScore"]
-                    summary = commentary["aiAnalysisSummary"]
+                if attribute_labels:
+                    # attribute_quality_v3 경로 — 등급(특상/보통)은 이 모델이 실측한 값을
+                    # 그대로 쓴다(다시 안 매김). 문장만 OpenAI로 더 자연스럽게 새로 쓰고,
+                    # 실패하면 모델이 만든 템플릿 요약(ai_scan_summary)으로 폴백한다.
+                    grade = GRADE_MAP.get(grade_kor, "A")
+                    freshness, defect, uniformity = map_attribute_labels_to_scores(item_name, attribute_labels)
+                    label_grades = {name: v["grade"] for name, v in attribute_labels.items()}
+                    openai_summary = await asyncio.to_thread(
+                        generate_openai_attribute_summary, image, item_name, label_grades, grade_kor
+                    )
+                    summary = openai_summary or result["ai_scan_summary"]
+                    # 최종 등급을 이룬 속성들의 평균 확신도 — "등급 라벨만 보여주지 말고
+                    # 확률도 같이 노출하라"는 비전팀 권고를 이 경로에서도 지킨다.
+                    grade_confidence_percent = round(
+                        100 * sum(v["confidence"] for v in attribute_labels.values()) / len(attribute_labels)
+                    )
                 else:
-                    # 예전엔 3단계 임계값 배열(grade_thresholds)로 근사했는데, mlv2는
-                    # "특상일 확률" 하나만 준다. 비전팀 문서 경고대로 이 등급 확률 자체가
-                    # 신뢰도 낮은 지표라(grade_reliable=False), 폴백 표시값 정도로만 쓴다.
-                    freshness = int(p_high * 100)
-                    defect = int((1 - p_high) * 60)
-                    uniformity = int(confidence * 100)
-                    summary = f"AI 분석 결과 {item_name} {grade_kor}(으)로 판정되었습니다. (신뢰도: {confidence*100:.1f}%)"
+                    grade = GRADE_MAP.get(grade_kor, "A")
+                    p_high = result["grade_p_high"]  # "특상"일 확률 — 라벨보다 이 확률이 더 정직하다
+                    # 세부 점수/종합의견은 OpenAI에게 맡기고, 실패하면 Gemini로, 그마저
+                    # 실패하면 기존 방식(등급확률/확신도 재활용)으로 폴백한다.
+                    commentary = await asyncio.to_thread(generate_openai_commentary, image, item_name, grade_kor)
+                    if commentary is None:
+                        commentary = await asyncio.to_thread(generate_ai_commentary, image, item_name, grade_kor)
+                    if commentary:
+                        freshness = commentary["freshnessScore"]
+                        defect = commentary["defectScore"]
+                        uniformity = commentary["uniformityScore"]
+                        summary = commentary["aiAnalysisSummary"]
+                    else:
+                        # 비전팀 문서 경고대로 이 등급 확률 자체가 신뢰도 낮은 지표라
+                        # (grade_reliable=False), 폴백 표시값 정도로만 쓴다.
+                        freshness = int(p_high * 100)
+                        defect = int((1 - p_high) * 60)
+                        uniformity = int(confidence * 100)
+                        summary = f"AI 분석 결과 {item_name} {grade_kor}(으)로 판정되었습니다. (신뢰도: {confidence*100:.1f}%)"
+                    grade_confidence_percent = round(p_high * 100 if grade_kor == "특상" else (1 - p_high) * 100)
 
                 return {
                     "success": True,
@@ -321,6 +484,11 @@ async def analyze_product(request: ScanRequest):
                         "freshnessScore": freshness,
                         "defectScore": defect,
                         "uniformityScore": uniformity,
+                        # 실제 CV 모델이 측정한 품목별 속성(착색도/신선도/손상 등) 원본 —
+                        # 있으면 프론트가 freshness/defect/uniformity로 뭉갠 숫자 대신 이
+                        # 진짜 속성명+상/중/하를 그대로 보여준다. 감자 등 미지원 품목/
+                        # 2단계 폴백 경로는 None.
+                        "attributeLabels": attribute_labels,
                         "publicGuarantee": (
                             "농산물유통정보(KAMIS) 소매가격 실시간 연동"
                             if is_kamis_verified
@@ -330,7 +498,7 @@ async def analyze_product(request: ScanRequest):
                         "crossSellRecommendation": cross_sell,
                         # 비전팀 문서 권고: 등급 라벨만 크게 보여주면 안 되고 확률을 같이
                         # 노출해야 정직하다("특상 53%"와 "특상 99%"가 같아 보이면 안 됨).
-                        "gradeConfidencePercent": round(p_high * 100 if grade_kor == "특상" else (1 - p_high) * 100),
+                        "gradeConfidencePercent": grade_confidence_percent,
                     }
                 }
         except Exception as e:
@@ -376,9 +544,28 @@ def _cached_or_generate(cache_key: str, generate) -> str:
     return script
 
 
+def _generate_openai_text(prompt: str, temperature: float = 1.0) -> Optional[str]:
+    """텍스트 전용(이미지 없음) OpenAI 호출 공통 헬퍼 — 도슨트 등 짧은 문장 생성용."""
+    client = get_openai_client()
+    if client is None:
+        return None
+    try:
+        response = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=temperature,
+            max_tokens=300,
+        )
+        return (response.choices[0].message.content or "").strip() or None
+    except Exception as e:
+        print(f"OpenAI 텍스트 생성 실패: {e}")
+        return None
+
+
 def generate_docent_script_for_store(market_name: str, store: Store) -> str:
     """클릭한 '그 점포 하나'에 대한 도슨트를 생성한다 (구역 전체가 아니라).
-    Gemini 실패 시 같은 점포 데이터로 만든 템플릿 문장으로 폴백한다.
+    OpenAI를 우선 쓰고, 실패하면 Gemini로, 그마저 실패하면 같은 점포 데이터로 만든
+    템플릿 문장으로 폴백한다.
     """
     # store.subtitle이 상인이 마이 탭에서 고른 실제 "주요 품목"
     # (예: "수산물(고등어·갈치) / 건어물(멸치)") 이라 이걸 최우선으로 쓴다.
@@ -386,61 +573,71 @@ def generate_docent_script_for_store(market_name: str, store: Store) -> str:
     # 아이콘용 기본값("store")이라 실제 품목 정보가 아니다 — 둘 다 최후 폴백일 뿐이다.
     highlight = store.subtitle or store.notice or store.category
 
-    client = get_gemini_client()
-    if client is not None:
-        try:
-            from google.genai import types
+    prompt = (
+        f"당신은 전통시장 오디오 도슨트 해설자입니다. 손님이 방금 '{market_name}'의 "
+        f"'{store.alley}' 구역에 있는 점포 '{store.name}' 앞에 멈춰 섰습니다. "
+        f"이 점포가 취급하는 품목은 '{highlight}'입니다.\n"
+        f"참고 정보: {store.story_text or '추가 정보 없음'}\n\n"
+        f"다른 점포는 언급하지 말고 이 점포 하나에 집중해서, 3~4문장의 자연스러운 "
+        f"한국어 구어체 해설을 작성하세요. 참고 정보에 있는 사실(위치, 골목 분위기 등)을 "
+        f"자연스럽게 녹여서 매번 다른 인상을 주도록 하고, '안녕하세요, 지금 서 계신 곳은' "
+        f"같은 뻔한 도입부를 반복하지 마세요. 없는 사실을 지어내지 말고, 따옴표로 감싸지 마세요."
+    )
 
-            prompt = (
-                f"당신은 전통시장 오디오 도슨트 해설자입니다. 손님이 방금 '{market_name}'의 "
-                f"'{store.alley}' 구역에 있는 점포 '{store.name}' 앞에 멈춰 섰습니다. "
-                f"이 점포가 취급하는 품목은 '{highlight}'입니다.\n"
-                f"참고 정보: {store.story_text or '추가 정보 없음'}\n\n"
-                f"다른 점포는 언급하지 말고 이 점포 하나에 집중해서, 3~4문장의 자연스러운 "
-                f"한국어 구어체 해설을 작성하세요. 참고 정보에 있는 사실(위치, 골목 분위기 등)을 "
-                f"자연스럽게 녹여서 매번 다른 인상을 주도록 하고, '안녕하세요, 지금 서 계신 곳은' "
-                f"같은 뻔한 도입부를 반복하지 마세요. 없는 사실을 지어내지 말고, 따옴표로 감싸지 마세요."
-            )
-            response = client.models.generate_content(
-                model="gemini-3.6-flash",
-                contents=[prompt],
-                config=types.GenerateContentConfig(temperature=1.1),
-            )
-            text = (response.text or "").strip()
-            if text:
-                return f'"{text}"'
-        except Exception as e:
-            print(f"Gemini 도슨트 생성 실패 (템플릿으로 폴백): {e}")
+    text = _generate_openai_text(prompt, temperature=1.1)
 
+    if not text:
+        client = get_gemini_client()
+        if client is not None:
+            try:
+                from google.genai import types
+
+                response = client.models.generate_content(
+                    model="gemini-3.6-flash",
+                    contents=[prompt],
+                    config=types.GenerateContentConfig(temperature=1.1),
+                )
+                text = (response.text or "").strip() or None
+            except Exception as e:
+                print(f"Gemini 도슨트 생성 실패 (템플릿으로 폴백): {e}")
+
+    if text:
+        return f'"{text}"'
     return f'"{store.name}에 오신 것을 환영합니다. {highlight}을(를) 만나보세요."'
 
 
 def generate_docent_script(market_name: str, alley_name: str, stores: list[Store]) -> str:
     """실제 DB 점포 데이터를 근거로 도슨트 해설을 생성한다.
-    Gemini 키가 없거나 호출이 실패하면 같은 데이터로 만든 템플릿 문장으로 폴백한다.
+    OpenAI를 우선 쓰고, 실패하면 Gemini로, 그마저 실패하면 같은 데이터로 만든 템플릿
+    문장으로 폴백한다.
     """
     highlights = [f"{s.name}({s.subtitle})" if s.subtitle else s.name for s in stores[:4]]
 
-    client = get_gemini_client()
-    if client is not None and highlights:
-        try:
-            prompt = (
-                f"당신은 전통시장 오디오 도슨트 해설자입니다. '{market_name}' 안의 '{alley_name}' 구역을 "
-                f"둘러보는 손님에게 들려줄 자연스러운 한국어 해설을 2~3문장으로 작성하세요. "
-                f"이 구역에는 다음 실제 점포들이 있습니다: {', '.join(highlights)}. "
-                f"실제 점포명과 취급 품목을 자연스럽게 언급하며 친근하고 생동감 있는 구어체로 "
-                f"작성하고, 없는 사실을 지어내지 마세요. 따옴표로 감싸지 마세요."
-            )
-            response = client.models.generate_content(
-                model="gemini-3.6-flash",
-                contents=[prompt],
-            )
-            text = (response.text or "").strip()
-            if text:
-                return f'"{text}"'
-        except Exception as e:
-            print(f"Gemini 도슨트 생성 실패 (템플릿으로 폴백): {e}")
+    text = None
+    if highlights:
+        prompt = (
+            f"당신은 전통시장 오디오 도슨트 해설자입니다. '{market_name}' 안의 '{alley_name}' 구역을 "
+            f"둘러보는 손님에게 들려줄 자연스러운 한국어 해설을 2~3문장으로 작성하세요. "
+            f"이 구역에는 다음 실제 점포들이 있습니다: {', '.join(highlights)}. "
+            f"실제 점포명과 취급 품목을 자연스럽게 언급하며 친근하고 생동감 있는 구어체로 "
+            f"작성하고, 없는 사실을 지어내지 마세요. 따옴표로 감싸지 마세요."
+        )
+        text = _generate_openai_text(prompt)
 
+        if not text:
+            client = get_gemini_client()
+            if client is not None:
+                try:
+                    response = client.models.generate_content(
+                        model="gemini-3.6-flash",
+                        contents=[prompt],
+                    )
+                    text = (response.text or "").strip() or None
+                except Exception as e:
+                    print(f"Gemini 도슨트 생성 실패 (템플릿으로 폴백): {e}")
+
+    if text:
+        return f'"{text}"'
     if highlights:
         joined = ", ".join(highlights[:3])
         return f'"{alley_name}에 오신 것을 환영합니다. {joined} 등 다양한 점포를 만나보세요."'

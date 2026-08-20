@@ -1,3 +1,4 @@
+import json
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -27,8 +28,12 @@ def scanned_to_dict(item: ScannedProduct) -> dict:
         "freshnessScore": item.freshness_score,
         "defectScore": item.defect_score,
         "uniformityScore": item.uniformity_score,
+        "attributeLabels": json.loads(item.attribute_labels) if item.attribute_labels else None,
         "description": item.description,
         "aiSummary": item.ai_summary,
+        "scanLat": item.scan_lat,
+        "scanLng": item.scan_lng,
+        "memo": item.memo,
         "createdAt": item.created_at.isoformat() + "Z" if item.created_at else None,
     }
 
@@ -86,8 +91,11 @@ class ScannedProductIn(BaseModel):
     freshnessScore: int = 0
     defectScore: int = 0
     uniformityScore: int = 0
+    attributeLabels: Optional[dict] = None
     description: str = ""
     aiSummary: Optional[str] = None
+    scanLat: Optional[float] = None
+    scanLng: Optional[float] = None
 
 
 @router.get("/scanned")
@@ -122,8 +130,11 @@ def add_scanned(
         freshness_score=payload.freshnessScore,
         defect_score=payload.defectScore,
         uniformity_score=payload.uniformityScore,
+        attribute_labels=json.dumps(payload.attributeLabels, ensure_ascii=False) if payload.attributeLabels else None,
         description=payload.description,
         ai_summary=payload.aiSummary,
+        scan_lat=payload.scanLat,
+        scan_lng=payload.scanLng,
     )
     db.add(item)
     db.commit()
@@ -142,3 +153,27 @@ def remove_scanned(item_id: str, current_user: User = Depends(get_current_user),
     if not deleted:
         raise HTTPException(status_code=404, detail="스캔 저장 항목을 찾을 수 없습니다.")
     return {"success": True}
+
+
+class MemoIn(BaseModel):
+    memo: str = ""
+
+
+@router.put("/scanned/{item_id}/memo")
+def update_scanned_memo(
+    item_id: str,
+    payload: MemoIn,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    item = (
+        db.query(ScannedProduct)
+        .filter(ScannedProduct.id == item_id, ScannedProduct.user_id == current_user.id)
+        .first()
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="스캔 저장 항목을 찾을 수 없습니다.")
+    item.memo = payload.memo or None
+    db.commit()
+    db.refresh(item)
+    return {"success": True, "product": scanned_to_dict(item)}

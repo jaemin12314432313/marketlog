@@ -10,6 +10,8 @@ bcrypt==4.1.3
 pyjwt==2.9.0
 email-validator==2.2.0
 google-genai==2.16.0
+openai>=1.50
+google-cloud-storage==2.18.2
 
 # marketlog_vision (품목인식/품질등급 모델) 및 AI 스캔에서 사용.
 # consumer.py가 최상단에서 import하므로 빠지면 서버 자체가 부팅되지 않는다.

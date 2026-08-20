@@ -29,7 +29,7 @@ var import_genai = require("@google/genai");
 var import_dotenv = __toESM(require("dotenv"), 1);
 import_dotenv.default.config();
 var app = (0, import_express.default)();
-var PORT = 8080;
+var PORT = 3e3;
 app.use(import_express.default.json({ limit: "20mb" }));
 function getGeminiClient() {
   const apiKey = process.env.GEMINI_API_KEY;

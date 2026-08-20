@@ -19,7 +19,11 @@ coverage/
 marketlog-backend07.25/marketlog.db
 marketlog-backend07.25/uploads/
 marketlog-backend07.25/ai_engine/weights/
-# checkpoints/*.pt는 배포(Render 등) 시 필요해서 커밋함 — 파일당 100MB 미만이라 git으로 충분
+# checkpoints/*.pt는 배포(Render 등) 시 필요해서 커밋함 — 파일당 100MB 미만이라 git으로 충분.
+# attribute_quality_convnextv2_tiny_v3.pt만 106MB로 GitHub 100MB 제한을 넘어서 예외적으로
+# 제외 — 배포 시(gcloud run deploy --source .) 로컬 파일을 그대로 쓰므로 배포엔 영향 없지만,
+# 새 환경에서 클론할 땐 이 파일만 따로 복사해줘야 한다.
+marketlog-backend07.25/checkpoints/attribute_quality_convnextv2_tiny_v3.pt
 
 # Misc
 .DS_Store
