@@ -21,7 +21,8 @@ marketlog-backend07.25/   FastAPI 백엔드
 | 공공데이터 | KAMIS(농산물유통정보) 소매가격 API, 광주광역시 전통시장 점포 현황(463개 실점포) |
 | 프론트엔드 | React 19 + TypeScript + Vite + Tailwind, Naver Maps SDK |
 | 모바일 앱 | Capacitor 8 (Android) — 네이티브 TTS(`@capacitor-community/text-to-speech`), 카메라, 위치, 상태바 플러그인 |
-| 배포 | 백엔드: Google Cloud Run (`asia-northeast3`, 요청 없으면 0으로 스케일) / DB: Neon Postgres (5분 유휴 시 자동 절전) |
+| 배포 | 백엔드: Google Cloud Run (`asia-northeast3`, 요청 없으면 0으로 스케일) / DB: Neon Postgres Launch 플랜(5분 유휴 시 컴퓨트 자동 절전, 사용량만큼 과금) |
+| 이미지 저장 | Google Cloud Storage(`marketlog-505311-product-images`, 공개 읽기) — `image_storage.py`가 상품 등록/수정 시 base64 사진을 업로드하고 DB엔 URL만 저장 |
 
 ## 백엔드 시작하기
 
@@ -159,8 +160,9 @@ JAVA_HOME="<JDK 21 경로>" ANDROID_HOME="<Android SDK 경로>" ./gradlew bundle
 
 - **양동시장 외 지역 데이터 없음** — 망원/자갈치시장은 `Market` row만 있고 실제 점포 데이터가 없음
 - **상인 계정 승인 절차 없음** — 회원가입 시 "판매자" 선택만으로 즉시 판매자 권한 부여. 사업자 확인/운영진 심사는 의도적으로 고도화 단계로 미룸
-- **Gemini 무료 티어 한도** — 하루 요청 수 제한이 있어 실사용엔 부족할 수 있음. 유료 전환은 필요 시점에 결정(보류 중). 한도 초과 시엔 항상 실제 DB 데이터 기반 템플릿 문장으로 조용히 폴백
-- **Cloud Run/Neon 콜드 스타트** — 둘 다 무료 티어 특성상 유휴 후 첫 요청이 느림(스케일 0/자동 절전). 실사용 트래픽이 늘면 유료 always-on 전환 고려 필요
+- **Gemini 무료 티어 한도** — 하루 요청 수 제한이 있어 실사용엔 부족할 수 있음. 한도 초과 시엔 항상 실제 DB 데이터 기반 템플릿 문장으로 조용히 폴백
+- **Cloud Run/Neon 콜드 스타트** — 둘 다 유휴 시 스케일 0(Cloud Run)/컴퓨트 절전(Neon)이라 첫 요청이 느림. Neon은 Launch 플랜(유료, 사용량 과금)으로 전환해서 데이터 전송량 한도 자체는 사라졌지만, 절전 후 첫 요청 지연은 그대로 남아있음
+- **기존에 base64로 저장된 이미지 미이전** — GCS 업로드(`image_storage.py`)는 신규 등록/수정 건부터 적용되고, 그 이전에 이미 Postgres에 base64로 박혀있던 상품/스캔 사진들은 아직 GCS로 옮기지 않음 — 그 행들을 조회할 때마다 여전히 큰 데이터가 DB에서 빠져나간다
 - **아이디/비밀번호 찾기** — 실제 문자/이메일 인증 없이 이름+전화번호 일치만으로 처리하는 데모 수준 구현
 - **지갑 탭의 쿠폰/퀘스트** — 백엔드 자체가 없는 프론트 전용 mock 상태로 남아있음
 - CORS가 `allow_origins=["*"]` — 실사용 확장 시 프론트 도메인으로 좁혀야 함
@@ -174,6 +176,7 @@ JAVA_HOME="<JDK 21 경로>" ANDROID_HOME="<Android SDK 경로>" ./gradlew bundle
 - `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`
 - `KAMIS_CERT_KEY`, `KAMIS_CERT_ID` — 농산물유통정보(KAMIS) Open API 인증키+아이디 (둘 다 필요)
 - `JWT_SECRET` — 배포 전 반드시 임의의 강력한 값으로 교체
+- `GCS_BUCKET_NAME` — 상품/스캔 사진 업로드용 GCS 버킷 이름. 없으면 `marketlog-505311-product-images`로 기본 설정. Cloud Run 배포 환경에선 기본 서비스 계정 자격증명(Application Default Credentials)을 그대로 쓰므로 별도 키 파일이 필요 없음
 
 `마켓로그_2026-08-10/.env.local`:
 - `VITE_API_BASE_URL` — FastAPI 백엔드 주소 (기본 `http://localhost:8000`)
