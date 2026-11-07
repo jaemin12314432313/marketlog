@@ -24,6 +24,7 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
   const [cameraRestartTick, setCameraRestartTick] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   // Start / Stop Camera
@@ -118,13 +119,50 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
     return "";
   };
 
+  // 갤러리/PC에서 고른 사진을 촬영한 사진처럼 쓴다 — 너무 큰 사진은 긴 변 1280px로 줄여 보낸다.
+  const readImageFile = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = reject;
+        img.onload = () => {
+          const scale = Math.min(1, 1280 / Math.max(img.width, img.height));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return reject(new Error("canvas"));
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", 0.85));
+        };
+        img.src = reader.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+
+  const handlePickPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    let image = "";
+    try {
+      image = await readImageFile(file);
+    } catch {
+      alert("사진을 불러오지 못했습니다. 다른 사진을 골라주세요.");
+      return;
+    }
+    await handleCaptureAndAnalyze(image);
+  };
+
   // Handle Capture & AI Analysis (real backend vision inference, not a canned preset)
-  const handleCaptureAndAnalyze = async () => {
+  const handleCaptureAndAnalyze = async (pickedImage?: string) => {
     if (isAnalyzing) return;
 
-    const capturedImg = captureFrame();
+    const capturedImg = pickedImage || captureFrame();
     if (!capturedImg) {
-      alert("카메라를 사용할 수 없어 촬영할 수 없습니다. 카메라 권한을 확인해주세요.");
+      alert("카메라를 사용할 수 없어 촬영할 수 없습니다. 카메라 권한을 확인하거나 '사진 불러오기'를 이용해주세요.");
       return;
     }
 
@@ -260,12 +298,25 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
       </div>
 
       {/* Hidden Native File Input for Gallery Selection */}
+      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePickPhoto} />
       {/* Bottom Shutter & Controls Container */}
       <div className="relative z-30 w-full px-4 pb-[calc(2rem+env(safe-area-inset-bottom))] max-w-md mx-auto space-y-3">
-        <div className="flex items-center justify-center px-6 pt-2">
+        <div className="relative flex items-center justify-center px-6 pt-2">
+          {/* 사진 불러오기: 카메라 없이 갤러리/PC 사진으로 진행 */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isAnalyzing}
+            className="absolute left-2 flex flex-col items-center gap-1 text-white/90 active:scale-95 transition-transform"
+            title="사진 불러오기"
+          >
+            <span className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-md border border-white/30 flex items-center justify-center">
+              <span className="material-symbols-outlined text-2xl">photo_library</span>
+            </span>
+            <span className="text-[11px] font-bold">사진 불러오기</span>
+          </button>
           {/* Main Center Camera Shutter Button */}
           <button
-            onClick={handleCaptureAndAnalyze}
+            onClick={() => handleCaptureAndAnalyze()}
             disabled={isAnalyzing}
             className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center p-1.5 border border-white/40 cursor-pointer active:scale-95 transition-transform shadow-xl"
             title="카메라 AI 촬영 및 내 점포 자동 등록"

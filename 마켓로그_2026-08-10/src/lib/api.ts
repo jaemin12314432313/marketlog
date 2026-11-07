@@ -1,6 +1,11 @@
 import type { InspectionResult, ProductItem } from "../types";
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000").replace(/\/$/, "");
+// 로컬 테스트용: VITE_API_BASE_URL=auto 로 띄우면 화면을 연 주소의 8000번 포트를 백엔드로 쓴다
+// (PC 내부 IP가 Wi-Fi마다 바뀌어도 폰/PC 어느 쪽에서 열든 그대로 동작).
+const RAW_API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE = (
+  RAW_API_BASE === "auto" ? `${window.location.protocol}//${window.location.hostname}:8000` : RAW_API_BASE
+).replace(/\/$/, "");
 
 const AUTH_TOKEN_KEY = "marketlog_auth_token";
 
@@ -66,8 +71,9 @@ async function apiFetch<T>(
   return res.json() as Promise<T>;
 }
 
-export function fetchFeed(): Promise<ProductItem[]> {
-  return apiFetch<ProductItem[]>("/api/v1/consumer/feed");
+// market="coshow": 앱을 CO-SHOW 부스 모드로 쓸 때 부스 가게 상품만 받는다.
+export function fetchFeed(market?: string): Promise<ProductItem[]> {
+  return apiFetch<ProductItem[]>(`/api/v1/consumer/feed${market ? `?market=${encodeURIComponent(market)}` : ""}`);
 }
 
 export interface MapStorePin {

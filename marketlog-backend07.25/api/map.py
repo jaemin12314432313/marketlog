@@ -278,7 +278,7 @@ def get_map_stores(market_name: str = "양동시장", db: Session = Depends(get_
 def get_market_boundaries(db: Session = Depends(get_db)):
     stores = (
         db.query(Store)
-        .filter(Store.category.notin_(MAP_EXCLUDED_CATEGORIES), Store.category != "merchant")
+        .filter(Store.category.notin_(MAP_EXCLUDED_CATEGORIES), Store.category.notin_(["merchant", "booth"]))
         .all()
     )
     points_by_market: dict[str, list[dict]] = {}
