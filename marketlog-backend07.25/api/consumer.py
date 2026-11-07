@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import asyncio
@@ -373,8 +374,20 @@ def run_ai_inference(image: Image.Image) -> dict:
 
 # 피드 조회
 @router.get("/api/v1/consumer/feed")
-async def get_feeds(db: Session = Depends(get_db)):
-    products = db.query(Product).order_by(Product.created_at.desc()).all()
+async def get_feeds(market: Optional[str] = None, db: Session = Depends(get_db)):
+    # CO-SHOW 부스 체험 상품(market_id="coshow"):
+    #  - ?market=coshow 면 부스 상품만(부스 가게 계정으로 로그인한 앱)
+    #  - 그 외에는 고객 피드에도 함께 보여준다(전시 중 고객 계정으로 둘러볼 때). 전시가 끝나고
+    #    실제 시장 피드에서 빼려면 서버 환경변수 BOOTH_HIDE_FROM_FEED=1 을 설정한다.
+    #  - 스태프가 숨긴 부스 가게(BoothShop.hidden)의 상품은 어느 쪽에서도 빠진다.
+    from models import BoothShop
+    hidden_store_ids = db.query(BoothShop.store_id).filter(BoothShop.hidden.is_(True))
+    query = db.query(Product).filter(or_(Product.store_id.is_(None), ~Product.store_id.in_(hidden_store_ids)))
+    if market == "coshow":
+        query = query.filter(Product.market_id == "coshow")
+    elif os.getenv("BOOTH_HIDE_FROM_FEED") == "1":
+        query = query.filter(or_(Product.market_id.is_(None), Product.market_id != "coshow"))
+    products = query.order_by(Product.created_at.desc()).all()
     # 상품 등록 폼 자체가 "AI 스캔 필수"로 잠겨 있긴 하지만, 실제로 ai_summary/
     # attribute_labels가 둘 다 비어있는(=진짜로 스캔을 거치지 않았거나 스캔이 실패한)
     # 상품이 섞여 들어온 사례가 있었다 — 소비자 피드는 "AI가 실측 검증한 상품"이라는

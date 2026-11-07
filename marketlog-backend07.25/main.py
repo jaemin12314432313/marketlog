@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from api.map import router as map_router
 import os
 from sqlalchemy import inspect, text
-from api import merchant, consumer, recommend, auth, saved
+from api import merchant, consumer, recommend, auth, saved, booth
 from db import Base, engine, SessionLocal
 import kamis
 import models  # noqa: F401  (모델을 등록해야 create_all에서 테이블이 생성됨)
@@ -40,6 +40,7 @@ _pending_columns = {
         ("attribute_labels", "TEXT"), ("memo", "TEXT"),
     ],
     "stores": [("address", "VARCHAR NOT NULL DEFAULT ''")],
+    "booth_shops": [("visitor_type", "VARCHAR"), ("affiliation", "VARCHAR"), ("tagline", "VARCHAR"), ("data_consent", "BOOLEAN NOT NULL DEFAULT FALSE")],
 }
 for _table, _columns in _pending_columns.items():
     if _table not in _inspector.get_table_names():
@@ -73,6 +74,7 @@ app.include_router(recommend.router)
 app.include_router(map_router)  # 👈 이 줄이 추가되었습니다!
 app.include_router(auth.router)
 app.include_router(saved.router)
+app.include_router(booth.router)
 
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -89,6 +91,24 @@ def serve_frontend():
     if os.path.exists(index_path):
         return FileResponse(index_path)
     return {"message": "MarketLog 백엔드 서버 작동 중!"}
+
+# CO-SHOW 부스 화면(태블릿 /booth/kiosk, 대형 모니터 /booth/board)과 QR 결과 페이지(/r/{id})는
+# 같은 웹앱(static/index.html)이 주소를 보고 화면을 고른다 — 그래서 이 주소들도 index.html을 준다.
+@app.get("/booth/{rest:path}")
+@app.get("/r/{rest:path}")
+@app.get("/s/{rest:path}")
+def serve_booth_pages(rest: str = ""):
+    return serve_frontend()
+
+
+# CO-SHOW 3D 가상 시장(별도 페이지, QR로 연다)
+@app.get("/market3d.html")
+def serve_market3d():
+    path = "static/market3d.html"
+    if os.path.exists(path):
+        return FileResponse(path)
+    return serve_frontend()
+
 
 @app.get("/api/health")
 def health_check():

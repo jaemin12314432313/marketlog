@@ -9,6 +9,7 @@ import {
   resetPassword,
   setAuthToken,
 } from "../lib/api";
+import { boothApi, BoothApiError, VISITOR_TYPES } from "../booth/boothApi";
 
 function describeApiError(err: unknown, authFailMessage: string): string {
   if (err instanceof ApiError) {
@@ -21,7 +22,12 @@ function describeApiError(err: unknown, authFailMessage: string): string {
 }
 
 export type UserRole = "customer" | "merchant";
-type ViewMode = "login" | "signup" | "findId" | "findPw";
+// booth: CO-SHOW 부스 체험 — 가게 이름만 정하면 가게와 임시 상인 계정이 만들어지고 바로 로그인된다.
+type ViewMode = "login" | "signup" | "findId" | "findPw" | "booth";
+
+const BOOTH_NAME_IDEAS = ["싱싱청과", "달콤과일상회", "꿀사과네", "새콤달콤", "제철과일집", "햇살농원"];
+// "우리 가게 한마디" 예시 — 눌러서 바로 쓸 수 있다.
+const BOOTH_TAGLINE_IDEAS = ["새벽에 따온 꿀사과", "시세보다 싸고 맛은 특상", "AI가 인정한 과일 맛집", "한 번 맛보면 단골 확정"];
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -240,6 +246,60 @@ export const LoginModal = React.forwardRef<LoginModalHandle, LoginModalProps>(({
     }
   };
 
+  // CO-SHOW 부스: 가게 열기
+  const [boothShopName, setBoothShopName] = useState("");
+  const [boothError, setBoothError] = useState("");
+  // 같은 이름의 가게가 이미 있을 때: 그 가게로 다시 들어갈지 묻는다.
+  const [boothExistingName, setBoothExistingName] = useState<string | null>(null);
+  // 익명 체험 데이터: 관람객 유형(새 가게를 열 때만 받는다)
+  const [boothVisitorType, setBoothVisitorType] = useState("");
+  const [boothAffiliation, setBoothAffiliation] = useState("");
+  const [boothTagline, setBoothTagline] = useState("");
+  const handleOpenBoothShop = async (e: React.FormEvent | null, reenter = false) => {
+    e?.preventDefault();
+    const name = (reenter && boothExistingName) || boothShopName.trim();
+    if (!name) {
+      setBoothError("가게 이름을 지어주세요.");
+      return;
+    }
+    if (!reenter && !boothVisitorType) {
+      setBoothError("어떤 분인지 하나 골라주세요.");
+      return;
+    }
+    setIsSubmitting(true);
+    setBoothError("");
+    try {
+      const res = reenter
+        ? await boothApi.enterShop(name, boothTagline.trim())
+        : await boothApi.openShop(name, boothVisitorType, boothAffiliation.trim(), boothTagline.trim());
+      setAuthToken(res.token);
+      onLoginSuccess(
+        res.user.role,
+        res.user.displayName,
+        res.user.shopName ?? undefined,
+        res.user.username,
+        res.user.phone ?? undefined,
+        res.user.profileImage ?? undefined,
+        res.user.marketId ?? undefined
+      );
+      setBoothShopName("");
+      setBoothExistingName(null);
+      setBoothVisitorType("");
+      setBoothAffiliation("");
+      setBoothTagline("");
+      setViewMode("login");
+      onClose();
+    } catch (err: any) {
+      if (!reenter && err instanceof BoothApiError && err.status === 409) {
+        setBoothExistingName(name);
+        return;
+      }
+      setBoothError(err?.message || "잠시 후 다시 시도해주세요.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Reset Subviews
   const resetToLogin = () => {
     setViewMode("login");
@@ -249,6 +309,8 @@ export const LoginModal = React.forwardRef<LoginModalHandle, LoginModalProps>(({
     setFoundPwResult(null);
     setFindPwName("");
     setFindPwPhone("");
+    setBoothError("");
+    setBoothExistingName(null);
   };
 
   useImperativeHandle(ref, () => ({
@@ -293,6 +355,7 @@ export const LoginModal = React.forwardRef<LoginModalHandle, LoginModalProps>(({
           {viewMode === "signup" && "MarketLog 신규 회원가입"}
           {viewMode === "findId" && "아이디 찾기"}
           {viewMode === "findPw" && "비밀번호 찾기 / 재설정"}
+          {viewMode === "booth" && "CO-SHOW 2026 · 나만의 과일가게 만들기"}
         </p>
       </div>
 
@@ -433,7 +496,152 @@ export const LoginModal = React.forwardRef<LoginModalHandle, LoginModalProps>(({
               비밀번호 찾기
             </button>
           </div>
+
+          {/* CO-SHOW 부스 체험 진입 */}
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode("booth");
+              setBoothError("");
+            }}
+            className="w-full mt-2 p-4 rounded-2xl border-2 border-dashed border-[#0052FF]/40 bg-[#0052FF]/5 hover:bg-[#0052FF]/10 transition-colors flex items-center gap-3 text-left"
+          >
+            <span className="w-11 h-11 shrink-0 rounded-xl bg-[#0052FF] text-white flex items-center justify-center">
+              <span className="material-symbols-outlined">storefront</span>
+            </span>
+            <span className="flex-1">
+              <span className="block text-sm font-extrabold text-[#0F172A]">CO-SHOW 부스 체험</span>
+              <span className="block text-xs font-semibold text-slate-500">회원가입 없이 나만의 과일가게 열기</span>
+            </span>
+            <span className="material-symbols-outlined text-[#0052FF]">arrow_forward</span>
+          </button>
         </div>
+      )}
+
+      {viewMode === "booth" && (
+        <form onSubmit={handleOpenBoothShop} className="space-y-4 my-auto animate-in fade-in duration-200">
+          <div className="space-y-1">
+            <label className="text-xs font-extrabold text-slate-700">가게 이름</label>
+            <input
+              type="text"
+              value={boothShopName}
+              maxLength={12}
+              onChange={(e) => {
+                setBoothShopName(e.target.value);
+                setBoothExistingName(null);
+              }}
+              placeholder="예: 달콤과일상회"
+              autoFocus
+              className="w-full px-4 py-3.5 bg-white rounded-xl border border-slate-200 text-base text-slate-900 focus:outline-none focus:border-[#0052FF] focus:ring-1 focus:ring-[#0052FF] font-bold transition-all"
+            />
+            <p className="text-[11px] font-semibold text-slate-400 text-right">{boothShopName.trim().length}/12</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {BOOTH_NAME_IDEAS.map((idea) => (
+              <button
+                key={idea}
+                type="button"
+                onClick={() => setBoothShopName(idea)}
+                className="px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-600"
+              >
+                {idea}
+              </button>
+            ))}
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-extrabold text-slate-700">어떤 분이세요?</label>
+            <div className="grid grid-cols-3 gap-2">
+              {VISITOR_TYPES.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => {
+                    setBoothVisitorType(type);
+                    setBoothError("");
+                  }}
+                  className={`py-2.5 rounded-xl text-xs font-extrabold border transition-all ${
+                    boothVisitorType === type
+                      ? "bg-[#0052FF] border-[#0052FF] text-white shadow-md shadow-blue-500/25"
+                      : "bg-white border-slate-200 text-slate-600 hover:border-[#0052FF]"
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-extrabold text-slate-700">
+              소속 <span className="font-semibold text-slate-400">(선택)</span>
+            </label>
+            <input
+              type="text"
+              value={boothAffiliation}
+              maxLength={30}
+              onChange={(e) => setBoothAffiliation(e.target.value)}
+              placeholder="예: 전남대학교, 광주○○고, ○○기관"
+              className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 text-sm text-slate-900 focus:outline-none focus:border-[#0052FF] focus:ring-1 focus:ring-[#0052FF] font-semibold transition-all"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-extrabold text-slate-700">
+              우리 가게 한마디 <span className="font-semibold text-slate-400">(선택 · 비우면 자동으로 채워져요)</span>
+            </label>
+            <input
+              type="text"
+              value={boothTagline}
+              maxLength={30}
+              onChange={(e) => setBoothTagline(e.target.value)}
+              placeholder="예: 새벽에 따온 꿀사과 팝니다"
+              className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 text-sm text-slate-900 focus:outline-none focus:border-[#0052FF] focus:ring-1 focus:ring-[#0052FF] font-semibold transition-all"
+            />
+            <div className="flex flex-wrap gap-1.5">
+              {BOOTH_TAGLINE_IDEAS.map((idea) => (
+                <button
+                  key={idea}
+                  type="button"
+                  onClick={() => setBoothTagline(idea)}
+                  className="px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 text-[11px] font-bold text-slate-600"
+                >
+                  {idea}
+                </button>
+              ))}
+            </div>
+          </div>
+          {boothError && (
+            <p className="text-xs font-bold text-red-500 bg-red-50 p-2.5 rounded-lg border border-red-100 text-center">{boothError}</p>
+          )}
+          {boothExistingName && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+              <p className="text-sm font-bold text-slate-800 text-center">
+                &lsquo;{boothExistingName}&rsquo;은(는) 이미 문을 연 가게예요.
+                <br />
+                <span className="text-xs font-semibold text-slate-500">내 가게라면 다시 들어가서 이어서 할 수 있어요.</span>
+              </p>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => handleOpenBoothShop(null, true)}
+                className="w-full py-3 rounded-xl bg-slate-900 text-white text-sm font-extrabold flex items-center justify-center gap-1.5 disabled:opacity-60"
+              >
+                <span className="material-symbols-outlined text-lg">login</span>
+                이 가게로 다시 들어가기
+              </button>
+              <p className="text-[11px] font-semibold text-slate-400 text-center">새 가게를 열려면 위에서 이름을 바꿔주세요</p>
+            </div>
+          )}
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full bg-[#0052FF] hover:bg-[#0046E0] active:scale-[0.98] text-white py-3.5 px-4 rounded-xl shadow-lg shadow-blue-500/25 transition-all text-sm font-extrabold flex items-center justify-center gap-2 disabled:opacity-60"
+          >
+            {isSubmitting ? "가게 여는 중..." : "가게 문 열기"}
+            {!isSubmitting && <span className="material-symbols-outlined text-lg">storefront</span>}
+          </button>
+          <button type="button" onClick={resetToLogin} className="w-full text-xs font-bold text-slate-500 hover:text-[#0052FF]">
+            로그인 화면으로 돌아가기
+          </button>
+        </form>
       )}
 
       {/* -------------------------------------------------------------

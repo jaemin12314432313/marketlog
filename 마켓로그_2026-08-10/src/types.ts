@@ -52,6 +52,8 @@ export interface ProductItem {
   isSavedScanRecord?: boolean;
   region?: string;
   marketId?: string;
+  // 상품을 올린 점포(Store.id) — CO-SHOW 부스 상품의 "내 가게 QR"에 쓴다.
+  storeId?: string;
   createdAt?: string;
   // 소비자가 스캔해서 저장한 상품에 직접 남기는 개인 메모(예: "가격 괜찮았음"). 이
   // 스캔을 저장한 본인만 보고 쓴다 — isSavedScanRecord 항목에서만 의미가 있다.

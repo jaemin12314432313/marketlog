@@ -186,6 +186,35 @@ class Product(Base):
     is_scanned_product = Column(Boolean, nullable=False, default=False)
 
 
+# ---------- CO-SHOW 전시 부스 전용 ----------
+# 부스 체험으로 생긴 가게의 순번(모니터에 "No.37"로 표시)과 노출 여부. Store 테이블에
+# 컬럼을 추가하지 않고 별도 테이블로 둬서, 기존 운영 데이터 구조는 건드리지 않는다.
+class BoothShop(Base):
+    __tablename__ = "booth_shops"
+
+    store_id = Column(String, ForeignKey("stores.id"), primary_key=True)
+    number = Column(Integer, nullable=False, unique=True, index=True)
+    # 스태프가 부적절한 이름/사진을 숨기면 True — 데이터는 남기고 화면 노출만 끈다.
+    hidden = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    # 체험 데이터 분석용(익명): 관람객 유형(초등/중고등/대학생/일반/교사·기관/기업).
+    visitor_type = Column(String, nullable=True)
+    affiliation = Column(String, nullable=True)  # 소속(선택) — 예: "전남대학교", "○○고등학교"
+    tagline = Column(String, nullable=True)  # 우리 가게 한마디(선택) — 비어 있으면 화면에서 자동 한줄평을 쓴다
+    data_consent = Column(Boolean, nullable=False, default=False)  # (사용 안 함) 예전 데이터 활용 동의 칸 — 기존 DB에 있어 남겨 둠
+
+
+# 전시 성과 집계용 기록(체험 시작, 스캔 성공/실패, 등록, QR 결과 페이지 조회).
+class BoothEvent(Base):
+    __tablename__ = "booth_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    type = Column(String, nullable=False, index=True)
+    product_id = Column(String, nullable=True, index=True)
+    detail = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
 def product_to_dict(product: Product) -> dict:
     return {
         "id": product.id,

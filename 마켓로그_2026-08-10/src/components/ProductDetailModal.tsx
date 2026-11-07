@@ -4,6 +4,7 @@ import { ProductItem, MarketInfo, AttributeGradeLabel } from "../types";
 import { fetchStoreByName, StoreInfo } from "../lib/api";
 import { MARKETS_DATA } from "../data/initialData";
 import { UserRole } from "./LoginModal";
+import { BoothShopQrButton } from "../booth/BoothShopQrCard";
 
 // 비전 파이프라인이 2단계(특상/보통) 등급으로 바뀌어서, 화면에도 A+/B 같은 영문 등급
 // 대신 실제 판정 체계와 맞는 한글 표기를 쓴다 (HomeFeed/ProductFilterModal과 동일 규칙).
@@ -1478,6 +1479,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </button>
                 )}
               </div>
+
+              {/* CO-SHOW 부스 상품: 이 상품을 올린 가게 페이지를 폰으로 가져가는 QR */}
+              {product.marketId === "coshow" && product.storeId && (
+                <BoothShopQrButton storeId={product.storeId} shopName={product.shopName} />
+              )}
             </div>
           )}
         </div>

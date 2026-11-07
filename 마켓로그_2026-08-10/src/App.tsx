@@ -37,6 +37,18 @@ import { ProductDetailModal } from "./components/ProductDetailModal";
 import { BottomNav } from "./components/BottomNav";
 import { LoginModal, LoginModalHandle, UserRole } from "./components/LoginModal";
 
+
+// CO-SHOW 2026 부스 체험용 가상 시장(백엔드 seed의 "coshow" 시장과 같은 id).
+const COSHOW_MARKET: MarketInfo = {
+  id: "coshow",
+  name: "CO-SHOW 가상 시장",
+  city: "광주광역시 서구",
+  region: "전남광주통합특별시",
+  congestion: "보통",
+  parkingCapacity: "",
+  toiletLocation: "",
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>("home");
   const [userRole, setUserRole] = useState<UserRole>("customer");
@@ -63,7 +75,10 @@ export default function App() {
   // 상인 화면(내 정보/물건 등록)에 보여줄 시장 이름 — 지도 탭에서 검색으로 다른 시장을
   // 봐도(selectedMarket) 이건 안 바뀌고, 항상 그 상인이 고른 시장 그대로다. 아직 안
   // 골랐으면(userMarketId가 빈 값) undefined로 둬서 마이 탭이 선택 카드를 보여주게 한다.
-  const merchantMarket = userMarketId ? MARKETS_DATA.find((m) => m.id === userMarketId) : undefined;
+  // CO-SHOW 부스 가상 시장은 일반 시장 목록(MARKETS_DATA)에 넣지 않고, 부스 가게 계정일 때만 쓴다.
+  const merchantMarket = userMarketId === COSHOW_MARKET.id
+    ? COSHOW_MARKET
+    : userMarketId ? MARKETS_DATA.find((m) => m.id === userMarketId) : undefined;
   // 상품 상세의 "상점 위치 지도에서 확인하기"에서 넘어왔을 때 지도가 바로 그 상점으로
   // 이동/포커스하도록 전달하는 값 — MapView가 처리하고 나면 다시 null로 비운다.
   const [mapFocusShopName, setMapFocusShopName] = useState<string | null>(null);
@@ -96,7 +111,22 @@ export default function App() {
   // 상품 피드를 다시 불러오는 로직 — 탭 전환 시 자동으로도 쓰고, 홈 화면의 새로고침
   // 버튼(수동)에서도 그대로 재사용한다. 반환하는 Promise로 호출부가 로딩 상태를
   // 직접 관리할 수 있게 한다(수동 새로고침은 전체 스켈레톤 대신 버튼 스피너만 돌리므로).
-  const refreshFeed = () => fetchFeed().then(setProducts);
+  // 부스 가게 계정(소속 시장 CO-SHOW)으로 로그인하면 피드도 CO-SHOW 가상 시장 상품만 보여준다.
+  const isBoothMode = userMarketId === COSHOW_MARKET.id;
+  // 부스 모드에서는 홈 화면의 시장도 CO-SHOW 가상 시장으로 맞춘다.
+  useEffect(() => {
+    if (isBoothMode) setSelectedMarket(COSHOW_MARKET);
+    else setSelectedMarket((prev) => (prev.id === COSHOW_MARKET.id ? MARKETS_DATA[0] : prev));
+  }, [isBoothMode]);
+  // 피드 요청이 겹치면(로그인 직후 전체 피드 → 부스 피드) 늦게 도착한 옛 응답이 화면을 덮어쓰지 않게
+  // 가장 마지막 요청의 응답만 반영한다.
+  const feedRequestSeq = useRef(0);
+  const refreshFeed = () => {
+    const seq = ++feedRequestSeq.current;
+    return fetchFeed(isBoothMode ? "coshow" : undefined).then((list) => {
+      if (seq === feedRequestSeq.current) setProducts(list);
+    });
+  };
 
   // 상품 피드는 로그인 여부와 무관하게 백엔드에서 불러온다. 처음 홈 탭에 들어올 때뿐
   // 아니라, 다른 탭(지도/저장/내 정보)에 갔다가 다시 홈으로 돌아올 때마다도 새로
@@ -109,7 +139,7 @@ export default function App() {
       .catch((err) => console.error("상품 피드를 불러오지 못했습니다.", err))
       .finally(() => setIsFeedLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
+  }, [activeTab, isBoothMode]);
 
   // 저장된 토큰이 있으면 앱을 새로 열 때마다 다시 로그인하지 않고 세션을 복원한다(자동로그인).
   // 토큰이 없거나 만료됐으면 로그인 화면을 강제로 띄운다(게스트 진입 불가).

@@ -4,6 +4,21 @@ from models import Market, Store, Product
 from gwangju_market_data import load_yangdong_stores
 
 MARKETS = [
+    # CO-SHOW 2026 전시 부스 전용 가상 시장(김대중컨벤션센터). 부스에서 관람객이 만든
+    # 가게/상품은 전부 여기에 묶여서 실제 시장 데이터와 섞이지 않는다 (api/booth.py).
+    {
+        "id": "coshow",
+        "name": "CO-SHOW 가상 시장",
+        "city": "광주광역시 서구",
+        "congestion": "보통",
+        "parking_capacity": "",
+        "toilet_location": "",
+        "docent_story_title": "CO-SHOW 가상 시장 이야기",
+        "docent_script": "\"김대중컨벤션센터 마켓로그 부스에서 관람객들이 직접 문을 연 과일가게들입니다.\"",
+        "audio_duration": "01:00",
+        "center_lat": 35.1467,
+        "center_lng": 126.8402,
+    },
     {
         "id": "yangdong",
         "name": "광주 양동시장",
