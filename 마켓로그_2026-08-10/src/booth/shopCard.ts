@@ -165,7 +165,6 @@ function drawShopHead(
   setSpacing(ctx, 5);
   ctx.fillText("CO-SHOW VIRTUAL MARKET", x, y + 82);
   setSpacing(ctx, 0);
-  pill(ctx, `No.${shopNumber}`, PAD + CW - 56, y + 50, { size: 26, color: BLUE, bg: "#EEF4FF", alignRight: true });
 
   // No. 배지 아래 작은 QR(가게 페이지로 연결)
   const qrSize = 132;

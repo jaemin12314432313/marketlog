@@ -543,7 +543,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
         {userRole === "merchant" && (
           <span className="bg-amber-500/90 text-slate-950 font-extrabold text-[11px] px-3 py-1 rounded-full shadow-md flex items-center gap-1 border border-amber-300">
             <span className="material-symbols-outlined text-xs">storefront</span>
-            판매자 점포 물건 등록
+            판매자 점포 상품 등록
           </span>
         )}
 
@@ -773,7 +773,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
                   className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 disabled:opacity-60 text-white text-xs font-extrabold rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
                 >
                   <span className="material-symbols-outlined text-base">storefront</span>
-                  점포 물건 등록
+                  점포 상품 등록
                 </button>
               )}
             </div>

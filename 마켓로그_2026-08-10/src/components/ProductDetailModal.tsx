@@ -656,7 +656,7 @@ interface QualityMetric {
 // freshness/defect/uniformity 3개 값 + 그 평균을 순서대로 매핑해 둔다.
 // getRecipeRecommendation과 동일한 순서 제약: "양배추"가 "배추"를, "감귤"이 "감"을 부분
 // 문자열로 포함하므로 더 구체적인 품목을 먼저 검사해야 한다.
-function getQualityMetrics(product: ProductItem): QualityMetric[] {
+export function getQualityMetrics(product: ProductItem): QualityMetric[] {
   // attribute_quality_v3가 실제로 측정한 진짜 속성명(착색도/신선도/손상 등)+등급이
   // 있으면 그걸 그대로 쓴다 — 아래 품목별 하드코딩 라벨은 이 값이 없을 때(감자 등 미지원
   // 품목, 모델 도입 전 저장된 상품, 수동 등록 상품)만 쓰는 근사치 폴백이다.

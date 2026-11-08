@@ -2,9 +2,9 @@
 // 앱 설치 없이 내가 만든 가게의 AI 품질 판정 결과, 공공 시세 비교, AI 도슨트를 보고 공유할 수 있는 읽기 전용 페이지.
 import React, { useEffect, useState } from "react";
 import { boothApi, type BoothProduct } from "./boothApi";
-import { gradeText } from "./boothUi";
-import { APP_BG, APP_CARD, AppHeader, BTN_DARK, BTN_OUTLINE, BTN_PRIMARY, CardTitle, GradePill, HeaderIconButton, MetricBars, PriceRow } from "./appUi";
+import { APP_BG, APP_CARD, AppHeader, BTN_DARK, BTN_OUTLINE, BTN_PRIMARY, GradePill, HeaderIconButton, MetricBars, PriceRow } from "./appUi";
 import { copyText, downloadBlob, makeProductPageCard, shareCardFile, shopCardFileName } from "./shopCard";
+import { getQualityMetrics } from "../components/ProductDetailModal";
 
 // preview: 체험 태블릿 안에서 "내 가게 페이지"를 미리 보여줄 때 — 방문 수를 세지 않고, 공유 버튼은 숨긴다.
 export default function BoothResult({ productId, preview = false }: { productId: string; preview?: boolean }) {
@@ -131,9 +131,9 @@ export default function BoothResult({ productId, preview = false }: { productId:
           <div className="px-1">
             <div className="flex items-center justify-between">
               <span className="text-sm font-bold text-[#0052FF]">
-                {store.name} · No.{store.number}
+                {store.name}
               </span>
-              <GradePill grade={p.grade} />
+              <GradePill grade={p.grade} showIcon={false} />
             </div>
             <h1 className="mt-1.5 text-2xl font-extrabold tracking-tight break-keep">{p.title}</h1>
             <p className="mt-1 text-xs font-medium text-slate-400">
@@ -157,56 +157,37 @@ export default function BoothResult({ productId, preview = false }: { productId:
             </div>
             <div className="flex justify-between items-center">
               <h3 className="text-sm font-bold text-[#0F172A] tracking-wider">AI 정밀 분석 지표</h3>
-              <GradePill grade={p.grade} confidence={p.gradeConfidencePercent} />
+              <span className={`text-xs font-extrabold px-2.5 py-1 rounded-full border flex items-center gap-1 ${p.grade?.startsWith("A") ? "text-[#10B981] bg-emerald-50 border-emerald-200" : "text-[#0052FF] bg-blue-50 border-blue-200"}`}>
+                <span className="material-symbols-outlined text-xs" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+                품질 등급 {p.grade?.startsWith("A") ? "특상" : "보통"}
+              </span>
             </div>
-            <MetricBars labels={p.attributeLabels} />
+            <MetricBars labels={Object.fromEntries(getQualityMetrics(p).map(({ label, grade }) => [label, { grade }]))} />
             {p.aiSummary && (
-              <div className="border-t border-[#E2E8F0] pt-3 space-y-1.5">
+              <div className="border-t border-[#D1D1D1] pt-3 space-y-2">
                 <div className="font-extrabold text-[#0052FF] text-xs">AI 스캔 종합 의견</div>
                 <p className="text-slate-700 font-medium text-xs leading-relaxed">{p.aiSummary}</p>
               </div>
             )}
-            <p className="text-[11px] text-slate-400 font-medium">
-              자체 AI 모델이 사진을 분석해 등급({gradeText(p.grade)})을 판정했어요. 공공 시세는 KAMIS 소매가격 기준이에요.
-            </p>
           </section>
 
           {/* 사장님 한마디 */}
           {p.description && (
-            <section className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-[0_4px_12px_rgba(15,23,42,0.08)]">
-              <div className="flex items-center gap-1.5 text-xs font-extrabold text-amber-700 mb-1.5">
-                <span className="material-symbols-outlined text-base">chat_bubble</span>
+            <section className="rounded-2xl border border-amber-100 bg-[#FFFBF3] p-5">
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-800">
+                <span className="material-symbols-outlined text-lg">chat_bubble_outline</span>
                 사장님 한마디
               </div>
-              <p className="text-sm text-slate-700 leading-relaxed font-medium">{p.description}</p>
+              <p className="mt-3 text-sm leading-7 text-slate-700 break-keep">{p.description}</p>
             </section>
           )}
 
-          {/* 버튼 */}
-          {!preview && (
-            <div className="space-y-2.5">
-              <button onClick={saveCard} disabled={isSaving} className={BTN_PRIMARY}>
-                <span className="material-symbols-outlined text-lg">download</span>
-                {isSaving ? "이미지 만드는 중..." : "이 페이지 이미지로 저장하기"}
-              </button>
-              <div className="grid grid-cols-2 gap-2.5">
-                {p.storeId && (
-                  <a href={`/s/${p.storeId}`} className={BTN_OUTLINE}>
-                    <span className="material-symbols-outlined text-lg">storefront</span>
-                    가게 전체 보기
-                  </a>
-                )}
-                <a href={`/market3d.html${p.storeId ? `?shop=${encodeURIComponent(p.storeId)}` : ""}`} className={`${BTN_DARK} ${p.storeId ? "" : "col-span-2"}`}>
-                  <span className="material-symbols-outlined text-lg">view_in_ar</span>
-                  3D 시장
-                </a>
-              </div>
-            </div>
-          )}
-
           {/* AI 도슨트 */}
-          <section className={`${APP_CARD} p-5`}>
-            <CardTitle icon="record_voice_over">AI 도슨트</CardTitle>
+          <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-[0_4px_18px_rgba(15,23,42,0.04)]">
+            <div className="mb-4 flex items-center gap-3">
+              <span className="material-symbols-outlined rounded-xl bg-blue-50 p-2 text-[#0052FF]">record_voice_over</span>
+              <div><h2 className="text-sm font-bold">AI 도슨트</h2><p className="mt-0.5 text-xs text-slate-500">가게의 이야기를 들어보세요</p></div>
+            </div>
             {docent === null ? (
               <div className="space-y-2">
                 <div className="h-4 bg-slate-100 rounded animate-pulse" />
@@ -216,9 +197,9 @@ export default function BoothResult({ productId, preview = false }: { productId:
               </div>
             ) : docent ? (
               <>
-                <p className="text-sm leading-relaxed text-slate-700 font-medium">{docent}</p>
+                <p className="text-sm leading-7 text-slate-700 break-keep">{docent}</p>
                 {"speechSynthesis" in window && (
-                  <button onClick={toggleSpeak} className={`${BTN_OUTLINE} mt-3`}>
+                  <button onClick={toggleSpeak} aria-pressed={isSpeaking} className="mt-4 inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-blue-50 px-4 text-sm font-semibold text-[#0052FF] transition hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
                     <span className="material-symbols-outlined text-lg text-[#0052FF]">{isSpeaking ? "stop_circle" : "play_circle"}</span>
                     {isSpeaking ? "멈추기" : "음성으로 듣기"}
                   </button>
@@ -229,21 +210,32 @@ export default function BoothResult({ productId, preview = false }: { productId:
             )}
           </section>
 
-          {/* 서비스 소개 */}
-          <section className={`${APP_CARD} p-5`}>
-            <CardTitle icon="storefront">마켓로그는 이런 서비스예요</CardTitle>
-            <p className="text-sm leading-relaxed text-slate-600 font-medium">
-              사진 한 장으로 AI가 품질 등급을 판정하고 공공 시세와 비교해 보여줘요. 고객은 믿고 사고, 상인은 쉽게 알릴 수 있어요.
-            </p>
-            {!preview && (
-              <button onClick={share} className={`${BTN_OUTLINE} mt-4`}>
+          {!preview && (
+            <section className="space-y-3 pt-1">
+              <button onClick={saveCard} disabled={isSaving} className={BTN_PRIMARY}>
+                <span className="material-symbols-outlined text-lg">download</span>
+                {isSaving ? "이미지 만드는 중..." : "이 페이지 이미지로 저장하기"}
+              </button>
+              <p className="text-center text-xs text-slate-500">상품과 가게 이야기를 이미지로 간직해요</p>
+              <div className="grid grid-cols-2 gap-2.5">
+                {p.storeId && (
+                  <a href={`/s/${p.storeId}`} className="flex min-h-12 items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-blue-100/60 px-3 text-sm font-semibold text-blue-900 transition hover:bg-blue-100 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+                    <span className="material-symbols-outlined text-lg">storefront</span>
+                    가게 전체 보기
+                  </a>
+                )}
+                <a href={`/market3d.html${p.storeId ? `?shop=${encodeURIComponent(p.storeId)}` : ""}`} className={`flex min-h-12 items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-blue-100/60 px-3 text-sm font-semibold text-blue-900 transition hover:bg-blue-100 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${p.storeId ? "" : "col-span-2"}`}>
+                  <span className="material-symbols-outlined text-lg">view_in_ar</span>
+                  3D 시장
+                </a>
+              </div>
+              <button onClick={share} className={BTN_OUTLINE}>
                 <span className="material-symbols-outlined text-lg text-[#0052FF]">link</span>
                 친구에게 내 가게 자랑하기
               </button>
-            )}
-          </section>
+            </section>
+          )}
 
-          <p className="text-center text-xs font-medium text-slate-400 pb-2">이 페이지를 즐겨찾기하면 언제든 다시 볼 수 있어요</p>
         </main>
       </div>
 

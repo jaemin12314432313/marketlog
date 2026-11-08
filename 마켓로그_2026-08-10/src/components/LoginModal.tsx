@@ -520,8 +520,11 @@ export const LoginModal = React.forwardRef<LoginModalHandle, LoginModalProps>(({
 
       {viewMode === "booth" && (
         <form onSubmit={handleOpenBoothShop} className="space-y-4 my-auto animate-in fade-in duration-200">
-          <div className="space-y-1">
-            <label className="text-xs font-extrabold text-slate-700">가게 이름</label>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-extrabold text-slate-700">가게 이름</label>
+              <span className="text-[11px] font-semibold text-slate-400">{boothShopName.trim().length}/12</span>
+            </div>
             <input
               type="text"
               value={boothShopName}
@@ -532,21 +535,20 @@ export const LoginModal = React.forwardRef<LoginModalHandle, LoginModalProps>(({
               }}
               placeholder="예: 달콤과일상회"
               autoFocus
-              className="w-full px-4 py-3.5 bg-white rounded-xl border border-slate-200 text-base text-slate-900 focus:outline-none focus:border-[#0052FF] focus:ring-1 focus:ring-[#0052FF] font-bold transition-all"
+              className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 text-sm text-slate-900 focus:outline-none focus:border-[#0052FF] focus:ring-1 focus:ring-[#0052FF] font-semibold transition-all"
             />
-            <p className="text-[11px] font-semibold text-slate-400 text-right">{boothShopName.trim().length}/12</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {BOOTH_NAME_IDEAS.map((idea) => (
-              <button
-                key={idea}
-                type="button"
-                onClick={() => setBoothShopName(idea)}
-                className="px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-600"
-              >
-                {idea}
-              </button>
-            ))}
+            <div className="flex flex-wrap gap-1.5">
+              {BOOTH_NAME_IDEAS.map((idea) => (
+                <button
+                  key={idea}
+                  type="button"
+                  onClick={() => setBoothShopName(idea)}
+                  className="px-2.5 py-1 rounded-full border border-slate-300 bg-white hover:bg-slate-100 text-xs font-bold text-slate-700"
+                >
+                  {idea}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="space-y-2">
             <label className="text-xs font-extrabold text-slate-700">어떤 분이세요?</label>
@@ -601,7 +603,7 @@ export const LoginModal = React.forwardRef<LoginModalHandle, LoginModalProps>(({
                   key={idea}
                   type="button"
                   onClick={() => setBoothTagline(idea)}
-                  className="px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 text-[11px] font-bold text-slate-600"
+                  className="px-2.5 py-1 rounded-full border border-slate-300 bg-white hover:bg-slate-100 text-xs font-bold text-slate-700"
                 >
                   {idea}
                 </button>

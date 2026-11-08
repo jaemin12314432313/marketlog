@@ -1,3 +1,4 @@
+import scanCharacter from "../assets/scan-character.gif";
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Capacitor } from "@capacitor/core";
@@ -288,7 +289,8 @@ export const MerchantAiScanModal: React.FC<MerchantAiScanModalProps> = ({
 
         {/* Analyzing Spinner Overlay State */}
         {isAnalyzing && (
-          <div className="bg-black/80 backdrop-blur-md rounded-2xl p-6 text-center space-y-3 border border-white/20 shadow-2xl">
+          <div role="status" aria-live="polite" className="bg-black/80 backdrop-blur-md rounded-2xl p-6 text-center space-y-3 shadow-2xl">
+            <img src={scanCharacter} alt="" className="w-72 max-w-[70vw] h-auto mx-auto" />
             <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto"></div>
             <p className="text-xs font-bold text-white">
               스캔 중입니다...

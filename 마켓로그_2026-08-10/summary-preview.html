@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>가게 요약본 미리보기</title>
+  <style>
+    body { margin: 0; background: #e9edf3; color: #0f172a; font-family: sans-serif; text-align: center; }
+    header { padding: 24px 16px 12px; }
+    h1 { margin: 0 0 8px; font-size: 20px; }
+    p { margin: 0; color: #64748b; font-size: 14px; }
+    img { display: block; width: min(100% - 32px, 540px); height: auto; margin: 16px auto 32px; box-shadow: 0 8px 32px #0f172a20; }
+  </style>
+</head>
+<body>
+  <header><h1>가게 요약본 미리보기</h1><p>예시 가게와 상품으로 만든 디자인 미리보기입니다.</p></header>
+  <p id="status">요약본을 만드는 중이에요...</p>
+  <img id="preview" alt="가게 요약본 예시" hidden />
+  <script type="module">
+    import { boothApi } from '/src/booth/boothApi.ts';
+    import { makeShopSummaryCard } from '/src/booth/shopCard.ts';
+
+    const status = document.querySelector('#status');
+    try {
+      const feed = await boothApi.feed(3);
+      const products = feed.products.slice(0, 3);
+      const blob = await makeShopSummaryCard('달콤과일상회 (예시)', 1, products, '2026-11-08', `${location.origin}/s/example`, '싱싱한 과일로 달콤한 하루를!');
+      const preview = document.querySelector('#preview');
+      preview.src = URL.createObjectURL(blob);
+      preview.hidden = false;
+      status.textContent = 'QR과 가게 이름은 예시이며, 상품은 로컬 서버의 데이터를 사용합니다.';
+    } catch (error) {
+      status.textContent = '미리보기를 만들지 못했어요. 로컬 서버 연결을 확인해주세요.';
+      console.error(error);
+    }
+  </script>
+</body>
+</html>

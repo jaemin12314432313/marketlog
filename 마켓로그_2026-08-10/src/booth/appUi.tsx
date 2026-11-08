@@ -40,7 +40,7 @@ export function HeaderIconButton({ icon, label, onClick }: { icon: string; label
 }
 
 // 앱의 "특상" 배지(초록, 체크 아이콘). 보통은 파랑.
-export function GradePill({ grade, confidence, solid = false }: { grade: string; confidence?: number | null; solid?: boolean }) {
+export function GradePill({ grade, confidence, solid = false, showIcon = true }: { grade: string; confidence?: number | null; solid?: boolean; showIcon?: boolean }) {
   const premium = grade === "A+";
   const tone = solid
     ? premium
@@ -51,9 +51,9 @@ export function GradePill({ grade, confidence, solid = false }: { grade: string;
       : "text-[#0052FF] bg-blue-50 border-blue-200";
   return (
     <span className={`inline-flex items-center gap-1 text-xs font-extrabold px-2.5 py-1 rounded-full border ${tone}`}>
-      <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
+      {showIcon && <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>
         verified
-      </span>
+      </span>}
       {premium ? "특상" : "보통"}
       {confidence != null && <span className="opacity-75 font-bold">{confidence}%</span>}
     </span>
@@ -68,14 +68,14 @@ export function MetricBars({ labels }: { labels?: Record<string, { grade: Attrib
   const entries = Object.entries(labels || {});
   if (!entries.length) return null;
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 pt-1">
       {entries.map(([name, info], index) => {
         const rank = GRADE_RANK[info.grade] ?? 1;
         const color = RANK_COLOR[rank];
         return (
-          <div key={name} className={index > 0 ? "border-t border-[#E2E8F0] pt-3" : ""}>
+          <div key={name} className={index > 0 ? "border-t border-[#D1D1D1] pt-3" : ""}>
             <div className="flex justify-between items-center text-xs mb-1">
-              <span className="font-bold text-[#334155]">{name}</span>
+              <span className="font-bold" style={{ color: /(모양|형태|손상|흠집)/.test(name) ? "#0F172A" : "#334155" }}>{name}</span>
               <span className="text-sm font-black" style={{ color }}>
                 {info.grade}
               </span>
