@@ -52,7 +52,7 @@ function BoothShopQrPopup({ storeId, shopName, onClose }: { storeId: string; sho
         <div className="h-1.5 bg-gradient-to-r from-[#0052FF] to-[#6EA8FF]" />
         <div className="p-6 flex flex-col items-center text-center">
           <p className="text-xs font-bold text-[#0052FF]">
-            CO-SHOW 가상 시장{shop ? ` · No.${shop.number}` : ""}
+            CO-SHOW 가상 시장
           </p>
           <p className="mt-1 text-2xl font-extrabold text-[#0F172A]">{shop?.name || shopName}</p>
           {productCount != null && <p className="mt-0.5 text-sm font-medium text-slate-500">진열 상품 {productCount}개</p>}
@@ -110,7 +110,7 @@ export function BoothShopQrButton({ storeId, shopName }: { storeId: string; shop
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="w-full bg-[#0F172A] hover:bg-black text-white py-3.5 px-4 rounded-xl font-extrabold text-sm shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+        className="w-full bg-[#0F172A] hover:bg-black text-white py-3.5 px-4 rounded-xl font-semibold text-sm shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
       >
         <span className="material-symbols-outlined text-lg">qr_code_2</span>
         <span>내 가게 · 3D 시장 QR</span>

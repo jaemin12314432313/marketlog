@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>내 가게 QR 미리보기</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" />
+</head>
+<body class="bg-slate-100">
+  <div id="root" class="max-w-md mx-auto p-5"></div>
+  <script type="module">
+    import React from 'react';
+    import { createRoot } from 'react-dom/client';
+    import { BoothShopQrButton } from '/src/booth/BoothShopQrCard.tsx';
+    import '/src/index.css';
+    const root = document.getElementById('root');
+    createRoot(root).render(React.createElement(BoothShopQrButton, { storeId: 'f4cc4786-a194-44c1-b86b-08063fa69c5a', shopName: '달콤과일상회' }));
+    const open = () => { const button = root.querySelector('button'); if (button) button.click(); else requestAnimationFrame(open); };
+    requestAnimationFrame(open);
+  </script>
+</body>
+</html>

@@ -8,10 +8,8 @@ import {
   APP_BG,
   APP_CARD,
   AppHeader,
-  BTN_DARK,
   BTN_PRIMARY,
   CardTitle,
-  GradePill,
   HeaderIconButton,
 } from "./appUi";
 
@@ -20,11 +18,12 @@ function ProductRow({ p }: { p: BoothProduct; key?: React.Key }) {
   const pct = p.publicPrice > 0 ? Math.round(((p.publicPrice - p.price) / p.publicPrice) * 100) : null;
   const meta = [p.origin, p.unit].filter(Boolean).join(" · ");
   return (
-    <a href={`/r/${p.id}`} className={`${APP_CARD} flex items-center gap-4 p-3.5 active:scale-[0.99] transition`}>
-      <div className="relative w-[84px] h-[84px] shrink-0 rounded-xl overflow-hidden border border-[#E2E8F0] bg-slate-100">
+    <a href={`/r/${p.id}`} className="group flex items-center gap-4 rounded-2xl border border-slate-100 bg-white p-3 shadow-[0_4px_18px_rgba(15,23,42,0.04)] transition hover:border-blue-200 hover:shadow-md active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+      <div className="relative w-[88px] h-[88px] shrink-0 rounded-xl overflow-hidden bg-slate-100">
         <img src={p.imageUrl} alt={p.title} className="w-full h-full object-cover" />
-        <span className="absolute top-1.5 left-1.5 scale-90 origin-top-left">
-          <GradePill grade={p.grade} solid />
+        <span className={`absolute top-1.5 left-1.5 inline-flex items-center gap-0.5 rounded-full px-2 py-1 text-[10px] font-bold leading-none text-white shadow-sm ${p.grade === "A+" ? "bg-emerald-500" : "bg-[#0052FF]"}`}>
+          <span className="material-symbols-outlined text-[12px] leading-none" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+          {p.grade === "A+" ? "특상" : "보통"}
         </span>
       </div>
       <div className="min-w-0 flex-1">
@@ -40,7 +39,7 @@ function ProductRow({ p }: { p: BoothProduct; key?: React.Key }) {
           )}
         </div>
       </div>
-      <span className="material-symbols-outlined text-slate-300">chevron_right</span>
+      <span className="material-symbols-outlined text-slate-300 transition group-hover:text-blue-600">chevron_right</span>
     </a>
   );
 }
@@ -85,7 +84,7 @@ export default function BoothShopPage({ storeId }: { storeId: string }) {
         `${window.location.origin}/s/${storeId}`,
         data.store.tagline
       );
-      const name = `마켓로그_${data.store.number}번_${data.store.name}.png`;
+      const name = `마켓로그_${data.store.name}.png`;
       const shared = await shareCardFile(blob, name, `${data.store.name} · CO-SHOW 가상 시장`);
       if (!shared) setCardPreview({ url: URL.createObjectURL(blob), blob, name });
     } catch {
@@ -97,7 +96,7 @@ export default function BoothShopPage({ storeId }: { storeId: string }) {
 
   const share = async () => {
     const url = window.location.href;
-    const title = data ? `CO-SHOW 가상 시장 ${data.store.number}번 가게 '${data.store.name}'` : "마켓로그";
+    const title = data ? `CO-SHOW 가상 시장 '${data.store.name}'` : "마켓로그";
     try {
       if (navigator.share) {
         await navigator.share({ title, text: `${title}에 놀러오세요! AI가 품질을 판정한 과일가게예요.`, url });
@@ -130,43 +129,35 @@ export default function BoothShopPage({ storeId }: { storeId: string }) {
     ? new Date(store.openedAt).toLocaleString("ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })
     : "";
   const premiumCount = products.filter((p) => p.grade === "A+").length;
-  const diffs = products.filter((p) => p.publicPrice > 0).map((p) => Math.round(((p.publicPrice - p.price) / p.publicPrice) * 100));
-  const avgDiff = diffs.length ? Math.round(diffs.reduce((a, b) => a + b, 0) / diffs.length) : null;
   const stats = [
     { label: "진열 상품", value: `${products.length}개`, color: "text-[#0F172A]" },
-    { label: "AI 특상", value: `${premiumCount}개`, color: "text-[#10B981]" },
-    {
-      label: "시세 대비",
-      value: avgDiff == null ? "-" : avgDiff > 0 ? `${avgDiff}% 저렴` : avgDiff < 0 ? `${-avgDiff}% 높음` : "시세 수준",
-      color: avgDiff != null && avgDiff > 0 ? "text-[#0052FF]" : "text-[#0F172A]",
-    },
+    { label: "AI 특상 상품", value: `${premiumCount}개`, color: "text-[#10B981]" },
   ];
   const line = store.tagline?.trim() || shopOneLiner(products);
 
   return (
-    <div className={`min-h-[100dvh] ${APP_BG} text-[#0F172A] pb-10`}>
+    <div className="min-h-[100dvh] bg-[#F7F8FA] text-[#0F172A] pb-10">
       <AppHeader right={<HeaderIconButton icon="ios_share" label="공유" onClick={share} />} />
 
-      <main className="max-w-md mx-auto px-4 pt-5 space-y-5">
+      <main className="max-w-md mx-auto px-4 pt-5 space-y-7">
         {/* 가게 정보 */}
-        <section className={`${APP_CARD} p-5`}>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[#0052FF]">CO-SHOW 가상 시장</span>
-            <span className="text-[11px] font-extrabold text-[#0052FF] bg-blue-50 border border-blue-200 rounded-full px-2.5 py-1">
-              No.{store.number}
-            </span>
-          </div>
-          <h1 className="mt-2 text-2xl font-extrabold tracking-tight break-keep">{store.name}</h1>
-          <p className="mt-1 text-xs font-medium text-slate-400">
+        <section className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-[0_8px_28px_rgba(15,23,42,0.06)]">
+          <div className="h-1.5 bg-gradient-to-r from-[#0052FF] to-[#79A8FF]" />
+          <div className="p-5 sm:p-6">
+          <span className="text-[11px] font-bold tracking-wider text-[#0052FF]">CO-SHOW 가상 시장</span>
+          <h1 className="mt-2 text-[26px] font-extrabold tracking-tight break-keep">{store.name}</h1>
+          <p className="mt-1.5 text-xs font-medium text-slate-500">
             {openedAt ? `${openedAt} 개점 · ` : ""}김대중컨벤션센터
           </p>
-          <div className="mt-4 grid grid-cols-3 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] divide-x divide-[#E2E8F0]">
+          <p className="mt-4 text-sm leading-relaxed text-slate-600 break-keep">&ldquo;{line}&rdquo;</p>
+          <div className="mt-5 grid grid-cols-2 border-t border-slate-100 divide-x divide-slate-100">
             {stats.map((s) => (
-              <div key={s.label} className="px-3 py-2.5">
-                <p className="text-[10px] font-bold text-slate-500">{s.label}</p>
-                <p className={`text-sm font-extrabold ${s.color}`}>{s.value}</p>
+              <div key={s.label} className="px-3 pt-4 text-center">
+                <p className="text-[11px] font-medium text-slate-500">{s.label}</p>
+                <p className={`mt-1 text-sm font-bold ${s.color}`}>{s.value}</p>
               </div>
             ))}
+          </div>
           </div>
         </section>
 
@@ -176,17 +167,14 @@ export default function BoothShopPage({ storeId }: { storeId: string }) {
             <span className="material-symbols-outlined text-lg">download</span>
             {isSaving ? "요약본 만드는 중..." : "내 가게 요약본 저장하기"}
           </button>
-          <a href={`/market3d.html?shop=${encodeURIComponent(storeId)}`} className={BTN_DARK}>
-            <span className="material-symbols-outlined text-lg">view_in_ar</span>
-            3D 시장에서 다른 가게 구경하기
-          </a>
+          <p className="text-center text-xs text-slate-400">가게 정보와 진열 상품을 이미지로 간직해요</p>
         </div>
 
         {/* 진열 상품 */}
         <section>
-          <div className="flex items-center justify-between mb-3 px-1">
-            <h2 className="text-sm font-extrabold text-[#0F172A]">진열 상품 ({products.length})</h2>
-            <span className="text-xs font-semibold text-slate-400">누르면 자세히 보기</span>
+          <div className="flex items-end justify-between mb-3 px-1">
+            <div><h2 className="text-lg font-bold tracking-tight text-[#0F172A]">오늘의 진열대</h2><p className="mt-0.5 text-xs text-slate-500">상품을 눌러 자세히 살펴보세요</p></div>
+            <span className="text-xs font-semibold text-slate-400">{products.length}개 상품</span>
           </div>
           {products.length === 0 ? (
             <div className={`${APP_CARD} p-8 text-center`}>
@@ -202,14 +190,11 @@ export default function BoothShopPage({ storeId }: { storeId: string }) {
           )}
         </section>
 
-        {/* 우리 가게 한마디 — 앱의 "사장님 한마디"와 같은 모양 */}
-        <section className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-[0_4px_12px_rgba(15,23,42,0.08)]">
-          <div className="flex items-center gap-1.5 text-xs font-extrabold text-amber-700 mb-1.5">
-            <span className="material-symbols-outlined text-base">chat_bubble</span>
-            우리 가게 한마디
-          </div>
-          <p className="text-sm text-slate-700 leading-relaxed font-semibold break-keep">&ldquo;{line}&rdquo;</p>
-        </section>
+        <a href={`/market3d.html?shop=${encodeURIComponent(storeId)}`} className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-[#0F172A] transition hover:bg-blue-100/70 active:scale-[0.99]">
+          <span className="material-symbols-outlined rounded-xl bg-white p-2 text-[#0052FF]">view_in_ar</span>
+          <span className="flex-1"><span className="block text-sm font-bold">3D 시장 둘러보기</span><span className="mt-0.5 block text-xs text-slate-500">다른 가게도 구경해 보세요</span></span>
+          <span className="material-symbols-outlined text-blue-400">chevron_right</span>
+        </a>
 
         {/* 서비스 소개 */}
         <section className={`${APP_CARD} p-5`}>

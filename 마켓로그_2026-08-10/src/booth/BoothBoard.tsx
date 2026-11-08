@@ -222,7 +222,7 @@ const FeedCard: React.FC<{
         <div className="flex items-center gap-2">
           {isFresh && <span className="text-xs font-black bg-rose-500 rounded px-1.5 py-0.5">NEW</span>}
           <p className="text-sm font-bold text-white/55 truncate">
-            No.{p.shopNumber} · {p.shopName}
+            {p.shopName}
           </p>
           <p className="ml-auto text-xs text-white/40 shrink-0">{timeAgo(p.createdAt, now)}</p>
         </div>

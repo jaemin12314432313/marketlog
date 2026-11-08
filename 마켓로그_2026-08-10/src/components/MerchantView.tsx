@@ -508,7 +508,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
       <div className="space-y-3 mt-3">
         <div className="flex justify-between items-center">
           <h3 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">
-            새 물건 등록
+            새 상품 등록
           </h3>
         </div>
 
@@ -526,21 +526,21 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
           }}
           className={`w-full p-4 rounded-2xl text-left shadow-[0_1px_3px_rgba(0,0,0,0.05)] transition-all border flex items-center justify-between ${
             isFormOpen
-              ? "bg-[#0F172A] text-white border-[#0F172A]"
+              ? "bg-emerald-50 text-emerald-950 border-emerald-200"
               : "bg-white hover:bg-[#F8FAFC] text-[#0F172A] border-[#E2E8F0]"
           }`}
         >
           <div className="flex items-center gap-3">
             <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-              isFormOpen ? "bg-white/10 text-emerald-400" : "bg-slate-100 text-slate-600"
+              isFormOpen ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"
             }`}>
               <span className="material-symbols-outlined text-lg">storefront</span>
             </div>
             <div>
               <h5 className="text-xs font-semibold">
-                {editingProductId ? "점포 물건 수동 수정 중" : "점포 물건 등록"}
+                {editingProductId ? "점포 상품 수동 수정 중" : "점포 상품 등록"}
               </h5>
-              <p className={`text-[11px] mt-0.5 ${isFormOpen ? "text-slate-300" : "text-[#64748B]"}`}>
+              <p className={`text-[11px] mt-0.5 ${isFormOpen ? "text-emerald-800" : "text-[#64748B]"}`}>
                 {editingProductId ? "목록에서 선택한 상품의 상세정보를 수정합니다." : "AI 스캔으로 빠르게 등록하거나 수동으로 입력하여 등록합니다."}
               </p>
             </div>
@@ -561,7 +561,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
           <div className="flex justify-between items-center border-b pb-3">
             <div className="flex items-center gap-2">
               <h4 className="font-semibold text-sm text-slate-900">
-                {editingProductId ? "점포 물건 정보 수정" : "점포 물건 상세정보 입력"}
+                {editingProductId ? "점포 상품 정보 수정" : "점포 상품 상세정보 입력"}
               </h4>
               {editingProductId && (
                 <span className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
@@ -927,7 +927,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                         onClick={() => setDescription(recText)}
                         className={`w-full text-left p-2.5 rounded-xl border text-xs font-medium transition-all cursor-pointer flex items-start gap-2 ${
                           isSelected
-                            ? "bg-emerald-600 text-white border-emerald-600 font-bold shadow-xs"
+                            ? "bg-emerald-100 text-emerald-900 border-emerald-300 font-bold shadow-xs"
                             : "bg-white hover:bg-emerald-50 text-slate-800 border-emerald-200 hover:border-emerald-300"
                         }`}
                       >
@@ -998,7 +998,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
             <div>
               <p className="text-sm font-bold text-slate-800">등록된 상품이 없습니다.</p>
               <p className="text-xs text-slate-400 mt-1">
-                위의 'AI SCAN' 또는 '직접 입력'을 통해 점포 물건을 등록해 보세요!
+                위의 'AI SCAN' 또는 '직접 입력'을 통해 점포 상품을 등록해 보세요!
               </p>
             </div>
           </div>
@@ -1072,7 +1072,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                         handleEditProduct(p);
                       }}
                       className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-extrabold transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
-                      title="점포 물건 수동 등록(수정) 양식으로 이동"
+                      title="점포 상품 수동 등록(수정) 양식으로 이동"
                     >
                       <span className="material-symbols-outlined text-sm">edit</span>
                       <span>수정하기</span>

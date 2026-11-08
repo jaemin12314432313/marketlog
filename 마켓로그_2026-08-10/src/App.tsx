@@ -50,9 +50,10 @@ const COSHOW_MARKET: MarketInfo = {
 };
 
 export default function App() {
+  const merchantPreview = import.meta.env.DEV && ["localhost", "127.0.0.1"].includes(window.location.hostname) && new URLSearchParams(window.location.search).get("preview") === "merchant";
   const [activeTab, setActiveTab] = useState<TabType>("home");
-  const [userRole, setUserRole] = useState<UserRole>("customer");
-  const [userDisplayName, setUserDisplayName] = useState<string>("");
+  const [userRole, setUserRole] = useState<UserRole>(merchantPreview ? "merchant" : "customer");
+  const [userDisplayName, setUserDisplayName] = useState<string>(merchantPreview ? "상인 미리보기" : "");
   const [userShopName, setUserShopName] = useState<string>("");
   const [userUsername, setUserUsername] = useState<string>("");
   const [userPhone, setUserPhone] = useState<string>("");
@@ -101,7 +102,14 @@ export default function App() {
   // — HomeFeed가 처리하고 나면 다시 null로 비운다(mapFocusShopName과 같은 1회성 트리거 패턴).
   const [feedSearchTrigger, setFeedSearchTrigger] = useState<string | null>(null);
 
-  const [products, setProducts] = useState<ProductItem[]>([]);
+  const [products, setProducts] = useState<ProductItem[]>(merchantPreview ? [{
+    id: "preview-apple", title: "신선한 사과", unit: "1kg", origin: "국내산", tags: "#예시상품", shopName: "상인 미리보기",
+    distance: "", timeAgo: "미리보기 예시", price: 5000, publicPrice: 6000,
+    priceTag: "예시 가격", grade: "A", category: "과일",
+    imageUrl: "https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?auto=format&fit=crop&w=800&q=80",
+    freshnessScore: 95, defectScore: 2, uniformityScore: 95,
+    description: "화면 확인을 위한 예시 상품입니다.", isMerchantUploaded: true,
+  }] : []);
   const [scannedProducts, setScannedProducts] = useState<ProductItem[]>([]);
   const [bookmarkedProducts, setBookmarkedProducts] = useState<ProductItem[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(null);
@@ -134,7 +142,7 @@ export default function App() {
   // 보이게 하기 위함. isFeedLoading은 최초 1회만 true였다가 false로 내려가므로, 재진입
   // 때 다시 불러오는 동안 로딩 스켈레톤이 깜빡이며 다시 뜨지는 않는다.
   useEffect(() => {
-    if (activeTab !== "home") return;
+    if (activeTab !== "home" || merchantPreview) return;
     refreshFeed()
       .catch((err) => console.error("상품 피드를 불러오지 못했습니다.", err))
       .finally(() => setIsFeedLoading(false));
@@ -144,6 +152,10 @@ export default function App() {
   // 저장된 토큰이 있으면 앱을 새로 열 때마다 다시 로그인하지 않고 세션을 복원한다(자동로그인).
   // 토큰이 없거나 만료됐으면 로그인 화면을 강제로 띄운다(게스트 진입 불가).
   useEffect(() => {
+    if (merchantPreview) {
+      setIsAuthChecking(false);
+      return;
+    }
     const token = getAuthToken();
     if (!token) {
       setIsAuthChecking(false);
@@ -169,7 +181,7 @@ export default function App() {
 
   // 로그인 상태가 되면(토큰 발급 후) 내 찜/AI스캔 저장목록을 백엔드에서 불러온다.
   useEffect(() => {
-    if (isAuthChecking || isLoginModalOpen || !getAuthToken()) return;
+    if (merchantPreview || isAuthChecking || isLoginModalOpen || !getAuthToken()) return;
     fetchBookmarks()
       .then(setBookmarkedProducts)
       .catch((err) => console.error("찜 목록을 불러오지 못했습니다.", err));
