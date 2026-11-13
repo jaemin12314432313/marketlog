@@ -520,32 +520,38 @@ def booth_market(db: Session = Depends(get_db)):
         ):
             by_store.setdefault(product.store_id, []).append(product)
 
+    def market_item(product: Product, number: int) -> dict:
+        d = _booth_product_dict(product, number)
+        return {
+            "id": d["id"],
+            "title": d.get("title") or "",
+            "unit": d.get("unit") or "",
+            "origin": d.get("origin") or "",
+            "price": d.get("price") or 0,
+            "publicPrice": d.get("publicPrice") or 0,
+            "grade": d.get("grade") or "",
+            "confidence": d.get("gradeConfidencePercent"),
+            "attributeLabels": d.get("attributeLabels") or {},
+            "aiSummary": d.get("aiSummary") or "",
+            "description": d.get("description") or "",  # 사장님 한마디(홍보 문구)
+            "tags": [t for t in (d.get("tags") or "").split(",") if t.strip()][:3],
+            # 사진은 크기가 커서 목록에 넣지 않고, 상세를 열 때 /api/v1/booth/result/{id}/image 로 받는다
+        }
+
     shops = []
     for shop, name in rows:
         products = by_store.get(shop.store_id, [])
-        main = _booth_product_dict(products[0], shop.number) if products else None
+        # 3D 매대에 진열 상품을 여러 개 보여주고, 가까이 가면 골라 볼 수 있게 최근 6개까지 준다.
+        # "product"(대표 상품 1개)는 예전 화면과의 호환을 위해 그대로 둔다.
+        items = [market_item(p, shop.number) for p in products[:6]]
         shops.append({
             "storeId": shop.store_id,
             "number": shop.number,
             "name": name,
             "tagline": shop.tagline,
             "productCount": len(products),
-            "product": (
-                {
-                    "id": main["id"],
-                    "title": main.get("title") or "",
-                    "unit": main.get("unit") or "",
-                    "price": main.get("price") or 0,
-                    "publicPrice": main.get("publicPrice") or 0,
-                    "grade": main.get("grade") or "",
-                    "confidence": main.get("gradeConfidencePercent"),
-                    "attributeLabels": main.get("attributeLabels") or {},
-                    "aiSummary": main.get("aiSummary") or "",
-                    "tags": [t for t in (main.get("tags") or "").split(",") if t.strip()][:3],
-                }
-                if main
-                else None
-            ),
+            "product": items[0] if items else None,
+            "products": items,
         })
     return {"success": True, "shops": shops}
 

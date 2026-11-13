@@ -1,10 +1,9 @@
 <!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><style>:root{color-scheme:light}body{margin:0;font:14px system-ui,sans-serif}</style></head><body>
-<title>CO-SHOW 3D 가상 시장 | 마켓로그</title>
+<title>CO-SHOW 3D 공항 마켓 | 마켓로그</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<!-- 폰트·three.js는 앱에 포함된 파일(/vendor)을 쓴다 — 인터넷이 불안정해도 3D 시장이 뜨게 -->
+<link rel="stylesheet" href="/vendor/jua/jua.css">
+<link rel="stylesheet" href="/vendor/pretendard/pretendard.css">
 <style>
   /* Layout: phone-first. One full-screen 3D exhibition hall (RE:LOCAL / 2026 CO-SHOW): dark floor, yellow accents, white booth partitions.
      HUD floats over it: title + minimap on top, info card above a joystick (left) and two buttons (right). */
@@ -61,7 +60,8 @@
   .toast { position: absolute; top: 72px; left: max(16px, env(safe-area-inset-left, 0px)); max-width: calc(100% - 130px); background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 600; opacity: 0; transform: translateY(-6px); transition: opacity 0.3s, transform 0.3s; pointer-events: none; }
   .toast.on { opacity: 1; transform: none; }
 
-  .card { position: absolute; bottom: 166px; max-width: 420px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3); }
+  /* bottom 206px: 오른쪽 버튼 묶음(점프 + 내 가게로 + 위에서 보기, 약 196px)보다 위에 떠서 가리지 않게 */
+  .card { position: absolute; bottom: 206px; max-width: 420px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3); }
   .card[hidden] { display: none !important; }
   .card .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
   .card h2 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 20px; line-height: 1.2; }
@@ -80,9 +80,31 @@
   .btn { background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 11px 18px; font-size: 14px; font-weight: 500; cursor: pointer; }
   .btn[aria-pressed="true"], .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
   .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .hint { position: absolute; bottom: 166px; font-size: 12px; color: var(--fg); background: var(--chip); border-radius: 999px; padding: 6px 12px; transition: opacity 0.6s; pointer-events: none; width: max-content; max-width: calc(100% - 32px); }
+  /* 점프 버튼: 엄지로 누르기 쉽게 크고 둥글게. 누르는 순간 반응하도록 pointerdown으로 처리한다 */
+  .btn.jump { width: 72px; height: 72px; padding: 0; border-radius: 50%; font-size: 15px; font-weight: 700; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); touch-action: none; user-select: none; -webkit-user-select: none; }
+  .btn.jump:active { transform: scale(0.92); }
+  .hint { position: absolute; bottom: 206px; font-size: 12px; color: var(--fg); background: var(--chip); border-radius: 999px; padding: 6px 12px; transition: opacity 0.6s; pointer-events: none; width: max-content; max-width: calc(100% - 32px); }
   .hint.gone { opacity: 0; }
   .card:not([hidden]) ~ .hint { display: none; }
+  /* 카드 안 진열 상품 목록 — 앱 "오늘의 진열대"와 같은 모양(등급 배지 · 이름 · 가격) */
+  .card .items { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; max-height: 172px; overflow-y: auto; }
+  .card .items button { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 12px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .card .items button:active { transform: scale(0.98); }
+  .card .items button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .card .ig { flex: none; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: var(--chip); border: 1px solid var(--line); }
+  .card .ig.top { background: var(--good); border-color: var(--good); color: #fff; }
+  .card .it { flex: 1; min-width: 0; display: grid; }
+  .card .it b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .it small { font-size: 11px; color: var(--muted); }
+  .card .ip { flex: none; font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums; }
+  .card .cclose { flex: none; width: 36px; height: 36px; margin: -4px -6px 0 0; border: 0; border-radius: 50%; background: var(--chip); color: inherit; font-size: 20px; line-height: 1; cursor: pointer; }
+  .card .cclose:focus-visible, .reopen:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  /* 카드를 닫았을 때 그 자리에 남는 다시 보기 버튼 */
+  .reopen { position: absolute; bottom: 206px; left: max(16px, env(safe-area-inset-left, 0px)); background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 999px; padding: 10px 16px; font: inherit; font-size: 14px; font-weight: 700; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3); cursor: pointer; }
+  .reopen[hidden] { display: none; }
+  .qpick { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .qpick button { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+  .qpick button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
   .card .more { margin-top: 10px; width: 100%; padding: 9px; border-radius: 999px; border: 1px solid var(--accent); background: transparent; color: var(--accent); font-weight: 600; font-size: 13px; cursor: pointer; }
   .qs { position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; max-height: 74%; overflow: auto; background: var(--surface); border-top: 1px solid var(--line); border-radius: 18px 18px 0 0; box-shadow: 0 -10px 34px rgba(0, 0, 0, 0.35); padding: 16px max(16px, env(safe-area-inset-right, 0px)) 22px max(16px, env(safe-area-inset-left, 0px)); }
   .qs[hidden] { display: none !important; }
@@ -107,6 +129,56 @@
   .qsum { margin: 14px 0 0; font-size: 14px; line-height: 1.6; max-width: 60ch; }
   .qtags { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; padding: 0; list-style: none; }
   .qtags li { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: var(--line); }
+  .qopts { display: grid; gap: 8px; margin-top: 12px; }
+  .qopts .btn { width: 100%; text-align: left; font-size: 15px; padding: 13px 16px; }
+  /* 상품 상세(앱 상품설명 탭과 같은 모양). 앱처럼 항상 밝은 화면으로 보여준다 */
+  .qs.ps { padding: 0; max-height: 88%; background: #F8FAFC; color: #0F172A; border-top: 0; }
+  .ps-hero { position: relative; height: 220px; background: #0F172A; overflow: hidden; border-radius: 18px 18px 0 0; }
+  .ps-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ps-hero.noimg img { display: none; }
+  .ps-grad { position: absolute; inset: 0; background: linear-gradient(to top, #0F172A, rgba(0,0,0,0.2) 45%, transparent); }
+  .ps-badge { position: absolute; top: 14px; right: 58px; display: inline-flex; align-items: center; gap: 4px; padding: 5px 12px; border-radius: 999px; background: #0052FF; color: #fff; font-size: 12px; font-weight: 800; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+  .ps-badge.top { background: #00C875; }
+  .ps-x { position: absolute; top: 10px; right: 12px; width: 38px; height: 38px; border-radius: 50%; border: 0; background: rgba(255,255,255,0.92); color: #0F172A; font-size: 22px; line-height: 1; cursor: pointer; }
+  .ps-body { padding: 14px max(16px, env(safe-area-inset-right, 0px)) 22px max(16px, env(safe-area-inset-left, 0px)); display: grid; gap: 12px; }
+  .ps-pick { display: flex; gap: 6px; flex-wrap: wrap; }
+  .ps-pick button { padding: 7px 14px; border-radius: 999px; border: 1px solid #E2E8F0; background: #fff; color: #475569; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .ps-pick button[aria-pressed="true"] { background: #0052FF; border-color: #0052FF; color: #fff; }
+  .ps-head { display: flex; justify-content: space-between; align-items: center; }
+  .ps-shop { color: #0052FF; font-weight: 700; font-size: 14px; }
+  .ps-shop small { color: #94A3B8; font-weight: 600; font-size: 12px; margin-left: 4px; }
+  .ps-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 999px; border: 1px solid #DBEAFE; background: #EFF6FF; color: #0052FF; }
+  .ps-pill.top { border-color: #A7F3D0; background: #ECFDF5; color: #10B981; }
+  .ps-title { margin: -6px 0 0; font-size: 21px; font-weight: 600; line-height: 1.35; }
+  .ps-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: -4px; }
+  .ps-tags span { padding: 4px 10px; border-radius: 999px; background: #ECFDF5; color: #047857; font-size: 11px; font-weight: 700; }
+  .ps-card { background: #fff; border: 1px solid #E2E8F0; border-radius: 16px; padding: 16px 16px 18px; box-shadow: 0 4px 12px rgba(15,23,42,0.08); display: grid; gap: 12px; }
+  .ps-prices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid #D1D1D1; }
+  .ps-lbl { font-size: 12px; font-weight: 700; }
+  .ps-price { font-size: 20px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .ps-price em { font-style: normal; font-size: 11px; font-weight: 600; color: #0052FF; background: #EFF6FF; padding: 2px 6px; border-radius: 999px; vertical-align: 3px; }
+  .ps-ai-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .ps-ai-head h3 { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: 0.02em; }
+  .ps-ai-head .ps-pill { font-size: 12px; padding: 4px 10px; }
+  .ps-metrics { display: grid; }
+  .ps-m + .ps-m { border-top: 1px solid #D1D1D1; margin-top: 12px; padding-top: 12px; }
+  .ps-mrow { display: flex; justify-content: space-between; align-items: center; font-size: 12px; margin-bottom: 5px; }
+  .ps-mrow span { font-weight: 700; color: #0F172A; }
+  .ps-mrow b { font-size: 14px; font-weight: 900; }
+  .ps-bars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .ps-bars i { position: relative; display: block; height: 10px; border-radius: 6px; background: #E2E8F0; border: 1px solid #CBD5E1; border-top-color: rgba(255,255,255,0.7); box-shadow: inset 0 2px 4px rgba(15,23,42,0.16), inset 0 -1px 1px rgba(255,255,255,0.75); overflow: hidden; }
+  .ps-bars i::after { content: ""; position: absolute; left: 4px; right: 4px; top: 1px; height: 1px; border-radius: 999px; background: rgba(255,255,255,0.6); }
+  .ps-talk b svg { vertical-align: -4px; margin-right: 6px; }
+  .ps-sum { border-top: 1px solid #D1D1D1; padding-top: 12px; }
+  .ps-sum b { display: block; color: #0052FF; font-size: 12px; font-weight: 800; margin-bottom: 6px; }
+  .ps-sum p, .ps-talk p { margin: 0; font-size: 12px; line-height: 1.6; color: #334155; font-weight: 500; }
+  .ps-talk { background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 16px; padding: 14px 16px; box-shadow: 0 4px 12px rgba(15,23,42,0.08); }
+  .ps-talk b { display: block; color: #B45309; font-size: 12px; font-weight: 800; margin-bottom: 6px; }
+  .ps-note { margin: 0; font-size: 11px; color: #94A3B8; }
+  .ps-empty { margin: 0; font-size: 14px; color: #475569; }
+  .ps-btn { display: block; width: 100%; text-align: center; text-decoration: none; padding: 14px; border-radius: 16px; border: 1px solid #E2E8F0; background: #fff; color: #0F172A; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; box-sizing: border-box; }
+  .ps-btn.primary { background: #0052FF; border-color: #0052FF; color: #fff; }
+  .ps-btn:focus-visible, .ps-x:focus-visible, .ps-pick button:focus-visible { outline: 2px solid #0052FF; outline-offset: 2px; }
   .qnote { margin: 16px 0 12px; font-size: 12px; color: var(--muted); }
   .nogl { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; padding: 24px; text-align: center; color: var(--muted); }
   .app.nogl-on .nogl { display: flex; }
@@ -118,24 +190,26 @@
   <canvas id="gl" aria-label="RE:LOCAL 2026 CO-SHOW 가상 전시장. 왼쪽 아래 조이스틱으로 걷고, 화면을 끌어서 시야를 돌립니다."></canvas>
 
   <div class="topbar hud-x">
-    <div class="plate"><small>MARKETLOG · CO-SHOW 2026</small><strong>3D 가상 시장</strong><span id="stats"></span></div>
+    <div class="plate"><small>MARKETLOG AIRPORT ✈ CO-SHOW 2026</small><strong>3D 공항 마켓</strong><span id="stats"></span></div>
     <a class="sample" id="myLink" href="#" hidden>내 가게 페이지</a>
   </div>
   <canvas class="minimap" id="mini" width="144" height="186" aria-hidden="true"></canvas>
   <div class="toast" id="toast" role="status"></div>
 
   <div class="card hud-x" id="card" hidden></div>
-  <div class="hint hud-x" id="hint">조이스틱 위아래는 걷기, 좌우는 몸 돌리기 · 가게를 누르면 정보가 보여요</div>
+  <button class="reopen" id="reopen" type="button" hidden>🛒 진열 상품 보기</button>
+  <div class="hint hud-x" id="hint">조이스틱 위아래는 걷기, 좌우는 몸 돌리기 · 점프로 가게 지붕 위를 건너 보세요</div>
 
   <div class="joy" id="joy" style="left:max(16px, env(safe-area-inset-left, 0px))"><i id="knob"></i></div>
   <div class="btns" style="right:max(16px, env(safe-area-inset-right, 0px))">
+    <button class="btn jump" id="jump" type="button" aria-label="점프">점프</button>
     <button class="btn primary" id="goMine" type="button">내 가게로 가기</button>
     <button class="btn" id="aerial" type="button" aria-pressed="false">위에서 보기</button>  </div>
   <section class="qs" id="qs" hidden aria-live="polite"></section>
   <p class="nogl" id="nogl">이 기기에서는 3D 화면을 열 수 없습니다. 다른 브라우저로 열어 주세요.</p>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script><script>
+<script src="/vendor/three/three-r128.min.js"></script><script>
 /* 마켓로그 CO-SHOW 3D 가상 시장 — 팀원 데모(coshow-market-demo)를 실제 부스 가게 데이터에 연결한 버전.
    ?shop={가게 id} 로 열면 내 가게 앞에서 시작한다. 데이터: GET /api/v1/booth/market (몇 초마다 다시 불러 새 가게를 세움) */
 var MARKET_PARAMS = new URLSearchParams(location.search);
@@ -201,6 +275,11 @@ function startMarket(SHOP_DATA, MINE_ID) {
     var p = d.product, r = rng(d.number * 7919);
     st.storeId = d.storeId; st.number = d.number; st.name = d.name; st.tagline = d.tagline || "";
     st.count = d.productCount || 0; st.has = !!p;
+    /* 진열 상품 전체(최근순). 예전 서버는 products 없이 product 하나만 준다 */
+    st.items = (d.products && d.products.length ? d.products : (p ? [p] : [])).map(function (it) {
+      return { id: it.id, title: it.title || "", unit: it.unit || "", origin: it.origin || "", price: it.price || 0, pub: it.publicPrice || 0,
+        grade: it.grade || "", conf: it.confidence, attrs: it.attributeLabels || {}, sum: it.aiSummary || "", description: it.description || "", tags: it.tags || [], fi: fruitIndex(it.title) };
+    });
     st.title = p ? p.title : "준비 중"; st.unit = p ? p.unit : ""; st.fi = fruitIndex(st.title); st.fruit = FRUITS[st.fi];
     st.price = p ? p.price : 0; st.pub = p ? p.publicPrice : 0; st.grade = p ? p.grade : ""; st.conf = p ? p.confidence : null;
     st.attrs = p ? p.attributeLabels || {} : {}; st.sum = p ? (p.aiSummary || "") : ""; st.tags = p ? p.tags || [] : [];
@@ -208,6 +287,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
     st.mine = !!MINE_ID && d.storeId === MINE_ID;
   }
   function pctOf(st) { return st.pub > 0 ? Math.round((1 - st.price / st.pub) * 100) : null; }
+  var SHOW_ON_COUNTER = 3; /* 매대 상자에 칸을 나눠 담는 최대 품목 수 */
   /* ---------- hall plan: stalls in 12 x 12 slots, opened from the center outward ---------- */
   var COLS = 12, ROWS = 12, CAP = COLS * ROWS, OFF = 1.3, PITCH = 3.4, X0 = 4.8;
   var HX = 31, HZ0 = -36, HZ1 = 44, HH = 12, ARCH_Z = 31;
@@ -220,7 +300,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
     .sort(function (a, b) { return a.d - b.d; }).map(function (o) { return o.i; });
   var stalls = order.map(function (si) {
     var s = slots[si];
-    return { x: s.x, z: s.z, ry: s.ry, side: s.side, name: "", fruit: FRUITS[0], fi: 0, price: 0, pub: 0, grade: "", awn: AWN[0], sign: SIGN[0], mine: false, attrs: {}, sum: "", tags: [], title: "", unit: "" };
+    return { x: s.x, z: s.z, ry: s.ry, side: s.side, name: "", fruit: FRUITS[0], fi: 0, price: 0, pub: 0, grade: "", awn: AWN[0], sign: SIGN[0], mine: false, items: [], attrs: {}, sum: "", tags: [], title: "", unit: "" };
   });
   SHOP_DATA = SHOP_DATA.slice(-CAP);
   SHOP_DATA.forEach(function (d, k) { fillStall(stalls[k], d); });
@@ -231,13 +311,13 @@ function startMarket(SHOP_DATA, MINE_ID) {
   /* ---------- scene ---------- */
   var scene = new THREE.Scene();
   var camera = new THREE.PerspectiveCamera(60, 1, 0.1, 260);
-  var hemi = new THREE.HemisphereLight(0xffffff, 0x6b707a, 0.22); scene.add(hemi);
-  var sun = new THREE.DirectionalLight(0xfff1d6, 0.5); sun.position.set(20, 40, 15);
+  var hemi = new THREE.HemisphereLight(0xffffff, 0xb8c0ca, 0.6); scene.add(hemi);
+  var sun = new THREE.DirectionalLight(0xfff6e8, 0.85); sun.position.set(20, 40, 15);
   sun.castShadow = true; sun.shadow.mapSize.set(Math.min(innerWidth, innerHeight) > 700 ? 2048 : 1024, Math.min(innerWidth, innerHeight) > 700 ? 2048 : 1024);
   sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.03;
   var shc = sun.shadow.camera; shc.left = -16; shc.right = 16; shc.top = 16; shc.bottom = -16; shc.near = 1; shc.far = 90;
   scene.add(sun); scene.add(sun.target);
-  scene.fog = new THREE.Fog(0x15161a, 60, 150);
+  scene.fog = new THREE.Fog(0xdfe8f0, 70, 190);
 
   /* sky only matters from the bird's-eye view, where the ceiling is hidden */
   var skyU = { top: { value: new THREE.Color() }, bot: { value: new THREE.Color() }, gamma: { value: 1 } };
@@ -259,7 +339,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
   (function buildEnv() {
     try {
       var envScene = new THREE.Scene();
-      envScene.add(new THREE.Mesh(new THREE.BoxGeometry(60, 24, 80), new THREE.MeshBasicMaterial({ color: 0x20232a, side: THREE.BackSide })));
+      envScene.add(new THREE.Mesh(new THREE.BoxGeometry(60, 24, 80), new THREE.MeshBasicMaterial({ color: 0xc9d4df, side: THREE.BackSide })));
       var pan = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 2.5, 2.3) }), wash = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.9, 0.72, 0.5), side: THREE.DoubleSide });
       for (var ex = -20; ex <= 20; ex += 10) for (var ez = -30; ez <= 30; ez += 10) { var pp = new THREE.Mesh(new THREE.PlaneGeometry(4, 2).rotateX(Math.PI / 2), pan); pp.position.set(ex, 11.5, ez); envScene.add(pp); }
       [-1, 1].forEach(function (s) { var w = new THREE.Mesh(new THREE.PlaneGeometry(60, 8), wash); w.rotation.y = s > 0 ? -Math.PI / 2 : Math.PI / 2; w.position.set(s * 29.5, 6, 0); envScene.add(w); });
@@ -304,28 +384,28 @@ function startMarket(SHOP_DATA, MINE_ID) {
     m.position.set(x, y, z); m.rotation.y = ry || 0; scene.add(m); return m;
   }
 
-  /* floor: dark hall, lighter aisles, yellow edge lines, dashed entrance lane marks */
-  plane(600, 600, 0x07080a, 0, 0, -0.1);
-  /* procedural PBR textures: polished concrete tiles (color + roughness + bump) */
+  /* ================= 공항 터미널 컨셉 (2026 CO-SHOW · 마켓로그 공항) =================
+     밝은 대리석 바닥, 유리 커튼월 너머 활주로와 비행기, 출발 전광판(가게 = 항공편), 노란 공항 안내판,
+     대기 의자 라운지, 여행가방·수하물 카트. 가게(매대) 배치와 충돌 판정은 그대로다. */
+
+  /* 바깥: 계류장(아스팔트) + 유도선 */
+  plane(600, 600, 0x5d636b, 0, 0, -0.1);
   function mkCanvas(n) { var c = document.createElement("canvas"); c.width = c.height = n; return c; }
   function tex(c, srgb, rx, ry) {
     var t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; if (srgb) t.encoding = THREE.sRGBEncoding;
     t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy()); t.repeat.set(rx, ry); return t;
   }
+  /* 공항 바닥: 밝은 테라조(작은 돌 알갱이) + 큰 타일 줄눈, 반질반질(낮은 거칠기) */
   var floorSet = (function () {
     var TS = 512, col = mkCanvas(TS), rou = mkCanvas(TS), hei = mkCanvas(TS), gc = col.getContext("2d"), gr = rou.getContext("2d"), gh = hei.getContext("2d"), i;
-    gc.fillStyle = "#4a4e57"; gc.fillRect(0, 0, TS, TS); gr.fillStyle = "rgb(0,235,0)"; gr.fillRect(0, 0, TS, TS); gh.fillStyle = "#c8c8c8"; gh.fillRect(0, 0, TS, TS);
-    for (i = 0; i < 260; i++) {
-      var r = 20 + Math.random() * 60, x = r + Math.random() * (TS - 2 * r), y = r + Math.random() * (TS - 2 * r), a = Math.random() * 0.05;
-      var g1 = gc.createRadialGradient(x, y, 0, x, y, r); g1.addColorStop(0, "rgba(255,255,255," + a + ")"); g1.addColorStop(1, "rgba(255,255,255,0)"); gc.fillStyle = g1; gc.fillRect(x - r, y - r, r * 2, r * 2);
-      var g2 = gr.createRadialGradient(x, y, 0, x, y, r); g2.addColorStop(0, "rgba(0,230,0," + (a * 4) + ")"); g2.addColorStop(1, "rgba(0,230,0,0)"); gr.fillStyle = g2; gr.fillRect(x - r, y - r, r * 2, r * 2);
+    gc.fillStyle = "#e9ebef"; gc.fillRect(0, 0, TS, TS); gr.fillStyle = "rgb(0,70,0)"; gr.fillRect(0, 0, TS, TS); gh.fillStyle = "#c8c8c8"; gh.fillRect(0, 0, TS, TS);
+    for (i = 0; i < 9000; i++) {
+      var v = Math.random(), fx = Math.random() * TS, fy = Math.random() * TS, s = 1 + Math.random() * 2.2;
+      gc.fillStyle = v > 0.6 ? "rgba(150,156,166,0.55)" : v > 0.3 ? "rgba(255,255,255,0.7)" : "rgba(196,180,150,0.45)"; gc.fillRect(fx, fy, s, s);
     }
-    /* exhibition-hall carpet: fine fibre noise, no tile grid */
-    for (i = 0; i < 30000; i++) {
-      var v = Math.random(), fx = Math.random() * TS, fy = Math.random() * TS;
-      gc.fillStyle = (v > 0.5 ? "rgba(255,255,255," : "rgba(0,0,0,") + (Math.abs(v - 0.5) * 0.22) + ")"; gc.fillRect(fx, fy, 1.6, 1.6);
-      gh.fillStyle = "rgba(0,0,0," + (v * 0.28) + ")"; gh.fillRect(fx, fy, 1.6, 1.6);
-    }
+    gc.fillStyle = "rgba(120,126,136,0.55)"; gc.fillRect(0, 0, TS, 3); gc.fillRect(0, 0, 3, TS);
+    gh.fillStyle = "#8a8a8a"; gh.fillRect(0, 0, TS, 3); gh.fillRect(0, 0, 3, TS);
+    gr.fillStyle = "rgb(0,160,0)"; gr.fillRect(0, 0, TS, 3); gr.fillRect(0, 0, 3, TS);
     return { col: col, rou: rou, hei: hei };
   })();
   var floorTexCache = {};
@@ -333,115 +413,152 @@ function startMarket(SHOP_DATA, MINE_ID) {
   function tiled(w, d, x, z, y, tint) {
     var rx = w / 4, ry = d / 4;
     var m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshStandardMaterial({
-      map: floorTex("col", rx, ry), roughnessMap: floorTex("rou", rx, ry), bumpMap: floorTex("hei", rx, ry), bumpScale: 1.0,
+      map: floorTex("col", rx, ry), roughnessMap: floorTex("rou", rx, ry), bumpMap: floorTex("hei", rx, ry), bumpScale: 0.6,
       color: new THREE.Color(tint).convertSRGBToLinear(), roughness: 1, metalness: 0
     }));
     m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.receiveShadow = true; scene.add(m); return m;
   }
-  tiled(62, 80, 0, 4, -0.02, 0x4a4d55);
+  tiled(62, 80, 0, 4, -0.02, 0xdfe2e7);
   for (var a = -3; a <= 3; a++) tiled(58, 5.4, 0, a * 10, 0, 0xffffff);
-  tiled(6.8, 80, 0, 4, 0.005, 0xffffff);
+  tiled(6.8, 80, 0, 4, 0.005, 0xf4f1ea);
   var slabMeshes = [];
   for (var pr2 = 0; pr2 < 6; pr2++) { var zc = (pr2 - 2.5) * 10; slabMeshes.push(slab(23.4, 4.7, 0x20242a, -15.1, zc, 0.07)); slabMeshes.push(slab(23.4, 4.7, 0x20242a, 15.1, zc, 0.07)); }
+  /* 가운데 통로: 공항 노란 유도선 + 흰 점선 */
   [-3.45, 3.45].forEach(function (x) { flat(0.12, 80, LINE_M, x, 4, 0.012); });
   for (var dz = 42; dz > 8; dz -= 3.6) flat(0.3, 1.7, WHITE_B, 0, dz, 0.014);
 
-  /* walls, ceiling, truss, pendant lights */
-  box(62.6, HH, 0.6, BLACK, 0, HH / 2, HZ0 - 0.3);
-  box(0.6, HH, 80.6, BLACK, -HX - 0.3, HH / 2, 4); box(0.6, HH, 80.6, BLACK, HX + 0.3, HH / 2, 4);
-  box(25.7, HH, 0.6, BLACK, -18.15, HH / 2, HZ1 + 0.3); box(25.7, HH, 0.6, BLACK, 18.15, HH / 2, HZ1 + 0.3);
-  box(11, 4, 0.6, BLACK, 0, HH - 2, HZ1 + 0.3);
+  /* 유리 커튼월(사방) + 멀리언(세로 창틀) + 가로 창틀 */
+  var GLASS = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(0xbcdcef).convertSRGBToLinear(), roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide });
+  var FRAME = new THREE.MeshStandardMaterial({ color: new THREE.Color(0x8d96a3).convertSRGBToLinear(), roughness: 0.35, metalness: 0.6 });
+  function glassWall(w, x, z, ry) {
+    var g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g);
+    var pane = new THREE.Mesh(new THREE.PlaneGeometry(w, HH), GLASS); pane.position.y = HH / 2; pane.renderOrder = 2; g.add(pane);
+    for (var mx = -w / 2; mx <= w / 2 + 0.01; mx += 4) { var mu = new THREE.Mesh(new THREE.BoxGeometry(0.14, HH, 0.2), FRAME); mu.position.set(mx, HH / 2, 0); g.add(mu); }
+    [0.15, 4, 8, HH - 0.15].forEach(function (y) { var tr = new THREE.Mesh(new THREE.BoxGeometry(w, 0.14, 0.2), FRAME); tr.position.y = y; g.add(tr); });
+    return g;
+  }
+  glassWall(62.6, 0, HZ0 - 0.1, 0);
+  glassWall(80.6, -HX - 0.1, 4, Math.PI / 2); glassWall(80.6, HX + 0.1, 4, Math.PI / 2);
+  glassWall(25.7, -18.15, HZ1 + 0.1, 0); glassWall(25.7, 18.15, HZ1 + 0.1, 0);
+  box(11, 4, 0.4, FRAME, 0, HH - 2, HZ1 + 0.1);
   box(62, 0.14, 0.06, YEL_M, 0, 0.35, HZ0 + 0.04); box(0.06, 0.14, 80, YEL_M, -HX + 0.04, 0.35, 4); box(0.06, 0.14, 80, YEL_M, HX - 0.04, 0.35, 4);
-  var ceil = new THREE.Mesh(new THREE.PlaneGeometry(62, 80), M(0x090a0c, 0.95)); ceil.rotation.x = Math.PI / 2; ceil.position.set(0, HH, 4); scene.add(ceil);
+
+  /* 밝은 천장 + 길게 이어진 조명 띠 + 천장 보 */
+  var ceil = new THREE.Mesh(new THREE.PlaneGeometry(62, 80), M(0xf1f3f6, 0.9)); ceil.rotation.x = Math.PI / 2; ceil.position.set(0, HH, 4); scene.add(ceil);
   var truss = [], i0;
   for (i0 = -30; i0 <= 30; i0 += 10) truss.push(i0, HH - 0.4, HZ0, i0, HH - 0.4, HZ1);
   for (i0 = -30; i0 <= 40; i0 += 10) truss.push(-HX, HH - 0.4, i0, HX, HH - 0.4, i0);
   var tg = new THREE.BufferGeometry(); tg.setAttribute("position", new THREE.Float32BufferAttribute(truss, 3));
-  var trussLines = new THREE.LineSegments(tg, new THREE.LineBasicMaterial({ color: 0x4a4e56 })); scene.add(trussLines);
+  var trussLines = new THREE.LineSegments(tg, new THREE.LineBasicMaterial({ color: 0xc3cad3 })); scene.add(trussLines);
   var lampPos = []; for (var lx = -25; lx <= 25; lx += 10) for (var lz = -30; lz <= 40; lz += 10) lampPos.push([lx, HH - 0.03, lz]);
-  var lamps = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.8, 0.55).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xa59f8c).convertSRGBToLinear(), toneMapped: false }), lampPos.length);
+  var lamps = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.5, 9).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffffff).convertSRGBToLinear(), toneMapped: false }), lampPos.length);
   lamps.frustumCulled = false; scene.add(lamps);
   var lm = new THREE.Matrix4(); lampPos.forEach(function (q, i) { lm.makeTranslation(q[0], q[1], q[2]); lamps.setMatrixAt(i, lm); });
 
-  /* branding: huge back-wall sign, entrance arch, side banners, floor WELCOME */
-  var bigTex = canvasTex(2048, 307, function (g, w, h) {
-    g.fillStyle = "#0d0e11"; g.fillRect(0, 0, w, h); g.fillStyle = "#f2c200"; g.fillRect(0, h - 14, w, 14);
-    g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = "#f2c200"; fit(g, "2026 CO-SHOW MARKET", 220, w - 110); g.fillText("2026 CO-SHOW MARKET", w / 2, h * 0.46);
-    g.fillStyle = "#ffffff"; g.font = FONT(44); g.textAlign = "right"; g.fillText("RE:LOCAL", w - 40, h - 42);
+  /* 창밖: 비행기 두 대(흰 동체 + 파란 띠 + 노란 꼬리) */
+  var JET_W = M(0xf6f7f9, 0.35), JET_B = M(0x0052ff, 0.5), JET_Y = M(0xf2c200, 0.5), JET_G = M(0x2b313a, 0.4);
+  function airplane(x, z, ry, s) {
+    var g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; g.scale.setScalar(s || 1); scene.add(g);
+    var body = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.7, 24, 24), JET_W); body.rotation.z = Math.PI / 2; body.position.y = 3.6; g.add(body);
+    var nose = new THREE.Mesh(new THREE.SphereGeometry(1.7, 20, 14), JET_W); nose.scale.set(1.6, 1, 1); nose.position.set(12, 3.6, 0); g.add(nose);
+    var tail = new THREE.Mesh(new THREE.ConeGeometry(1.7, 6, 20), JET_W); tail.rotation.z = Math.PI / 2; tail.position.set(-15, 3.9, 0); g.add(tail);
+    var stripe = new THREE.Mesh(new THREE.CylinderGeometry(1.72, 1.72, 22, 24, 1, true, Math.PI * 0.62, Math.PI * 0.16), JET_B); stripe.rotation.z = Math.PI / 2; stripe.position.y = 3.6; g.add(stripe);
+    var cock = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.45, 1.8), JET_G); cock.position.set(13.2, 4.4, 0); g.add(cock);
+    var wing = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.3, 26), JET_W); wing.position.set(0, 2.6, 0); wing.rotation.y = 0.18; g.add(wing);
+    var fin = new THREE.Mesh(new THREE.BoxGeometry(4, 5.5, 0.35), JET_Y); fin.position.set(-15.5, 7.6, 0); fin.rotation.z = 0.35; g.add(fin);
+    var hs = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.25, 9), JET_W); hs.position.set(-16, 4.4, 0); g.add(hs);
+    [-6.5, 6.5].forEach(function (ez) { var en = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.75, 3.2, 16), JET_G); en.rotation.z = Math.PI / 2; en.position.set(1.2, 1.7, ez); g.add(en); });
+    [[9, 0], [-2, 2.6], [-2, -2.6]].forEach(function (w) { var gear = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.5, 12), JET_G); gear.rotation.x = Math.PI / 2; gear.position.set(w[0], 0.5, w[1]); g.add(gear); });
+    g.traverse(function (o) { if (o.isMesh) o.castShadow = true; });
+  }
+  airplane(-12, HZ0 - 22, 0.25, 1);
+  airplane(HX + 30, 0, -Math.PI / 2 + 0.2, 1);
+  /* 계류장 노란 유도선 */
+  for (var tx = -60; tx <= 60; tx += 6) flat(3.5, 0.25, YEL_M, tx, HZ0 - 10, -0.08);
+  for (var tz = -40; tz <= 50; tz += 6) flat(0.25, 3.5, YEL_M, HX + 14, tz, -0.08);
+
+  /* 뒷벽: 출발 전광판 — 문을 연 가게를 항공편처럼 보여준다(새 가게가 생기면 다시 그림) */
+  var bigTex = canvasTex(2048, 720, function (g, w, h) {
+    g.fillStyle = "#0b1220"; g.fillRect(0, 0, w, h);
+    g.fillStyle = "#f2c200"; g.fillRect(0, 0, w, 120);
+    g.fillStyle = "#0b1220"; g.textBaseline = "middle"; g.textAlign = "left"; g.font = FONT(84); g.fillText("✈ 출발  DEPARTURES", 40, 64);
+    g.textAlign = "right"; g.font = FONT(52); g.fillText("마켓로그 공항 · 2026 CO-SHOW", w - 40, 64);
+    var cols = [60, 330, 900, 1380, 1760];
+    g.fillStyle = "#8ea0b8"; g.font = FONT(40); g.textAlign = "left";
+    ["편명", "가게", "상품", "가격", "상태"].forEach(function (t, i) { g.fillText(t, cols[i], 170); });
+    g.fillStyle = "#24324a"; g.fillRect(40, 200, w - 80, 3);
+    var rows = Math.min(6, filled);
+    if (!rows) { g.fillStyle = "#cfd8e6"; g.font = FONT(56); g.fillText("부스에서 가게를 열면 여기에 출발편으로 떠요!", 60, 400); }
+    for (var i = 0; i < rows; i++) {
+      var s = stalls[filled - 1 - i], y = 250 + i * 76;
+      if (i % 2) { g.fillStyle = "#111a2c"; g.fillRect(40, y - 36, w - 80, 72); }
+      g.font = FONT(50); g.textAlign = "left";
+      g.fillStyle = "#f2c200"; g.fillText("ML " + ("00" + s.number).slice(-3), cols[0], y);
+      g.fillStyle = "#ffffff"; fit(g, s.name, 50, 540); g.fillText(s.name, cols[1], y);
+      g.fillStyle = "#dbe4f0"; fit(g, s.has ? s.title : "준비 중", 50, 440); g.fillText(s.has ? s.title : "준비 중", cols[2], y);
+      g.fillStyle = "#ffffff"; g.font = FONT(50); g.fillText(s.has ? s.price.toLocaleString("ko-KR") + "원" : "-", cols[3], y);
+      g.fillStyle = i === 0 ? "#22d37f" : "#4d8bff"; g.fillText(i === 0 ? "탑승 중" : "정시 출발", cols[4], y);
+    }
   });
-  decal(48, 7.2, bigTex, 0, 8.4, HZ0 + 0.03, 0, false, 2.6);  var archTex = canvasTex(1024, 240, function (g, w, h) {
-    g.fillStyle = "#0d0e11"; g.fillRect(0, 0, w, h); g.textAlign = "center"; g.textBaseline = "middle";
-    g.fillStyle = "#ffffff"; g.font = FONT(170); g.fillText("CO-SHOW", w / 2, h * 0.42);
-    g.fillStyle = "#f2c200"; g.font = FONT(54); g.fillText("2026 · RE:LOCAL", w / 2, h * 0.84);
+  box(30.6, 11, 0.4, FRAME, 0, 6.6, HZ0 + 0.3); decal(30, 10.55, bigTex, 0, 6.6, HZ0 + 0.52, 0, false, 2.6);
+
+  /* 입구 게이트: 노란 공항 안내판 */
+  var archTex = canvasTex(1024, 240, function (g, w, h) {
+    g.fillStyle = "#f2c200"; g.fillRect(0, 0, w, h); g.textAlign = "center"; g.textBaseline = "middle";
+    g.fillStyle = "#0b1220"; g.font = FONT(140); g.fillText("✈ 게이트 M", w / 2, h * 0.42);
+    g.font = FONT(48); g.fillText("MARKET GATE · 마켓로그 공항", w / 2, h * 0.84);
   });
-  [-6, 6].forEach(function (x) { box(0.9, 8, 0.9, PANEL, x, 4, ARCH_Z); });
-  box(13, 3.2, 1.0, BLACK, 0, 9.4, ARCH_Z); box(13, 0.16, 1.04, YEL_M, 0, 7.76, ARCH_Z);
+  [-6, 6].forEach(function (x) { box(0.9, 8, 0.9, FRAME, x, 4, ARCH_Z); });
+  box(13, 3.2, 1.0, FRAME, 0, 9.4, ARCH_Z);
   decal(12.6, 2.95, archTex, 0, 9.4, ARCH_Z + 0.52, 0, false, 2.6); decal(12.6, 2.95, archTex, 0, 9.4, ARCH_Z - 0.52, Math.PI, false, 2.6);
   var welcomeTex = canvasTex(1024, 256, function (g, w, h) {
-    g.clearRect(0, 0, w, h); g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = "#f2c200"; g.font = FONT(200); g.fillText("WELCOME", w / 2, h / 2);
+    g.clearRect(0, 0, w, h); g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = "#0052ff"; g.font = FONT(170); g.fillText("WELCOME ✈", w / 2, h / 2);
   });
   var wel = new THREE.Mesh(new THREE.PlaneGeometry(9, 2.25), new THREE.MeshBasicMaterial({ map: welcomeTex, transparent: true, toneMapped: false })); wel.rotation.x = -Math.PI / 2; wel.position.set(0, 0.03, 34.3); scene.add(wel);
-  var bannerTex = canvasTex(256, 1024, function (g, w, h) {
-    g.fillStyle = "#f2c200"; g.fillRect(0, 0, w, h); g.save(); g.translate(w / 2, h / 2); g.rotate(-Math.PI / 2); g.fillStyle = "#0d0e11"; g.textAlign = "center"; g.textBaseline = "middle"; g.font = FONT(150); g.fillText("RE:LOCAL", 0, 6); g.restore();
-  });
-  [-24, -8, 8, 24].forEach(function (z) { decal(1.8, 7, bannerTex, -HX + 0.03, 6, z, Math.PI / 2); decal(1.8, 7, bannerTex, HX - 0.03, 6, z, -Math.PI / 2); });
 
-  /* our booth, centered under the giant sign: one white partition booth, two monitors, a big name board */
-  var BZ = HZ0 + 0.4;
-  box(15, 4.6, 0.12, PANEL, 0, 2.3, BZ);
-  [-7.5, 7.5].forEach(function (x) { box(0.12, 4.6, 3.2, PANEL, x, 2.3, HZ0 + 2.0); box(0.1, 4.6, 0.1, YEL_M, x, 2.3, HZ0 + 3.65); });
-  function screenFor(title, sub) {
-    return canvasTex(512, 288, function (g, w, h) {
-      g.fillStyle = "#0d0e11"; g.fillRect(0, 0, w, h); g.textAlign = "center"; g.textBaseline = "middle";
-      g.fillStyle = "#f2c200"; fit(g, title, 70, w - 40); g.fillText(title, w / 2, h * 0.4);
-      g.fillStyle = "#ffffff"; g.font = FONT(36); g.fillText(sub, w / 2, h * 0.72);
+  /* 천장에 매달린 노란 안내판(양면) */
+  function hangSign(z, text) {
+    var t = canvasTex(1024, 160, function (g, w, h) {
+      g.fillStyle = "#f2c200"; g.fillRect(0, 0, w, h); g.fillStyle = "#0b1220"; g.textAlign = "center"; g.textBaseline = "middle"; fit(g, text, 92, w - 60); g.fillText(text, w / 2, h / 2 + 4);
     });
+    box(7.2, 1.15, 0.2, M(0x0b1220, 0.6), 0, 8.2, z);
+    decal(7, 1.1, t, 0, 8.2, z + 0.11, 0); decal(7, 1.1, t, 0, 8.2, z - 0.11, Math.PI);
+    [-3, 3].forEach(function (x) { box(0.05, HH - 8.8, 0.05, FRAME, x, (HH + 8.8) / 2, z); });
   }
-  [[-3.6, "MarketLog", "전통시장 AI 품질 판정"], [3.6, "CO-SHOW MARKET", "나만의 과일가게 만들기"]].forEach(function (m) {
-    box(3.4, 1.9, 0.1, BLACK, m[0], 2.2, BZ + 0.12); decal(3.2, 1.8, screenFor(m[1], m[2]), m[0], 2.2, BZ + 0.18, 0, false, 2.4);
-  });
-  var nameTex = canvasTex(1024, 112, function (g, w, h) {
-    g.fillStyle = "#f2c200"; g.fillRect(0, 0, w, h); g.fillStyle = "#0d0e11"; g.textAlign = "center"; g.textBaseline = "middle";
-    fit(g, "마켓로그 · 테라바이트", 90, w - 60); g.fillText("마켓로그 · 테라바이트", w / 2, h / 2 + 3);
-  });
-  box(10.2, 0.7, 0.1, PANEL, 0, 3.95, BZ + 0.1); decal(10, 0.64, nameTex, 0, 3.95, BZ + 0.16, 0);
+  hangSign(20, "← A구역 과일가게  ·  B구역 과일가게 →");
+  hangSign(-10, "🍎 황금 사과를 찾아보세요  ·  i 안내");
+  hangSign(-24, "↑ 출발 전광판  DEPARTURES");
 
-  /* market banners on the side walls, between the RE:LOCAL ones */
-  function marketBanner(bg, text) {
-    return canvasTex(256, 1024, function (g, w, h) {
-      g.fillStyle = bg; g.fillRect(0, 0, w, h); g.strokeStyle = "#fff4dd"; g.lineWidth = 8; g.strokeRect(12, 12, w - 24, h - 24);
-      g.save(); g.translate(w / 2, h / 2); g.rotate(-Math.PI / 2); g.fillStyle = "#fff4dd"; g.textAlign = "center"; g.textBaseline = "middle"; g.font = FONT(130); g.fillText(text, 0, 6); g.restore();
-    });
-  }
-  var mbRed = marketBanner("#c23a26", "산지직송"), mbGreen = marketBanner("#2f7d5b", "싱싱 과일");
-  [-16, 0, 16].forEach(function (z, i) { var tx = i % 2 ? mbGreen : mbRed; decal(1.8, 7, tx, -HX + 0.03, 6, z, Math.PI / 2); decal(1.8, 7, tx, HX - 0.03, 6, z, -Math.PI / 2); });
-
-  /* plaza pillar with CO-SHOW on every side */
-  var plaza = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 4.6, 0.1, 40), M(0x101114, 0.9)); plaza.position.y = 0.05; plaza.receiveShadow = true; scene.add(plaza);
+  /* 가운데 안내(i) 기둥 */
+  var plaza = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 4.6, 0.1, 40), M(0xd6dbe2, 0.4)); plaza.position.y = 0.05; plaza.receiveShadow = true; scene.add(plaza);
   var ringY = new THREE.Mesh(new THREE.RingGeometry(4.3, 4.6, 48), new THREE.MeshBasicMaterial({ color: new THREE.Color(YEL).convertSRGBToLinear(), side: THREE.DoubleSide, toneMapped: false })); ringY.rotation.x = -Math.PI / 2; ringY.position.y = 0.11; scene.add(ringY);
-  var pillar = new THREE.Mesh(new THREE.BoxGeometry(1.7, 7, 1.7), BLACK); pillar.position.y = 3.5; pillar.castShadow = true; scene.add(pillar);
+  var pillar = new THREE.Mesh(new THREE.BoxGeometry(1.7, 7, 1.7), M(0x0b1220, 0.6)); pillar.position.y = 3.5; pillar.castShadow = true; scene.add(pillar);
   var pillarTex = canvasTex(512, 1024, function (g, w, h) {
-    g.fillStyle = "#0d0e11"; g.fillRect(0, 0, w, h); g.fillStyle = "#f2c200"; g.fillRect(0, h * 0.72, w, 10); g.textAlign = "center"; g.textBaseline = "middle";
-    g.fillStyle = "#ffffff"; g.font = FONT(120); g.fillText("CO-", w / 2, h * 0.3); g.fillText("SHOW", w / 2, h * 0.47);
-    g.fillStyle = "#f2c200"; g.font = FONT(66); g.fillText("2026", w / 2, h * 0.64); g.fillStyle = "#ffffff"; g.font = FONT(52); g.fillText("RE:LOCAL", w / 2, h * 0.84);
+    g.fillStyle = "#0b1220"; g.fillRect(0, 0, w, h); g.textAlign = "center"; g.textBaseline = "middle";
+    g.fillStyle = "#f2c200"; g.beginPath(); g.arc(w / 2, h * 0.24, 120, 0, 6.283); g.fill();
+    g.fillStyle = "#0b1220"; g.font = "bold 190px Georgia, serif"; g.fillText("i", w / 2, h * 0.25);
+    g.fillStyle = "#ffffff"; g.font = FONT(96); g.fillText("안내", w / 2, h * 0.5);
+    g.fillStyle = "#8ea0b8"; g.font = FONT(56); g.fillText("Information", w / 2, h * 0.6);
+    g.fillStyle = "#f2c200"; g.fillRect(60, h * 0.7, w - 120, 8);
+    g.fillStyle = "#ffffff"; g.font = FONT(50); g.fillText("마켓로그 공항", w / 2, h * 0.8); g.fillText("CO-SHOW 2026", w / 2, h * 0.88);
   });
   [[0, 0.86, 0], [0, -0.86, Math.PI], [0.86, 0, Math.PI / 2], [-0.86, 0, -Math.PI / 2]].forEach(function (f) { decal(1.6, 3.2, pillarTex, f[0], 5.1, f[1], f[2], false, 2.4); });
 
-  /* live feed board near the entrance: newest shops */
+  /* 입구 쪽 도착 안내판: 방금 문을 연 가게 */
   var feedTex = canvasTex(1024, 640, function (g, w, h) {
-    g.fillStyle = "#0d0e11"; g.fillRect(0, 0, w, h); g.fillStyle = "#f2c200"; g.fillRect(0, 96, w, 6);
-    g.textBaseline = "middle"; g.textAlign = "left"; g.font = FONT(64); g.fillText("방금 문을 연 가게", 36, 52);
+    g.fillStyle = "#0b1220"; g.fillRect(0, 0, w, h); g.fillStyle = "#22d37f"; g.fillRect(0, 96, w, 6);
+    g.textBaseline = "middle"; g.textAlign = "left"; g.font = FONT(60); g.fillText("🛬 도착 · 방금 문을 연 가게", 36, 52);
     for (var i = 0; i < 6; i++) {
       var k = filled - 1 - i; if (k < 0) break; var s = stalls[k], y = 150 + i * 80;
       g.fillStyle = "#ffffff"; g.textAlign = "left"; g.font = FONT(46); g.fillText(s.name, 36, y);
       g.fillStyle = "#f2c200"; g.textAlign = "right"; g.fillText(s.has ? s.title + " " + s.price.toLocaleString("ko-KR") + "원" : "준비 중", w - 36, y);
     }
   });
-  box(0.3, 4.6, 7.2, BLACK, -HX + 0.5, 2.6, 36); decal(7, 4.4, feedTex, -HX + 0.67, 2.6, 36, Math.PI / 2, false, 2.2);
+  box(0.3, 4.6, 7.2, M(0x0b1220, 0.6), -HX + 0.5, 2.6, 36); decal(7, 4.4, feedTex, -HX + 0.67, 2.6, 36, Math.PI / 2, false, 2.2);
 
   /* 오른쪽 벽 전광판: 공공 시세보다 저렴한 가게 TOP 3 (실제 가격 기준) */
   var topTex = canvasTex(1024, 640, function (g, w, h) {
-    g.fillStyle = "#0d0e11"; g.fillRect(0, 0, w, h); g.fillStyle = "#f2c200"; g.fillRect(0, 96, w, 6);
+    g.fillStyle = "#0b1220"; g.fillRect(0, 0, w, h); g.fillStyle = "#f2c200"; g.fillRect(0, 96, w, 6);
     g.textBaseline = "middle"; g.textAlign = "left"; g.fillStyle = "#ffffff"; g.font = FONT(60); g.fillText("시세보다 저렴한 가게 TOP 3", 36, 52);
     var rank = []; for (var k = 0; k < filled; k++) { var p = pctOf(stalls[k]); if (p != null && p > 0) rank.push({ k: k, p: p }); }
     rank.sort(function (a, b) { return b.p - a.p; });
@@ -454,87 +571,84 @@ function startMarket(SHOP_DATA, MINE_ID) {
       g.fillStyle = "#4d8bff"; g.textAlign = "right"; g.font = FONT(56); g.fillText(rank[i].p + "% ↓", w - 40, y);
     }
   });
-  box(0.3, 3.4, 5.2, BLACK, HX - 0.5, 4.5, -12.8); decal(5, 3.125, topTex, HX - 0.67, 4.5, -12.8, -Math.PI / 2, false, 2.2);
+  box(0.3, 3.4, 5.2, M(0x0b1220, 0.6), HX - 0.5, 4.5, -12.8); decal(5, 3.125, topTex, HX - 0.67, 4.5, -12.8, -Math.PI / 2, false, 2.2);
 
-  /* lounge on the right: tables, red chairs, planters */
-  var RED = M(0xd8352a, 0.7), TBL = M(0xd2d5da, 0.6), GRN = M(0x4f9a52, 0.8);
-  function lounge(z) {
-    var tp = new THREE.Mesh(new THREE.CylinderGeometry(0.78, 0.78, 0.06, 20), TBL); tp.position.set(27.6, 0.78, z); tp.castShadow = true; scene.add(tp);
-    var ts = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.75, 8), TBL); ts.position.set(27.6, 0.4, z); scene.add(ts);
-    [-1.2, 1.2].forEach(function (o) {
-      var seat = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.5), RED); seat.position.set(27.6, 0.45, z + o); seat.castShadow = true; scene.add(seat);
-      var back = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 0.07), RED); back.position.set(27.6, 0.72, z + o + (o > 0 ? 0.22 : -0.22)); back.castShadow = true; scene.add(back);
+  /* 오른쪽 라운지: 공항 대기 의자(4인 연결 의자가 등을 맞댄 2줄) + 화분 */
+  var SEAT = M(0x1f3a5f, 0.55), METAL = new THREE.MeshStandardMaterial({ color: new THREE.Color(0xc0c6ce).convertSRGBToLinear(), roughness: 0.3, metalness: 0.8 }), GRN = M(0x4f9a52, 0.8), POT = M(0xf4f1ea, 0.5);
+  function gateSeats(z) {
+    var beam = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 3.0), METAL); beam.position.set(27.6, 0.36, z); scene.add(beam);
+    [-1.3, 1.3].forEach(function (o) { var leg = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.36, 0.08), METAL); leg.position.set(27.6, 0.18, z + o); scene.add(leg); });
+    [-1, 1].forEach(function (side) {
+      for (var i = 0; i < 4; i++) {
+        var zz = z - 1.125 + i * 0.75;
+        var seat = new THREE.Mesh(rbox(0.5, 0.08, 0.66, 0.03), SEAT); seat.position.set(27.6 + side * 0.3, 0.44, zz); seat.castShadow = true; scene.add(seat);
+        var back = new THREE.Mesh(rbox(0.07, 0.5, 0.66, 0.03), SEAT); back.position.set(27.6 + side * 0.05, 0.72, zz); back.castShadow = true; scene.add(back);
+      }
     });
   }
-  [-26, -17, -8, 1, 10, 19, 28].forEach(function (z) {
-    lounge(z);
-    var pl = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.5, 3), BLACK); pl.position.set(29.7, 0.25, z + 4.5); scene.add(pl);
-    for (var q = -1; q <= 1; q++) { var bush = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 8), GRN); bush.position.set(29.7, 0.75, z + 4.5 + q); scene.add(bush); }
-  });
+  function plant(x, z) {
+    var pot = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.28, 0.6, 16), POT); pot.position.set(x, 0.3, z); pot.castShadow = true; scene.add(pot);
+    [[0, 0.95, 0, 0.45], [0.18, 1.3, 0.1, 0.32], [-0.15, 1.25, -0.12, 0.3]].forEach(function (b) { var bush = new THREE.Mesh(new THREE.SphereGeometry(b[3], 12, 9), GRN); bush.position.set(x + b[0], b[1], z + b[2]); bush.castShadow = true; scene.add(bush); });
+  }
+  [-26, -17, -8, 1, 10, 19, 28].forEach(function (z) { gateSeats(z); plant(29.7, z + 4.5); });
 
-  /* ---------- market props: crate stacks, sacks, baskets, barrels, carts, parasols (everything stands on the floor) ---------- */
+  /* ---------- 공항 소품: 여행가방, 기내용 가방, 더플백, 휴지통, 수하물 카트, 화분 ---------- */
   var pr = rng(99), pcol = new THREE.Color();
-  var PW = M(0xb98557), PWD = M(0x7f5636), SACK = M(0xd8c9a3, 0.95), WICK = M(0xa8743f, 0.9);
-  var crateGeo = rbox(0.9, 0.4, 0.6, 0.025), sackGeo = new THREE.CylinderGeometry(0.26, 0.34, 0.62, 10), basketGeo = new THREE.CylinderGeometry(0.36, 0.27, 0.34, 12);
-  var barrelGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.9, 12), fruitGeoP = new THREE.SphereGeometry(0.15, 8, 6);
-  var pm = { crate: [], sack: [], basket: [], barrel: [], fruit: [] }, pdum = new THREE.Object3D();
+  var BAG = [0x1f3a5f, 0xd2432d, 0xf2c200, 0x2f7d5b, 0x6b6f76, 0x8b4a8f, 0x0d0e11, 0x3c63a8, 0xe58a1f];
+  function bagColor() { return BAG[Math.floor(pr() * BAG.length)]; }
+  var crateGeo = rbox(0.5, 0.72, 0.28, 0.05), basketGeo = rbox(0.36, 0.5, 0.22, 0.04), sackGeo = rbox(0.72, 0.32, 0.34, 0.13), barrelGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.8, 16);
+  var pm = { crate: [], sack: [], basket: [], barrel: [] }, pdum = new THREE.Object3D();
   function put(kind, x, y, z, ry, hex) { pm[kind].push({ x: x, y: y, z: z, ry: ry || 0, hex: hex }); }
-  function fruitColor() { return FRUITS[Math.floor(pr() * FRUITS.length)].c; }
+  /* 이름은 예전 시장 소품 그대로 두고(배치 코드 재사용), 모양만 공항 짐으로 바꿨다 */
   function crateStack(x, z, ry, n) {
-    var i, fc = fruitColor(), cs = Math.cos(ry), sn = Math.sin(ry);
-    for (i = 0; i < n; i++) put("crate", x + (pr() - 0.5) * 0.08, 0.2 + i * 0.4, z + (pr() - 0.5) * 0.08, ry + (pr() - 0.5) * 0.12);
-    [-0.26, 0, 0.26].forEach(function (o) { put("fruit", x + o * cs, 0.4 * n + 0.1, z - o * sn, 0, fc); });
+    var cs = Math.cos(ry), sn = Math.sin(ry);
+    for (var i = 0; i <= n; i++) { var o = (i - n / 2) * 0.56; put("crate", x + o * cs, 0.36, z - o * sn, ry + (pr() - 0.5) * 0.3, bagColor()); }
   }
-  function basket(x, z) { var fc = fruitColor(); put("basket", x, 0.17, z, 0); [-0.14, 0.14].forEach(function (o) { put("fruit", x + o, 0.38, z, 0, fc); }); put("fruit", x, 0.5, z, 0, fc); }
-  function sacks(x, z) { put("sack", x - 0.45, 0.31, z, 0); put("sack", x + 0.4, 0.31, z + 0.05, 0); put("sack", x, 0.31, z + 0.5, 0); }
-  function barrel(x, z) { put("barrel", x, 0.45, z, 0); }
-  function cart(x, z, ry, hex) {
+  function basket(x, z) { put("basket", x, 0.25, z, pr() * 6.28, bagColor()); }
+  function sacks(x, z) { put("sack", x - 0.3, 0.16, z, pr(), bagColor()); put("sack", x + 0.35, 0.16, z + 0.2, pr() * 3, bagColor()); }
+  function barrel(x, z) { put("barrel", x, 0.4, z, 0, 0x9aa1ab); }
+  function cart(x, z, ry) {
+    /* 수하물 카트: 바닥판 + 뒤 프레임 + 손잡이 + 바퀴, 위에 가방 2개 */
     var g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g);
-    function cb(w, h, d, mat, px, py, pz) { var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(px, py, pz); m.receiveShadow = true; g.add(m); return m; }
-    cb(1.7, 0.12, 1.0, PW, 0, 0.62, 0); cb(1.7, 0.3, 0.06, PWD, 0, 0.78, 0.47); cb(1.7, 0.3, 0.06, PWD, 0, 0.78, -0.47); cb(0.06, 0.3, 1.0, PWD, 0.82, 0.78, 0); cb(0.06, 0.3, 1.0, PWD, -0.82, 0.78, 0);
-    cb(1.4, 0.22, 0.82, M(hex, 0.6), 0, 0.88, 0);
-    [-0.56, 0.56].forEach(function (zz) { var wh = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.07, 14), PWD); wh.rotation.x = Math.PI / 2; wh.position.set(0, 0.4, zz); g.add(wh); });
-    cb(1.0, 0.05, 0.05, PWD, 1.3, 0.55, 0.3); cb(1.0, 0.05, 0.05, PWD, 1.3, 0.55, -0.3);
+    function cb(w, h, d, mat, px, py, pz) { var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(px, py, pz); m.castShadow = true; g.add(m); return m; }
+    cb(1.1, 0.05, 0.62, METAL, 0, 0.22, 0); cb(0.05, 1.1, 0.62, METAL, -0.55, 0.75, 0); cb(0.05, 0.05, 0.7, METAL, -0.75, 1.15, 0);
+    cb(0.3, 0.05, 0.05, METAL, -0.65, 1.15, 0.33); cb(0.3, 0.05, 0.05, METAL, -0.65, 1.15, -0.33);
+    [[-0.45, 0.25], [-0.45, -0.25], [0.45, 0.25], [0.45, -0.25]].forEach(function (w) { var wh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.05, 12), JET_G); wh.rotation.x = Math.PI / 2; wh.position.set(w[0], 0.1, w[1]); g.add(wh); });
+    var b1 = new THREE.Mesh(rbox(0.9, 0.3, 0.55, 0.06), M(bagColor(), 0.5)); b1.position.set(0.05, 0.4, 0); b1.castShadow = true; g.add(b1);
+    var b2 = new THREE.Mesh(rbox(0.6, 0.26, 0.42, 0.06), M(bagColor(), 0.5)); b2.position.set(0, 0.68, 0); b2.rotation.y = 0.2; b2.castShadow = true; g.add(b2);
   }
-  function parasol(x, z, hex) {
-    var pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.5, 8), PWD); pole.position.set(x, 1.25, z); scene.add(pole);
-    var can = new THREE.Mesh(new THREE.ConeGeometry(1.9, 0.7, 12), M(hex, 0.8)); can.position.set(x, 2.75, z); scene.add(can);
-  }
-  var PARA = [0xd2432d, 0xf2c200, 0x2f7d5b, 0x3c63a8];
+  function parasol(x, z) { plant(x, z); }
 
-  /* back strip, both sides of our booth */
+  /* 뒤쪽(전광판 양옆) */
   [-1, 1].forEach(function (sd) {
     var i, m, x;
     for (i = 0; i < 9; i++) {
-      x = sd * (10.6 + i * 2.2); m = i % 4;
-      if (m === 0 || m === 2) crateStack(x, -35.15, 0, 1 + Math.floor(pr() * 3));
-      else if (m === 1) { basket(x - 0.5, -35.0); basket(x + 0.5, -35.0); }
-      else { sacks(x - 0.3, -35.0); barrel(x + 1.0, -35.0); }
+      x = sd * (16.4 + i * 1.6); m = i % 4;
+      if (m === 0 || m === 2) crateStack(x, -35.15, 0, 1 + Math.floor(pr() * 2));
+      else if (m === 1) { basket(x - 0.3, -35.0); basket(x + 0.3, -35.0); }
+      else { sacks(x, -35.0); barrel(x + 0.8, -35.0); }
     }
-    [11, 13, 21.5, 23.5, 25.5, 27.5].forEach(function (ax, j) { crateStack(sd * ax, -33.9, 0, 1 + (j % 2)); });
-    cart(sd * 17, -33.3, 0, FRUITS[sd > 0 ? 2 : 0].c); parasol(sd * 17 + 0.9, -32.4, PARA[sd > 0 ? 0 : 1]);
+    cart(sd * 22, -33.3, sd > 0 ? Math.PI : 0); parasol(sd * 16.2, -32.6);
   });
-  /* left wall */
-  for (var lz = -27; lz <= 27; lz += 2.4) {
-    if ((lz > -14 && lz < -8) || (lz > 10 && lz < 16)) continue;
-    var lm2 = Math.round((lz + 27) / 2.4) % 4;
-    if (lm2 === 0 || lm2 === 2) crateStack(-30.35, lz, Math.PI / 2, 1 + Math.floor(pr() * 3));
-    else if (lm2 === 1) { basket(-30.3, lz - 0.5); basket(-30.3, lz + 0.5); }
-    else { sacks(-30.2, lz); barrel(-30.3, lz + 1.1); }
+  /* 왼쪽 벽 */
+  for (var lz2 = -27; lz2 <= 27; lz2 += 3.0) {
+    if ((lz2 > -14 && lz2 < -8) || (lz2 > 10 && lz2 < 16)) continue;
+    var lm2 = Math.round((lz2 + 27) / 3.0) % 4;
+    if (lm2 === 0 || lm2 === 2) crateStack(-30.35, lz2, Math.PI / 2, 1 + Math.floor(pr() * 2));
+    else if (lm2 === 1) { basket(-30.3, lz2 - 0.3); basket(-30.3, lz2 + 0.3); }
+    else { sacks(-30.2, lz2); barrel(-30.3, lz2 + 1.0); }
   }
-  for (var lz2 = -26; lz2 <= 26; lz2 += 3.6) { if ((lz2 > -14 && lz2 < -8) || (lz2 > 10 && lz2 < 16)) continue; if (Math.round((lz2 + 26) / 3.6) % 2) basket(-28.9, lz2); else crateStack(-28.9, lz2, Math.PI / 2, 1); }
-  cart(-28.5, -11, Math.PI / 2, FRUITS[1].c); parasol(-27.2, -11, PARA[0]);
-  cart(-28.5, 13, Math.PI / 2, FRUITS[3].c); parasol(-27.2, 13, PARA[2]);
-  /* entrance sides and the lounge */
-  [-1, 1].forEach(function (sd) { for (var fx = 8; fx <= 28; fx += 2.3) crateStack(sd * fx, 43.15, Math.PI, 1 + Math.floor(pr() * 3)); });
-  for (var rz = 36; rz <= 42; rz += 2.2) crateStack(30.35, rz, Math.PI / 2, 1 + Math.floor(pr() * 3));
-  [-26, -17, -8, 1, 10, 19, 28].forEach(function (z, i) { parasol(28.8, z, PARA[i % 4]); });
+  cart(-28.5, -11, Math.PI / 2); parasol(-27.2, -12.6);
+  cart(-28.5, 13, Math.PI / 2); parasol(-27.2, 11.4);
+  /* 입구 양옆 */
+  [-1, 1].forEach(function (sd) { for (var fx = 8; fx <= 28; fx += 3.4) crateStack(sd * fx, 43.15, Math.PI, 1 + Math.floor(pr() * 2)); cart(sd * 24, 40.5, Math.PI / 2); });
 
   (function flushProps() {
-    var defs = { crate: [crateGeo, PW], sack: [sackGeo, SACK], basket: [basketGeo, WICK], barrel: [barrelGeo, PWD], fruit: [fruitGeoP, M(0xffffff, 0.5)] };
+    var BAGMAT = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.45, metalness: 0.05 });
+    var defs = { crate: [crateGeo, BAGMAT], sack: [sackGeo, BAGMAT], basket: [basketGeo, BAGMAT], barrel: [barrelGeo, METAL] };
     Object.keys(defs).forEach(function (kind) {
       var list = pm[kind]; if (!list.length) return;
-      var im = new THREE.InstancedMesh(defs[kind][0], defs[kind][1], list.length); im.frustumCulled = false; im.receiveShadow = true;
+      var im = new THREE.InstancedMesh(defs[kind][0], defs[kind][1], list.length); im.frustumCulled = false; im.receiveShadow = true; im.castShadow = true;
       list.forEach(function (o, i) {
         pdum.position.set(o.x, o.y, o.z); pdum.rotation.set(0, o.ry, 0); pdum.updateMatrix(); im.setMatrixAt(i, pdum.matrix);
         if (o.hex != null) { pcol.setHex(o.hex).convertSRGBToLinear(); im.setColorAt(i, pcol); }
@@ -691,7 +805,9 @@ function startMarket(SHOP_DATA, MINE_ID) {
   scene.add(me);
   me.traverse(function (o) { if (o.isMesh) o.castShadow = true; });
   me.visible = false; /* first-person by default: you see through your own eyes; the avatar shows only in the bird's-eye view */
-  var player = { x: 0, z: 36, face: Math.PI };
+  /* y/vy: 점프용 높이와 위아래 속도. 지붕(ROOF) 높이를 넘으면 가게 위에 올라설 수 있다 */
+  var player = { x: 0, z: 36, face: Math.PI, y: 0, vy: 0, grounded: true };
+  var GRAVITY = 22, JUMP_V = 12.2, ROOF = 2.75, STEP = 0.35; /* 최고 높이 약 3.4m — 차양 지붕(약 2.7m)을 넘는다 */
   if (MINE >= 0) { player.x = mine.x; player.z = mine.z + frontOff * 1.25; }
   me.position.set(player.x, 0, player.z);
 
@@ -711,7 +827,14 @@ function startMarket(SHOP_DATA, MINE_ID) {
   joyEl.addEventListener("pointermove", function (e) { if (e.pointerId === joy.id) setJoy(e); });
   function joyEnd(e) { if (e.pointerId !== joy.id) return; joy.id = null; joy.x = joy.y = 0; knob.style.transform = ""; }
   joyEl.addEventListener("pointerup", joyEnd); joyEl.addEventListener("pointercancel", joyEnd);
-  window.addEventListener("keydown", function (e) { keys[e.key.toLowerCase()] = true; auto = null; seen(); });
+  function jump() { if (player.grounded) { player.vy = JUMP_V; player.grounded = false; } auto = null; seen(); }
+  window.addEventListener("keydown", function (e) {
+    if (e.code === "Space") { e.preventDefault(); if (!e.repeat) jumpOrDig(); return; }
+    keys[e.key.toLowerCase()] = true; auto = null; seen();
+  });
+  $("jump").addEventListener("pointerdown", function (e) { e.preventDefault(); jumpOrDig(); });
+  /* 땅에 묻힌 사과 위에 서 있으면 점프 버튼이 "파기"가 된다 */
+  function jumpOrDig() { if (digTarget) dig(); else jump(); }
   window.addEventListener("keyup", function (e) { keys[e.key.toLowerCase()] = false; });
 
   var drag = null, ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), cardSlot = -1, cardUntil = 0;
@@ -727,7 +850,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
       var r = canvas.getBoundingClientRect();
       ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, camera);
       var hit = ray.intersectObjects(pickMeshes, false);
-      if (hit.length && hit[0].instanceId != null) { cardSlot = hit[0].instanceId; cardUntil = performance.now() + 7000; }
+      if (hit.length && hit[0].instanceId != null) { cardSlot = hit[0].instanceId; cardUntil = performance.now() + 7000; cardOff = -1; }
     }
     drag = null;
   });
@@ -744,12 +867,18 @@ function startMarket(SHOP_DATA, MINE_ID) {
   $("aerial").addEventListener("click", toggleAerial);
 
   /* ---------- collision: player, and camera (so it never ends up inside a stall or wall) ---------- */
-  function blocked(x, z) {
-    if (x * x + z * z < 3.0) return true;
-    if (Math.abs(Math.abs(x) - 6) < 0.85 && Math.abs(z - ARCH_Z) < 0.85) return true;
+  function onStall(x, z) {
     for (var i = 0; i < filled; i++) { var s = stalls[i]; if (Math.abs(x - s.x) < 1.8 && Math.abs(z - s.z) < 1.45) return true; }
     return false;
   }
+  /* y: 지금 발 높이. 지붕 높이 근처까지 뛰어오르면 가게는 더 이상 막지 않는다(그 위로 올라선다).
+     가운데 큰 기둥과 아치 기둥은 높아서 계속 막는다. */
+  function blocked(x, z, y) {
+    if (x * x + z * z < 3.0) return true;
+    if (Math.abs(Math.abs(x) - 6) < 0.85 && Math.abs(z - ARCH_Z) < 0.85) return true;
+    return (y || 0) < ROOF - STEP && onStall(x, z);
+  }
+  function groundAt(x, z) { return onStall(x, z) ? ROOF : 0; }
   function camBlocked(x, y, z) {
     if (x < -HX + 0.7 || x > HX - 0.7 || z < HZ0 + 0.7 || z > HZ1 - 0.7 || y > HH - 0.7 || y < 0.35) return true;
     if (y < 4.4) {
@@ -767,16 +896,24 @@ function startMarket(SHOP_DATA, MINE_ID) {
   var shownSlot = -2, cardEl = $("card");
   function won(n) { return n.toLocaleString("ko-KR") + "원"; }
   function esc(t) { return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  /* 가까이 가면 뜨는 카드: 가게 이름 + 진열 상품 목록(앱의 "오늘의 진열대"처럼). 상품을 누르면 그 상품 상세가 열린다 */
   function showCard(k) {
     if (k === shownSlot) return; shownSlot = k;
     if (k < 0) { cardEl.hidden = true; return; }
-    var s = stalls[k], pct = pctOf(s);
-    cardEl.innerHTML = '<div class="row"><div><h2></h2><p class="meta"></p></div><div class="grade"><small>AI 등급</small><b></b></div></div>' +
-      '<div class="price"><span>' + esc(s.title) + (s.unit ? " · " + esc(s.unit) : "") + (s.has ? " <b>" + won(s.price) + "</b>" : "") + '</span>' +
-      (pct != null && pct > 0 ? '<em>공공시세 대비 ' + pct + '% 저렴</em>' : "") + '</div><button class="more" type="button">가게 자세히 보기</button>';
+    var s = stalls[k];
+    var html = '<div class="row"><div><h2></h2><p class="meta"></p></div><button class="cclose" type="button" aria-label="닫기">×</button></div>';
+    if (s.items.length) {
+      html += '<ul class="items">' + s.items.map(function (it, i) {
+        var meta = [it.origin, it.unit].filter(Boolean).join(" · ");
+        return '<li><button type="button" data-i="' + i + '">' +
+          '<span class="ig' + (it.grade === "A+" ? " top" : "") + '">' + esc(gradeName(it.grade)) + '</span>' +
+          '<span class="it"><b>' + esc(it.title || "상품") + '</b>' + (meta ? '<small>' + esc(meta) + '</small>' : "") + '</span>' +
+          '<span class="ip">' + won(it.price) + '</span></button></li>';
+      }).join("") + '</ul>';
+    } else html += '<p class="meta" style="margin-top:8px">아직 진열한 상품이 없어요.</p>';
+    cardEl.innerHTML = html;
     cardEl.querySelector("h2").textContent = s.name;
-    cardEl.querySelector(".meta").innerHTML = (s.mine ? '<span class="tag">내 가게</span>' : "") + "No." + s.number + " · 진열 상품 " + s.count + "개";
-    cardEl.querySelector(".grade b").textContent = gradeName(s.grade);
+    cardEl.querySelector(".meta").innerHTML = (s.mine ? '<span class="tag">내 가게</span>' : "") + "No." + s.number + " · 진열 상품 " + s.count + "개" + (s.items.length > 1 ? " · 눌러서 골라 보세요" : "");
     cardEl.hidden = false;
   }
   var qs = $("qs");
@@ -785,37 +922,253 @@ function startMarket(SHOP_DATA, MINE_ID) {
     var r = ATTR_RANK[grade] == null ? 1 : ATTR_RANK[grade];
     return '<div class="qbar attr" style="--fill:' + ATTR_COLOR[r] + '"><span>' + esc(name) + '</span><div class="qtrack"><div class="qfill" style="width:' + ATTR_W[r] + '%"></div></div><b>' + esc(grade) + '</b></div>';
   }
-  function openSheet(k) {
-    var s = stalls[k], pct = pctOf(s), attrs = Object.keys(s.attrs || {});
-    var html = '<div class="qhead"><div><h2></h2><p class="qunit"></p></div><div class="qgrade"><small>AI 등급</small><b></b></div></div>';
-    if (s.has) {
-      html += '<div class="qprice"><b>' + won(s.price) + '</b>' + (pct != null && pct > 0 ? '<em>공공시세보다 ' + pct + '% 저렴</em>' : "") + '</div>';
-      if (s.pub > 0) html += '<div class="qbars"><div class="qbar ours"><span>이 가게</span><div class="qtrack"><div class="qfill" style="width:' + Math.min(100, Math.round(s.price / s.pub * 100)) + '%"></div></div><b>' + won(s.price) + '</b></div>' +
-        '<div class="qbar"><span>공공시세</span><div class="qtrack"><div class="qfill" style="width:100%"></div></div><b>' + won(s.pub) + '</b></div></div>';
-      if (attrs.length) html += '<div class="qlabel">AI 품질 판정' + (s.conf != null ? ' · 확신도 ' + s.conf + '%' : "") + '</div><div class="qscores">' + attrs.map(function (a) { return attrBar(a, s.attrs[a].grade); }).join("") + '</div>';
-    } else {
-      html += '<p class="qsum">아직 진열한 상품이 없는 가게예요.</p>';
+  /* 상품 상세 — 앱(ProductDetailModal "상품설명" 탭)과 같은 구성:
+     사진(+등급 배지) → 가게·등급 → [원산지] 상품명 단위 → 태그 → 판매가/공공시세 + AI 정밀 분석 지표 카드 → 사장님 한마디 */
+  var PS_RANK = { "특상": 0, "적음": 0, "상": 1, "보통": 1, "중": 2, "많음": 2 }, PS_COLOR = ["#10B981", "#F59E0B", "#F87171"];
+  var PS_CHECK = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M12 2 9.6 4.2 6.4 3.8 5.6 6.9 2.8 8.5 4 11.5 2.8 14.5l2.8 1.6.8 3.1 3.2-.4L12 21l2.4-2.2 3.2.4.8-3.1 2.8-1.6-1.2-3 1.2-3-2.8-1.6-.8-3.1-3.2.4Zm-1.2 13.6-3.6-3.6 1.4-1.4 2.2 2.2 5-5 1.4 1.4Z"/></svg>';
+  function psTitle(it) {
+    var o = (it.origin || "").split(" · "), type = (o[0] || "").trim(), detail = (o[1] || "").trim();
+    return (type ? "[" + type + "] " : "") + (detail ? detail + " " : "") + (it.title || "상품") + (it.unit ? " " + it.unit : "");
+  }
+  function openSheet(k, idx) {
+    var shop = stalls[k], items = shop.items;
+    idx = Math.max(0, Math.min(idx || 0, items.length - 1));
+    var it = items[idx];
+    if (!it) {
+      qs.className = "qs ps";
+      qs.innerHTML = '<div class="ps-body"><p class="ps-shop">' + esc(shop.name) + ' · No.' + shop.number + '</p><p class="ps-empty">아직 진열한 상품이 없는 가게예요.</p>' +
+        '<a class="ps-btn primary" href="/s/' + encodeURIComponent(shop.storeId) + '">이 가게 페이지 열기</a><button class="ps-btn qclose" type="button">닫기</button></div>';
+      qs.querySelector(".qclose").addEventListener("click", function () { qs.hidden = true; });
+      qs.scrollTop = 0; qs.hidden = false; return;
     }
-    if (s.tagline) html += '<div class="qlabel">우리 가게 한마디</div><p class="qsum" style="margin-top:4px">“' + esc(s.tagline) + '”</p>';
-    else if (s.sum) html += '<p class="qsum"></p>';
-    if (s.tags && s.tags.length) html += '<ul class="qtags">' + s.tags.map(function (t) { t = String(t).trim(); return "<li>" + esc(t.charAt(0) === "#" ? t : "#" + t) + "</li>"; }).join("") + '</ul>';
-    html += '<p class="qnote">진열 상품 ' + s.count + '개 중 가장 최근 상품이에요. 가격 비교는 KAMIS 공공시세 기준이에요.</p>' +
-      '<a class="btn primary qlink" href="/s/' + encodeURIComponent(s.storeId) + '">이 가게 페이지 열기</a>' +
-      '<button class="btn qclose" type="button" style="width:100%;margin-top:8px">닫기</button>';
+    var top = it.grade === "A+", gname = gradeName(it.grade);
+    var pct = it.pub > 0 ? Math.round((it.pub - it.price) / it.pub * 100) : 0;
+    var attrs = Object.keys(it.attrs || {});
+    var html = '<div class="ps-hero"><img alt="" src="' + MARKET_API + '/api/v1/booth/result/' + encodeURIComponent(it.id) + '/image">' +
+      '<div class="ps-grad"></div><span class="ps-badge' + (top ? " top" : "") + '">' + PS_CHECK + esc(gname) + '</span>' +
+      '<button class="ps-x qclose" type="button" aria-label="닫기">×</button></div><div class="ps-body">';
+    if (items.length > 1) html += '<div class="ps-pick">' + items.map(function (x, i) {
+      return '<button type="button" data-i="' + i + '" aria-pressed="' + (i === idx) + '">' + esc(x.title || "상품") + '</button>';
+    }).join("") + '</div>';
+    html += '<div class="ps-head"><span class="ps-shop">' + esc(shop.name) + ' <small>No.' + shop.number + '</small></span><span class="ps-pill' + (top ? " top" : "") + '">' + esc(gname) + '</span></div>' +
+      '<h2 class="ps-title"></h2>';
+    if (it.tags && it.tags.length) html += '<div class="ps-tags">' + it.tags.map(function (t) { t = String(t).trim(); return "<span>" + esc(t.charAt(0) === "#" ? t : "#" + t) + "</span>"; }).join("") + '</div>';
+    html += '<div class="ps-card"><div class="ps-prices">' +
+      '<div><span class="ps-lbl">현장 판매가</span><div class="ps-price">' + won(it.price) + (pct > 0 ? ' <em>' + pct + '% 저렴</em>' : "") + '</div></div>' +
+      '<div><span class="ps-lbl">공공 시세</span><div class="ps-price">' + (it.pub > 0 ? won(it.pub) : "-") + '</div></div></div>';
+    if (attrs.length) {
+      html += '<div class="ps-ai-head"><h3>AI 정밀 분석 지표</h3><span class="ps-pill' + (top ? " top" : "") + '">' + PS_CHECK + '품질 등급 ' + esc(gname) + '</span></div><div class="ps-metrics">' +
+        attrs.map(function (a) {
+          var g = (it.attrs[a] || {}).grade, r = PS_RANK[g] == null ? 1 : PS_RANK[g], c = PS_COLOR[r];
+          var bars = [0, 1, 2].map(function (n) { return '<i' + (n <= 2 - r ? ' style="background:' + c + '"' : "") + '></i>'; }).join("");
+          return '<div class="ps-m"><div class="ps-mrow"><span>' + esc(a) + '</span><b style="color:' + c + '">' + esc(g || "-") + '</b></div><div class="ps-bars">' + bars + '</div></div>';
+        }).join("") + '</div>';
+    }
+    if (it.sum) html += '<div class="ps-sum"><b>AI 스캔 종합 의견</b><p></p></div>';
+    html += '</div>';
+    var talk = it.description || shop.tagline;
+    if (talk) html += '<div class="ps-talk"><b><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M4 4h16v12H7l-3 3V4Z"/></svg>' + (it.description ? "사장님 한마디" : "우리 가게 한마디") + '</b><p></p></div>';
+    html += '<p class="ps-note">가격 비교는 KAMIS(한국농수산식품유통공사) 최신 소매 평균 시세 기준이에요.</p>' +
+      '<a class="ps-btn primary" href="/s/' + encodeURIComponent(shop.storeId) + '">이 가게 페이지 열기</a>' +
+      '<button class="ps-btn qclose" type="button">닫기</button></div>';
+    qs.className = "qs ps";
     qs.innerHTML = html;
-    qs.querySelector("h2").textContent = s.name;
-    qs.querySelector(".qunit").textContent = "No." + s.number + " · " + s.title + (s.unit ? " · " + s.unit : "");
-    qs.querySelector(".qgrade b").textContent = gradeName(s.grade);
-    if (!s.tagline && s.sum) qs.querySelector(".qsum").textContent = s.sum;
-    qs.querySelector(".qclose").addEventListener("click", function () { qs.hidden = true; });
+    qs.querySelector(".ps-title").textContent = psTitle(it);
+    if (it.sum) qs.querySelector(".ps-sum p").textContent = it.sum;
+    if (talk) qs.querySelector(".ps-talk p").textContent = talk;
+    var img = qs.querySelector(".ps-hero img");
+    img.addEventListener("error", function () { qs.querySelector(".ps-hero").classList.add("noimg"); });
+    Array.prototype.forEach.call(qs.querySelectorAll(".qclose"), function (b) { b.addEventListener("click", function () { qs.hidden = true; }); });
+    Array.prototype.forEach.call(qs.querySelectorAll(".ps-pick button"), function (b) {
+      b.addEventListener("click", function () { openSheet(k, +b.getAttribute("data-i")); });
+    });
     qs.scrollTop = 0; qs.hidden = false;
   }
-  cardEl.addEventListener("click", function () { if (shownSlot >= 0) openSheet(shownSlot); });
+  /* cardOff: 닫기를 누른 가게. 그 가게 앞에 있는 동안은 카드 대신 "진열 상품 보기" 버튼만 보인다 */
+  var cardOff = -1, reopenEl = $("reopen");
+  reopenEl.addEventListener("click", function () { cardOff = -1; });
+  cardEl.addEventListener("click", function (e) {
+    if (shownSlot < 0) return;
+    if (e.target.closest && e.target.closest(".cclose")) { cardOff = shownSlot; cardUntil = 0; return; }
+    var b = e.target.closest && e.target.closest("button[data-i]");
+    openSheet(shownSlot, b ? +b.getAttribute("data-i") : 0);
+  });
   var visited = {}, stampN = 0;
-  function stats() { $("stats").textContent = "가게 " + filled + "곳 · 둘러본 가게 " + stampN + "곳"; }
+  /* 보물 찾기 난이도: 7개 · 제한 시간 3분
+     종류(하나씩): 지붕(지붕 위에서 한 번 더 점프) · 도망(가까이 가면 달아남) · 땅속(파야 나옴) · 퀴즈(맞혀야 가져감)
+                 · 납작(바닥에 눌어붙어 있어 잘 안 보임). 가게가 없어 지붕 사과를 못 두면 보통 사과로 채운다 */
+  var APPLE_KINDS = ["roof", "runner", "buried", "quiz", "flat"], appleGot = 0; /* 종류마다 1개씩 항상 떠 있다 */
+  function mmss(s) { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ":" + ("0" + (s % 60)).slice(-2); }
+  function stats() {
+    $("stats").textContent = "가게 " + filled + "곳 · 둘러본 가게 " + stampN + "곳 · 찾은 황금 사과 " + appleGot + "개";
+  }
   stats();
   var toastEl = $("toast"), toastT = 0;
   function toast(msg) { toastEl.textContent = msg; toastEl.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(function () { toastEl.classList.remove("on"); }, 3200); }
+
+  /* ---------- 보물 찾기: 황금 사과 ----------
+     바닥 후보 자리는 모두 통로라서, 나중에 새 가게가 생겨도 사과가 가게 안에 묻히지 않는다.
+     사과마다 root(바닥 위치) 아래에 사과 모양(g)과 흙더미·받침대 같은 소품을 둔다. */
+  var apples = [], digTarget = null, DIG_TIMES = 3;
+  var haloMat, goldMat, stemMat, leafMat, bodyGeo, stemGeo, leafGeo, dirtMat, moundGeo, pebbleGeo, pedMat, pedGeo, qMat;
+  (function () {
+    var haloCan = mkCanvas(64), hg = haloCan.getContext("2d"), grd = hg.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grd.addColorStop(0, "rgba(255,226,120,0.9)"); grd.addColorStop(0.4, "rgba(255,200,60,0.35)"); grd.addColorStop(1, "rgba(255,200,60,0)");
+    hg.fillStyle = grd; hg.fillRect(0, 0, 64, 64);
+    haloMat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(haloCan), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
+    goldMat = new THREE.MeshStandardMaterial({ color: 0xffc83d, metalness: 0.85, roughness: 0.22, emissive: 0x7a5200, emissiveIntensity: 0.6 });
+    stemMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2b, roughness: 0.8 }); leafMat = new THREE.MeshStandardMaterial({ color: 0x5fbf4a, roughness: 0.6 });
+    bodyGeo = new THREE.SphereGeometry(0.32, 20, 16); stemGeo = new THREE.CylinderGeometry(0.025, 0.03, 0.18, 6); leafGeo = new THREE.SphereGeometry(0.1, 8, 6);
+    dirtMat = new THREE.MeshStandardMaterial({ color: 0x5a4330, roughness: 1 }); moundGeo = new THREE.SphereGeometry(0.55, 16, 10); pebbleGeo = new THREE.SphereGeometry(0.07, 6, 5);
+    pedMat = new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.5 }); pedGeo = new THREE.CylinderGeometry(0.32, 0.4, 0.9, 20);
+    var qc = mkCanvas(128), qg = qc.getContext("2d");
+    qg.fillStyle = "#0052ff"; qg.beginPath(); qg.arc(64, 64, 58, 0, 6.283); qg.fill();
+    qg.fillStyle = "#fff"; qg.font = "900 92px system-ui, sans-serif"; qg.textAlign = "center"; qg.textBaseline = "middle"; qg.fillText("?", 64, 70);
+    qMat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(qc), depthWrite: false, transparent: true });
+  })();
+  function makeApple(x, y, z, kind) {
+    var root = new THREE.Group(), g = new THREE.Group();
+    var body = new THREE.Mesh(bodyGeo, goldMat); body.scale.set(1, 0.9, 1); body.castShadow = true; g.add(body);
+    var stem = new THREE.Mesh(stemGeo, stemMat); stem.position.y = 0.33; g.add(stem);
+    var leaf = new THREE.Mesh(leafGeo, leafMat); leaf.scale.set(1.4, 0.35, 0.7); leaf.position.set(0.1, 0.36, 0); leaf.rotation.z = -0.5; g.add(leaf);
+    var halo = new THREE.Sprite(haloMat.clone()); halo.scale.set(1.5, 1.5, 1); g.add(halo);
+    g.scale.setScalar(0.7); g.position.y = y; root.add(g);
+    /* 납작 사과: 바닥에 눌어붙은 것처럼 납작하게, 반짝임 없이. 주우면 원래 모양으로 부풀며 떠오른다 */
+    if (kind === "flat") { g.scale.set(0.85, 0.12, 0.85); halo.visible = false; }
+    var a = { root: root, g: g, halo: halo, x: x, z: z, y: y, got: false, fade: 0, ph: Math.random() * 6.28, kind: kind || "plain", orig: kind || "plain", dig: 0, armed: true, wait: 0 };
+    if (a.kind === "buried") {
+      /* 땅속 사과: 사과는 숨기고 흙더미(+자갈)만 보인다. 바닥과 비슷한 색이라 잘 봐야 보인다 */
+      g.visible = false;
+      a.mound = new THREE.Group();
+      var m = new THREE.Mesh(moundGeo, dirtMat); m.scale.set(1, 0.22, 1); m.receiveShadow = true; a.mound.add(m);
+      for (var i = 0; i < 5; i++) { var pb = new THREE.Mesh(pebbleGeo, dirtMat); var an = i * 1.3; pb.position.set(Math.cos(an) * 0.6, 0.03, Math.sin(an) * 0.6); a.mound.add(pb); }
+      root.add(a.mound);
+    } else if (a.kind === "quiz") {
+      /* 퀴즈 사과: 흰 받침대 위 + 머리 위에 "?" 표시 */
+      var ped = new THREE.Mesh(pedGeo, pedMat); ped.position.y = 0.45; ped.castShadow = true; ped.receiveShadow = true; root.add(ped);
+      a.q = new THREE.Sprite(qMat); a.q.scale.set(0.6, 0.6, 1); a.q.position.y = y + 0.75; root.add(a.q);
+    }
+    root.position.set(x, 0, z); scene.add(root); apples.push(a);
+  }
+  /* 새 자리 고르기: 통로 아무 데나 — 지금·나중의 가게 자리(전체 슬롯), 가운데 광장, 입구 기둥은 피하고
+     플레이어와 다른 사과에서 떨어진 곳 */
+  function freeSpot() {
+    for (var t = 0; t < 300; t++) {
+      var x = -25 + Math.random() * 50, z = -30 + Math.random() * 70, ok = true, k;
+      if (x * x + z * z < 30 || (Math.abs(Math.abs(x) - 6) < 2 && Math.abs(z - ARCH_Z) < 2)) continue;
+      for (k = 0; k < CAP && ok; k++) if (Math.abs(x - stalls[k].x) < 2.7 && Math.abs(z - stalls[k].z) < 2.4) ok = false;
+      if (!ok || Math.hypot(x - player.x, z - player.z) < 10) continue;
+      for (k = 0; k < apples.length && ok; k++) if (!apples[k].got && Math.hypot(x - apples[k].x, z - apples[k].z) < 6) ok = false;
+      if (ok) return [x, z];
+    }
+    return [0, 38];
+  }
+  function spawnApple(kind) {
+    if (kind === "roof") {
+      /* 지붕 사과: 플레이어와 떨어진 가게 지붕 위. 가게가 없으면 보통 사과로 대신한다 */
+      var cand = [], k;
+      for (k = 0; k < filled; k++) if (Math.hypot(stalls[k].x - player.x, stalls[k].z - player.z) > 8) cand.push(k);
+      if (!cand.length) for (k = 0; k < filled; k++) cand.push(k);
+      if (cand.length) { k = cand[Math.floor(Math.random() * cand.length)]; makeApple(stalls[k].x, ROOF + 1.9, stalls[k].z, "roof"); return; }
+      kind = "plain";
+    }
+    var p = freeSpot();
+    makeApple(p[0], kind === "quiz" ? 1.3 : kind === "flat" ? 0.04 : 0.9, p[1], kind);
+  }
+  APPLE_KINDS.forEach(spawnApple);
+
+  /* ---------- 땅 파기 ---------- */
+  var jumpBtn = $("jump");
+  function setDigTarget(a) {
+    if (digTarget === a) return; digTarget = a;
+    jumpBtn.textContent = a ? "⛏ 파기" : "점프"; jumpBtn.setAttribute("aria-label", a ? "땅 파기" : "점프");
+  }
+  function dig() {
+    var a = digTarget; if (!a) return;
+    a.dig++; a.mound.scale.y = Math.max(0.15, 1 - a.dig / DIG_TIMES); a.mound.rotation.y += 0.6;
+    if (a.dig < DIG_TIMES) { toast("⛏ 파는 중… " + a.dig + "/" + DIG_TIMES); return; }
+    /* 다 팠다: 흙더미를 치우고 사과가 땅에서 튀어나온다(바로 앞에 서 있으니 곧 주워진다) */
+    a.root.remove(a.mound); a.kind = "plain"; a.g.visible = true; a.g.position.y = -0.3; a.rise = 0; setDigTarget(null);
+    toast("✨ 땅속에서 황금 사과가 나왔어요!");
+  }
+
+  /* ---------- 퀴즈 ---------- */
+  var QUIZ = [
+    { q: "마켓로그 AI가 과일에 매기는 등급 두 가지는?", a: ["특상 · 보통", "금 · 은", "A · Z"] },
+    { q: "KAMIS는 무엇을 알려주는 서비스일까요?", a: ["농산물 공공 시세", "오늘의 날씨", "버스 도착 시간"] },
+    { q: "신선한 사과를 고르는 방법은?", a: ["꼭지가 싱싱하고 단단한 것", "껍질이 쭈글쭈글한 것", "눌렀을 때 물렁한 것"] },
+    { q: "귤에 특히 많이 들어 있는 비타민은?", a: ["비타민 C", "비타민 D", "비타민 K"] },
+    { q: "이 3D 가상 시장의 가게는 어떻게 생길까요?", a: ["부스에서 관람객이 가게를 열면", "매일 자정에 저절로", "추첨으로 뽑혀서"] },
+    { q: "양파를 썰면 눈물이 나는 이유는?", a: ["매운 성분이 공기 중으로 퍼져서", "양파가 차가워서", "칼이 무뎌서"] }
+  ];
+  var quizApple = null;
+  function openQuiz(a) {
+    quizApple = a; a.armed = false; qs.className = "qs";
+    var item = QUIZ[Math.floor(Math.random() * QUIZ.length)];
+    var opts = item.a.map(function (t, i) { return { t: t, ok: i === 0 }; }).sort(function () { return Math.random() - 0.5; });
+    qs.innerHTML = '<div class="qhead"><div><h2>❓ 퀴즈 사과</h2><p class="qunit">정답을 맞히면 황금 사과를 가져갈 수 있어요</p></div></div>' +
+      '<p class="qsum" style="font-size:17px;font-weight:700;margin-top:14px"></p><div class="qopts">' +
+      opts.map(function (o, i) { return '<button type="button" class="btn" data-i="' + i + '">' + esc(o.t) + '</button>'; }).join("") +
+      '</div><button class="btn qclose" type="button" style="width:100%;margin-top:12px">나중에 풀기</button>';
+    qs.querySelector(".qsum").textContent = item.q;
+    Array.prototype.forEach.call(qs.querySelectorAll(".qopts button"), function (b) {
+      b.addEventListener("click", function () {
+        qs.hidden = true; quizApple = null;
+        if (opts[+b.getAttribute("data-i")].ok) { a.kind = "plain"; if (a.q) { a.root.remove(a.q); a.q = null; } toast("⭕ 정답! 황금 사과를 가져가세요"); }
+        else { a.wait = 10; toast("❌ 땡! 10초 뒤에 다시 도전할 수 있어요"); }
+      });
+    });
+    qs.querySelector(".qclose").addEventListener("click", function () { qs.hidden = true; quizApple = null; a.wait = 2; });
+    qs.scrollTop = 0; qs.hidden = false;
+  }
+
+  function appleFree(x, z) { return Math.abs(x) < 25.5 && z > -31 && z < 41 && !blocked(x, z, 0) && !onStall(x, z); }
+  function stepApples(dt, t) {
+    var nearDig = null;
+    for (var i = 0; i < apples.length; i++) {
+      var a = apples[i];
+      if (a.got) {
+        if (a.fade < 1) { a.fade = Math.min(1, a.fade + dt * 2.5); a.g.position.y = a.y + a.fade * 1.2; a.g.scale.setScalar(0.7 * (1 + a.fade * 0.8)); a.halo.material.opacity = 1 - a.fade; if (a.fade >= 1) { scene.remove(a.root); a.dead = true; } }
+        continue;
+      }
+      var dist = Math.hypot(a.x - player.x, a.z - player.z);
+      if (a.kind === "buried") {
+        if (dist < 1.3 && player.grounded && player.y < 0.5) nearDig = a;
+        continue; /* 땅속 사과는 파기 전엔 줍지 못한다 */
+      }
+      /* 도망 사과: 5m 안에 들어오면 반대쪽으로 달아난다(사람보다 조금 느림). 막히면 옆으로 틀어 본다 */
+      if (a.kind === "runner" && dist < 5 && dist > 0.01) {
+        var ang = Math.atan2(a.x - player.x, a.z - player.z), sp = 3.9 * dt, tries = [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8];
+        for (var q = 0; q < tries.length; q++) {
+          var nx = a.x + Math.sin(ang + tries[q]) * sp, nz = a.z + Math.cos(ang + tries[q]) * sp;
+          if (appleFree(nx, nz)) { a.x = nx; a.z = nz; break; }
+        }
+        a.root.position.x = a.x; a.root.position.z = a.z;
+      }
+      a.g.rotation.y += dt * (a.kind === "runner" && dist < 5 ? 6 : 1.6);
+      if (a.rise != null && a.rise < 1) { a.rise = Math.min(1, a.rise + dt * 2); a.g.position.y = -0.3 + (a.y + 0.3) * a.rise; }
+      else a.g.position.y = a.y + (reduced || a.kind === "flat" ? 0 : Math.sin(t * 2.2 + a.ph) * 0.12);
+      a.halo.visible = a.kind !== "flat" && dist < 12; /* 가까이 와야 반짝인다(납작 사과는 안 반짝임) */
+      a.halo.material.opacity = 0.7 + Math.sin(t * 3 + a.ph) * 0.3;
+      if (a.kind === "quiz") {
+        if (a.q) a.q.position.y = a.y + 0.75 + (reduced ? 0 : Math.sin(t * 3) * 0.06);
+        if (a.wait > 0) a.wait -= dt;
+        if (dist > 2.5) a.armed = true;
+        if (dist < 1.4 && a.armed && a.wait <= 0 && !quizApple) openQuiz(a);
+        continue; /* 퀴즈를 맞히기 전엔 줍지 못한다 */
+      }
+      if (dist < 1.0 && Math.abs(player.y + 0.9 - a.y) < (a.kind === "flat" ? 1.0 : 0.8) && !(a.rise != null && a.rise < 1)) {
+        a.got = true; appleGot++;
+        toast((a.orig === "runner" ? "🏃 도망가던 황금 사과를 잡았어요!" : a.orig === "buried" ? "⛏ 땅속 황금 사과를 캤어요!" : a.orig === "quiz" ? "❓ 퀴즈 황금 사과 획득!" : a.orig === "flat" ? "🫓 바닥에 붙은 황금 사과 발견!" : "🍎 황금 사과를 찾았어요!") +
+          " (" + appleGot + "개째) · 어딘가에 새 사과가 생겼어요");
+        spawnApple(a.orig === "plain" ? "plain" : a.orig);
+        stats();
+      }
+    }
+    setDigTarget(nearDig);
+    if (apples.some(function (x) { return x.dead; })) apples = apples.filter(function (x) { return !x.dead; });
+  }
+  setTimeout(function () { toast("✈ 황금 사과 찾기! 지붕 위·땅속·퀴즈·도망·납작 사과가 숨어 있어요. 찾을수록 새로 생겨요"); }, 1500);
 
   var mini = $("mini"), mg = mini.getContext("2d");
   function drawMini() {
@@ -873,12 +1226,23 @@ function startMarket(SHOP_DATA, MINE_ID) {
     cb(0.04, 0.2, 0.84, WOOD, 0.73, 0.12, 0); cb(0.04, 0.2, 0.84, WOOD, -0.73, 0.12, 0);
     var h = new THREE.Group(); g.add(h); g.userData.holder = h; g.userData.fi = -1; return g;
   }
-  function fillCrate(g, fi) {
-    if (g.userData.fi === fi) return; g.userData.fi = fi;
-    var h = g.userData.holder, i, j, f, y = FRUITS[fi].s === "pear" ? 0.35 : 0.33;
+  /* fis: 칸마다 담을 품목 번호 목록. 상자를 품목 수만큼 칸으로 나누고 칸 사이에 나무 칸막이를 세운다 */
+  function fillCrate(g, fis) {
+    if (typeof fis === "number") fis = [fis];
+    var key = fis.join(","); if (g.userData.fi === key) return; g.userData.fi = key;
+    var h = g.userData.holder, n = fis.length, W = 1.4, segW = W / n, i, j, c, f;
     while (h.children.length) h.remove(h.children[0]);
-    for (i = -1.5; i <= 1.5; i += 1) for (j = -1; j <= 1; j += 1) { f = makeFruit(fi); f.position.set(i * 0.34, y, j * 0.25); f.rotation.y = (i * 3 + j) * 0.7; h.add(f); }
-    for (i = -1; i <= 1; i += 2) { f = makeFruit(fi); f.position.set(i * 0.17, y + 0.2, 0); f.rotation.y = i * 1.1; h.add(f); }
+    for (var s = 0; s < n; s++) {
+      var fi = fis[s], y = FRUITS[fi].s === "pear" ? 0.35 : 0.33, x0 = -W / 2 + s * segW;
+      var cols = Math.max(1, Math.floor(segW / 0.33)), sp = segW / cols;
+      for (c = 0; c < cols; c++) for (j = -1; j <= 1; j += 1) { f = makeFruit(fi); f.position.set(x0 + sp * (c + 0.5), y, j * 0.25); f.rotation.y = (c * 3 + j + s) * 0.7; h.add(f); }
+      f = makeFruit(fi); f.position.set(x0 + segW / 2, y + 0.2, 0); f.rotation.y = s * 1.1; h.add(f);
+      if (s > 0) { var dv = new THREE.Mesh(rbox(0.03, 0.2, 0.8, 0.01), WOOD); dv.position.set(x0, 0.12, 0); dv.castShadow = true; h.add(dv); }
+    }
+  }
+  function stallFis(st) {
+    var fis = st.items.slice(0, SHOW_ON_COUNTER).map(function (it) { return it.fi; });
+    return fis.length ? fis : [st.fi];
   }
   function makeDetail() {
     var g = new THREE.Group(), d = { g: g, k: -1, sigFor: -1 }, i;
@@ -910,13 +1274,26 @@ function startMarket(SHOP_DATA, MINE_ID) {
     fit(g, st.name, 124, w - 120); g.fillText(st.name, w / 2, h / 2 + 6); d.tex.needsUpdate = true;
     var t = d.tagCv.getContext("2d"), tw = 512, th = 160;
     t.fillStyle = "#fffaf0"; t.fillRect(0, 0, tw, th); t.strokeStyle = "#8a5d3b"; t.lineWidth = 8; t.strokeRect(4, 4, tw - 8, th - 8);
-    t.textAlign = "center"; t.textBaseline = "middle"; t.fillStyle = "#6b4a2f"; t.font = FONT(40); fit(t, (st.title + " " + st.unit).trim(), 40, tw - 40); t.fillText((st.title + " " + st.unit).trim(), tw / 2, 50);
-    t.fillStyle = "#0052ff"; t.font = FONT(58); t.fillText(st.has ? won(st.price) : "준비 중", tw / 2, 112);
+    t.textAlign = "center"; t.textBaseline = "middle";
+    var shown = st.items.slice(0, SHOW_ON_COUNTER);
+    if (shown.length > 1) {
+      /* 상품이 여럿이면 가격표를 칸으로 나눠 상자 칸 순서대로(왼쪽부터) 이름·가격을 적는다 */
+      var cw = tw / shown.length;
+      shown.forEach(function (it, i) {
+        var cx = cw * (i + 0.5);
+        if (i > 0) { t.strokeStyle = "rgba(138,93,59,0.35)"; t.lineWidth = 3; t.beginPath(); t.moveTo(cw * i, 22); t.lineTo(cw * i, th - 22); t.stroke(); }
+        t.fillStyle = "#6b4a2f"; fit(t, it.title || "상품", 38, cw - 24); t.fillText(it.title || "상품", cx, 52);
+        t.fillStyle = "#0052ff"; fit(t, won(it.price), 46, cw - 20); t.fillText(won(it.price), cx, 110);
+      });
+    } else {
+      t.fillStyle = "#6b4a2f"; t.font = FONT(40); fit(t, (st.title + " " + st.unit).trim(), 40, tw - 40); t.fillText((st.title + " " + st.unit).trim(), tw / 2, 50);
+      t.fillStyle = "#0052ff"; t.font = FONT(58); t.fillText(st.has ? won(st.price) : "준비 중", tw / 2, 112);
+    }
     d.tagTex.needsUpdate = true;
   }
   function assignDetail(d, k) {
     var st = stalls[k]; d.k = k; d.g.position.set(st.x, 0, st.z); d.g.rotation.y = st.ry; d.mAwn.color.setHex(st.awn).convertSRGBToLinear();
-    fillCrate(d.crate, st.fi);
+    fillCrate(d.crate, stallFis(st));
     if (d.sigFor !== k) { drawDetailSign(d, st); d.sigFor = k; }
   }
   for (var di = 0; di < DETAIL; di++) details.push(makeDetail());
@@ -960,8 +1337,9 @@ function startMarket(SHOP_DATA, MINE_ID) {
         if (known[d.storeId] == null) pending.push(d);
         else if (known[d.storeId] >= 0) { var k = known[d.storeId], wasMine = stalls[k].mine; fillStall(stalls[k], d); stalls[k].mine = wasMine; paintSlot(k); }
       });
-      details.forEach(function (d) { d.sigFor = -1; if (d.k >= 0) { fillCrate(d.crate, stalls[d.k].fi); drawDetailSign(d, stalls[d.k]); d.sigFor = d.k; } });
-      feedTex.redraw(); topTex.redraw(); stats();
+      details.forEach(function (d) { d.sigFor = -1; if (d.k >= 0) { fillCrate(d.crate, stallFis(stalls[d.k])); drawDetailSign(d, stalls[d.k]); d.sigFor = d.k; } });
+      shownSlot = -2; /* 가까이 있는 가게 카드도 새 상품 목록으로 다시 그리게 */
+      feedTex.redraw(); topTex.redraw(); bigTex.redraw(); stats();
     }).catch(function () {});
   }
   setInterval(refresh, 8000);
@@ -1016,15 +1394,20 @@ function startMarket(SHOP_DATA, MINE_ID) {
     }
     if (mx || mz) {
       var sp = 5.2 * dt, nx = player.x + mx * sp, nz = player.z + mz * sp;
-      if (!blocked(nx, player.z)) player.x = clamp(nx, -26, 26);
-      if (!blocked(player.x, nz)) player.z = clamp(nz, -31.5, 41.5);
+      if (!blocked(nx, player.z, player.y)) player.x = clamp(nx, -26, 26);
+      if (!blocked(player.x, nz, player.y)) player.z = clamp(nz, -31.5, 41.5);
       var tf = Math.atan2(mx, mz), df = tf - player.face; while (df > Math.PI) df -= 6.283; while (df < -Math.PI) df += 6.283; player.face += df * Math.min(1, dt * 12);
     }
     if (lookAt && !aerial) {
       var tyw = Math.atan2(-(lookAt.x - player.x), -(lookAt.z - player.z)), dyw = tyw - cam.yaw; while (dyw > Math.PI) dyw -= 6.283; while (dyw < -Math.PI) dyw += 6.283;
       cam.yaw += dyw * Math.min(1, dt * 5); lookAt.t -= dt; if (lookAt.t <= 0) lookAt = null;
     }
-    me.position.set(player.x, 0, player.z); me.rotation.y = player.face;
+    /* 점프·낙하: 항상 중력을 받고, 발밑(바닥 또는 가게 지붕)에 닿으면 멈춘다. 지붕 끝에서 걸어 나가면 떨어진다 */
+    var gnd = groundAt(player.x, player.z);
+    player.vy -= GRAVITY * dt; player.y += player.vy * dt;
+    if (player.y <= gnd) { player.y = gnd; player.vy = 0; player.grounded = true; }
+    else player.grounded = false;
+    me.position.set(player.x, player.y, player.z); me.rotation.y = player.face;
     meBody.position.y = 0.5 + ((mx || mz) ? Math.abs(Math.sin(t * 10)) * 0.05 : 0);
 
     /* camera: pull in whenever something would be between us and the player */
@@ -1039,12 +1422,13 @@ function startMarket(SHOP_DATA, MINE_ID) {
       camera.lookAt(tx, ty, tz);
     } else {
       /* first person: eyes at 1.62 m, turn 360 degrees by dragging, tilt up/down within +-70 degrees */
-      var eye = 1.62 + ((mx || mz) && !reduced ? Math.sin(t * 9) * 0.03 : 0), lpc = Math.cos(cam.lp);
+      var eye = player.y + 1.62 + ((mx || mz) && player.grounded && !reduced ? Math.sin(t * 9) * 0.03 : 0), lpc = Math.cos(cam.lp);
       camera.position.set(player.x, eye, player.z);
       camera.lookAt(player.x - Math.sin(cam.yaw) * lpc, eye + Math.sin(cam.lp), player.z - Math.cos(cam.yaw) * lpc);
     }
 
     stepWalkers(dt, t);
+    stepApples(dt, t);
     sun.position.set(player.x + 18, 36, player.z + 14); sun.target.position.set(player.x, 0, player.z); sun.target.updateMatrixWorld();
     lodTimer -= dt; if (lodTimer <= 0) { lodTimer = 0.2; updateDetail(); }
 
@@ -1053,7 +1437,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
     if (spawnTimer <= 0 && pending.length && filled < CAP && !spawn) {
       spawnTimer = 1.2; var nk = filled; fillStall(stalls[nk], pending.shift()); paintSlot(nk); filled++;
       parts.forEach(function (o) { o.mesh.count = filled; }); aoM.count = filled; setAO(nk); setSlot(nk, 0.001); spawn = { k: nk, t: 0 };
-      toast(stalls[nk].name + "이(가) 문을 열었어요 · No." + stalls[nk].number); stats(); feedTex.redraw(); topTex.redraw();
+      toast(stalls[nk].name + "이(가) 문을 열었어요 · No." + stalls[nk].number); stats(); feedTex.redraw(); topTex.redraw(); bigTex.redraw();
     }
     if (spawn) {
       spawn.t += dt / 0.7; var u = Math.min(spawn.t, 1), sc = 1 + 2.2 * Math.pow(u - 1, 3) + 1.2 * Math.pow(u - 1, 2); setSlot(spawn.k, u >= 1 ? 1 : Math.max(sc, 0.001)); if (u >= 1) spawn = null;
@@ -1065,7 +1449,11 @@ function startMarket(SHOP_DATA, MINE_ID) {
     var best = -1, bd = 9;
     for (var i = 0; i < filled; i++) { var s = stalls[i], fz = s.z + (s.side ? 2.0 : -2.0), d2 = (s.x - player.x) * (s.x - player.x) + (fz - player.z) * (fz - player.z); if (d2 < bd) { bd = d2; best = i; } }
     if (best >= 0 && !visited[best]) { visited[best] = true; stampN++; stats(); }
-    showCard(performance.now() < cardUntil ? cardSlot : best);
+    var wantCard = performance.now() < cardUntil ? cardSlot : best;
+    if (cardOff >= 0 && wantCard !== cardOff) cardOff = -1; /* 다른 가게로 가면 다시 자동으로 뜬다 */
+    var off = cardOff >= 0;
+    showCard(off ? -1 : wantCard);
+    if (reopenEl.hidden !== !off) reopenEl.hidden = !off;
 
     var pulse = reduced ? 0.5 : 0.5 + 0.2 * Math.sin(t * 3);
     beacon.material.opacity = pulse; pad.scale.setScalar(1 + (reduced ? 0 : 0.12 * Math.sin(t * 3)));
