@@ -100,20 +100,25 @@ export function MetricBars({ labels }: { labels?: Record<string, { grade: Attrib
 
 // 앱의 "현장 판매가 / 공공 시세" 두 칸
 export function PriceRow({ price, publicPrice }: { price: number; publicPrice: number }) {
+  const [showInfo, setShowInfo] = React.useState(false);
   const pct = publicPrice > 0 ? Math.round(((publicPrice - price) / publicPrice) * 100) : null;
   return (
     <div className="grid grid-cols-2 gap-3">
       <div>
-        <span className="text-xs font-bold text-[#0F172A]">현장 판매가</span>
+        <span className="text-xs font-bold text-[#0F172A] h-4 flex items-center">현장 판매가</span>
         <div className="flex items-center gap-1.5 flex-wrap">
           <div className="text-xl font-semibold text-[#0F172A] mt-0.5">{price ? `${price.toLocaleString()}원` : "-"}</div>
           {pct != null && pct > 0 && (
-            <span className="text-[11px] font-semibold text-[#0052FF] bg-blue-50 px-1.5 py-0.5 rounded-full">{pct}% 저렴</span>
+            <span className="inline-block translate-y-px text-[11px] font-semibold text-[#0052FF] bg-blue-50 px-1.5 py-0.5 rounded-full">{pct}% 저렴</span>
           )}
         </div>
       </div>
       <div>
-        <span className="text-xs font-bold text-[#0F172A]">공공 시세</span>
+        <span className="text-xs font-bold text-[#0F172A] h-4 flex items-center gap-1 relative">
+          공공 시세
+          <button type="button" onClick={() => setShowInfo((value) => !value)} className="material-symbols-outlined text-xs text-slate-400 hover:text-slate-600 cursor-pointer leading-none" style={{ fontSize: "14px" }} aria-label="공공 시세 안내" aria-expanded={showInfo}>info</button>
+          {showInfo && <span className="absolute left-0 top-full mt-1 z-20 w-56 bg-[#0F172A] text-white text-[11px] font-medium leading-relaxed rounded-lg p-2.5 shadow-xl">한국농수산식품유통공사(KAMIS)에서 제공하는 해당 품목의 최신 소매 평균 시세입니다.</span>}
+        </span>
         <div className="text-xl font-semibold text-[#0F172A] mt-0.5">{publicPrice ? `${publicPrice.toLocaleString()}원` : "-"}</div>
       </div>
     </div>

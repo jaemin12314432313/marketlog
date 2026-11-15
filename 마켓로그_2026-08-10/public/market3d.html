@@ -47,9 +47,9 @@
 
   .hud-x { left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); }
   .topbar { position: absolute; top: 12px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; pointer-events: none; }
-  .plate { background: var(--chip); backdrop-filter: blur(6px); border: 1px solid var(--line); border-radius: 12px; padding: 7px 12px; min-width: 0; }
+  .plate { background: var(--chip); backdrop-filter: blur(6px); border: 1px solid var(--line); border-radius: 12px; padding: 10px 15px; min-width: 0; box-shadow: 0 4px 14px rgba(15,23,42,.1); }
   .plate small { display: block; font-size: 11px; letter-spacing: 0.08em; color: var(--muted); }
-  .plate strong { display: block; font-family: var(--font-display); font-weight: 800; font-size: 18px; line-height: 1.25; }
+  .plate strong { display: block; font-family: var(--font-display); font-weight: 800; font-size: 15px; line-height: 1.25; letter-spacing: .06em; white-space: nowrap; }
   .plate span { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
   .sample { pointer-events: auto; font-size: 12px; font-weight: 800; color: var(--accent); background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; white-space: nowrap; text-decoration: none; }
   .qbar.attr .qfill { background: var(--fill, var(--good)); }
@@ -61,7 +61,7 @@
   .toast { position: absolute; top: 72px; left: max(16px, env(safe-area-inset-left, 0px)); max-width: calc(100% - 130px); background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 600; opacity: 0; transform: translateY(-6px); transition: opacity 0.3s, transform 0.3s; pointer-events: none; }
   .toast.on { opacity: 1; transform: none; }
 
-  .card { position: absolute; bottom: 166px; max-width: 420px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3); }
+  .card { position: absolute; bottom: 166px; max-width: 420px; background: var(--surface); background: color-mix(in srgb, var(--surface) 70%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3); }
   .card[hidden] { display: none !important; }
   .card .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
   .card h2 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 20px; line-height: 1.2; }
@@ -86,6 +86,29 @@
   .card .more { margin-top: 10px; width: 100%; padding: 9px; border-radius: 999px; border: 1px solid var(--accent); background: transparent; color: var(--accent); font-weight: 600; font-size: 13px; cursor: pointer; }
   .qs { position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; max-height: 74%; overflow: auto; background: var(--surface); border-top: 1px solid var(--line); border-radius: 18px 18px 0 0; box-shadow: 0 -10px 34px rgba(0, 0, 0, 0.35); padding: 16px max(16px, env(safe-area-inset-right, 0px)) 22px max(16px, env(safe-area-inset-left, 0px)); }
   .qs[hidden] { display: none !important; }
+  .qs { background: #f1f5f9; color: #0f172a; }
+  .detail-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .detail-shop { color: #0052ff; font-size: 14px; font-weight: 700; }
+  .detail-grade { color: #10b981; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 999px; padding: 4px 10px; font-size: 11px; font-weight: 800; }
+  .detail-title { margin: 6px 0 0; font-size: 24px; font-weight: 800; letter-spacing: -0.025em; }
+  .detail-meta { margin: 4px 0 0; color: #94a3b8; font-size: 12px; font-weight: 500; }
+  .detail-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
+  .detail-tags span { border-radius: 999px; background: #eff6ff; color: #0052ff; font-size: 11px; font-weight: 600; padding: 2px 8px; }
+  .detail-card { margin-top: 16px; padding: 16px 16px 20px; background: white; border: 1px solid #e2e8f0; border-radius: 16px; box-shadow: 0 4px 12px rgba(15,23,42,.08); }
+  .detail-prices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid #d1d1d1; }
+  .detail-prices small { display: block; font-size: 12px; font-weight: 700; }
+  .detail-prices strong { display: block; margin-top: 2px; font-size: 20px; font-weight: 600; }
+  .detail-discount { display: inline-block; margin-top: 4px; padding: 2px 6px; border-radius: 999px; background: #eff6ff; color: #0052ff; font-size: 11px; font-weight: 600; }
+  .detail-metric-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0 4px; }
+  .detail-metric-head h3 { margin: 0; font-size: 14px; font-weight: 700; }
+  .detail-metric { padding: 12px 0; border-bottom: 1px solid #d1d1d1; }
+  .detail-metric-label { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 700; }
+  .detail-metric-label b { font-size: 14px; }
+  .detail-segments { display: grid; grid-template-columns: repeat(3,1fr); gap: 4px; margin-top: 5px; }
+  .detail-segments i { position: relative; display: block; height: 10px; overflow: hidden; border: 1px solid #cbd5e1; border-top-color: rgba(255,255,255,.7); border-radius: 6px; background: #e2e8f0; box-shadow: inset 0 2px 4px rgba(15,23,42,.16), inset 0 -1px 1px rgba(255,255,255,.75); }
+  .detail-segments i::after { content: ""; position: absolute; left: 4px; right: 4px; top: 1px; height: 1px; border-radius: 999px; background: rgba(255,255,255,.6); pointer-events: none; }
+  .detail-summary { margin-top: 12px; font-size: 12px; line-height: 1.6; color: #334155; }
+  .detail-summary strong { display: block; color: #0052ff; margin-bottom: 6px; }
   .qhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
   .qhead h2 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 22px; line-height: 1.2; }
   .qunit { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
@@ -118,7 +141,7 @@
   <canvas id="gl" aria-label="RE:LOCAL 2026 CO-SHOW 가상 전시장. 왼쪽 아래 조이스틱으로 걷고, 화면을 끌어서 시야를 돌립니다."></canvas>
 
   <div class="topbar hud-x">
-    <div class="plate"><small>MARKETLOG · CO-SHOW 2026</small><strong>3D 가상 시장</strong><span id="stats"></span></div>
+    <div class="plate"><small>CO-SHOW 2026</small><strong>3D 가상 시장</strong><span id="stats"></span></div>
     <a class="sample" id="myLink" href="#" hidden>내 가게 페이지</a>
   </div>
   <canvas class="minimap" id="mini" width="144" height="186" aria-hidden="true"></canvas>
@@ -142,7 +165,8 @@ var MARKET_PARAMS = new URLSearchParams(location.search);
 var MARKET_API = (function () {
   var o = MARKET_PARAMS.get("api");
   if (o) return o.replace(/\/$/, "");
-  /* 로컬 개발: 화면(3000)과 API(8000) 포트가 다르다. 배포: 같은 주소 */
+  /* 로컬 개발: 화면과 API 포트가 다르다. 배포: 같은 주소 */
+  if (location.port === "3001") return location.protocol + "//" + location.hostname + ":8001";
   if (location.port === "3000" || location.port === "5173") return location.protocol + "//" + location.hostname + ":8000";
   return location.origin;
 })();
@@ -204,6 +228,10 @@ function startMarket(SHOP_DATA, MINE_ID) {
     st.title = p ? p.title : "준비 중"; st.unit = p ? p.unit : ""; st.fi = fruitIndex(st.title); st.fruit = FRUITS[st.fi];
     st.price = p ? p.price : 0; st.pub = p ? p.publicPrice : 0; st.grade = p ? p.grade : ""; st.conf = p ? p.confidence : null;
     st.attrs = p ? p.attributeLabels || {} : {}; st.sum = p ? (p.aiSummary || "") : ""; st.tags = p ? p.tags || [] : [];
+    st.origin = p ? p.origin || "" : ""; st.createdAt = p ? p.createdAt : null;
+    st.freshness = p && p.freshnessScore != null ? p.freshnessScore : 90;
+    st.defect = p && p.defectScore != null ? p.defectScore : 5;
+    st.uniformity = p && p.uniformityScore != null ? p.uniformityScore : 92;
     st.awn = AWN[Math.floor(r() * AWN.length)]; st.sign = SIGN[Math.floor(r() * SIGN.length)];
     st.mine = !!MINE_ID && d.storeId === MINE_ID;
   }
@@ -780,33 +808,44 @@ function startMarket(SHOP_DATA, MINE_ID) {
     cardEl.hidden = false;
   }
   var qs = $("qs");
-  var ATTR_RANK = { "특상": 0, "적음": 0, "상": 1, "보통": 1, "중": 2, "많음": 2 }, ATTR_COLOR = ["#10b981", "#f59e0b", "#f87171"], ATTR_W = [92, 62, 30];
+  var ATTR_RANK = { "특상": 0, "적음": 0, "상": 1, "보통": 1, "중": 2, "많음": 2 }, ATTR_COLOR = ["#10b981", "#f59e0b", "#f87171"];
   function attrBar(name, grade) {
     var r = ATTR_RANK[grade] == null ? 1 : ATTR_RANK[grade];
-    return '<div class="qbar attr" style="--fill:' + ATTR_COLOR[r] + '"><span>' + esc(name) + '</span><div class="qtrack"><div class="qfill" style="width:' + ATTR_W[r] + '%"></div></div><b>' + esc(grade) + '</b></div>';
+    return '<div class="detail-metric"><div class="detail-metric-label"><span>' + esc(name) + '</span><b style="color:' + ATTR_COLOR[r] + '">' + esc(grade) + '</b></div><div class="detail-segments">' + [0, 1, 2].map(function (i) { return '<i' + (i <= 2 - r ? ' style="background:' + ATTR_COLOR[r] + '"' : '') + '></i>'; }).join('') + '</div></div>';
+  }
+  function fallbackAttrs(s) {
+    var t = s.title, labels = t.indexOf("사과") >= 0 ? ["표면 무결성 (흠집 · 멍 없음)", "착색도 (색택)", "표면 광택", "꼭지 신선도"] :
+      t.indexOf("감귤") >= 0 || t.indexOf("귤") >= 0 ? ["껍질 상태 (흠집 · 곰팡이 없음)", "색상 선명도", "껍질 광택", "꼭지 신선도"] :
+      t.indexOf("감") >= 0 && t.indexOf("감자") < 0 ? ["표면 무결성 (흠집 없음)", "색상 (숙성도 추정)", "표면 탄력 (주름 없음)", "꼭지 신선도"] :
+      t.indexOf("배") >= 0 && t.indexOf("배추") < 0 ? ["표면 무결성 (흠집 없음)", "색상 / 광택", "표면 탄력 (주름 없음)", "꼭지 신선도"] : [];
+    var values = [s.freshness, Math.max(0, 100 - s.defect), s.uniformity];
+    values.push(Math.round((values[0] + values[1] + values[2]) / 3));
+    var attrs = {}; labels.forEach(function (name, i) { var v = values[i]; attrs[name] = { grade: v >= 80 ? "특상" : v >= 50 ? "상" : "중" }; }); return attrs;
   }
   function openSheet(k) {
-    var s = stalls[k], pct = pctOf(s), attrs = Object.keys(s.attrs || {});
-    var html = '<div class="qhead"><div><h2></h2><p class="qunit"></p></div><div class="qgrade"><small>AI 등급</small><b></b></div></div>';
+    var s = stalls[k], pct = pctOf(s), attrData = s.attrs || {}, attrs = Object.keys(attrData);
+    if (!attrs.length) { attrData = fallbackAttrs(s); attrs = Object.keys(attrData); }
+    var html = '<div class="detail-top"><span class="detail-shop">' + esc(s.name) + '</span>' + (s.has ? '<span class="detail-grade">' + esc(gradeName(s.grade)) + '</span>' : '') + '</div>';
     if (s.has) {
-      html += '<div class="qprice"><b>' + won(s.price) + '</b>' + (pct != null && pct > 0 ? '<em>공공시세보다 ' + pct + '% 저렴</em>' : "") + '</div>';
-      if (s.pub > 0) html += '<div class="qbars"><div class="qbar ours"><span>이 가게</span><div class="qtrack"><div class="qfill" style="width:' + Math.min(100, Math.round(s.price / s.pub * 100)) + '%"></div></div><b>' + won(s.price) + '</b></div>' +
-        '<div class="qbar"><span>공공시세</span><div class="qtrack"><div class="qfill" style="width:100%"></div></div><b>' + won(s.pub) + '</b></div></div>';
-      if (attrs.length) html += '<div class="qlabel">AI 품질 판정' + (s.conf != null ? ' · 확신도 ' + s.conf + '%' : "") + '</div><div class="qscores">' + attrs.map(function (a) { return attrBar(a, s.attrs[a].grade); }).join("") + '</div>';
+      var opened = s.createdAt ? new Date(s.createdAt) : null;
+      var date = opened && !isNaN(opened.getTime()) ? opened.toLocaleString("ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }) + " 등록" : "";
+      var meta = date;
+      html += '<h2 class="detail-title">' + esc(s.title) + '</h2><p class="detail-meta">' + esc(meta) + '</p>';
+      if (s.tags.length) html += '<div class="detail-tags">' + s.tags.map(function (t) { t = String(t).trim(); return '<span>' + esc(t.charAt(0) === '#' ? t : '#' + t) + '</span>'; }).join('') + '</div>';
+      html += '<section class="detail-card"><div class="detail-prices"><div><small>현장 판매가</small><strong>' + (s.price ? won(s.price) : '-') + '</strong>' + (pct != null && pct > 0 ? '<span class="detail-discount">' + pct + '% 저렴</span>' : '') + '</div><div><small>공공 시세</small><strong>' + (s.pub ? won(s.pub) : '-') + '</strong></div></div>';
+      html += '<div class="detail-metric-head"><h3>AI 정밀 분석 지표</h3><span class="detail-grade">✓ 품질 등급 ' + esc(gradeName(s.grade)) + '</span></div>';
+      html += attrs.map(function (a) { return attrBar(a, attrData[a].grade); }).join('');
+      var summary = (s.sum || "").replace(/\s*\(\s*신뢰도\s*[:：]+\s*\d+(?:\.\d+)?\s*%\s*\)/g, "").replace(/\s*신뢰도\s*[:：]+\s*\d+(?:\.\d+)?\s*%/g, "").trim();
+      if (summary) html += '<div class="detail-summary"><strong>AI 스캔 종합 의견</strong>' + esc(summary) + '</div>';
+      html += '</section>';
     } else {
       html += '<p class="qsum">아직 진열한 상품이 없는 가게예요.</p>';
     }
     if (s.tagline) html += '<div class="qlabel">우리 가게 한마디</div><p class="qsum" style="margin-top:4px">“' + esc(s.tagline) + '”</p>';
-    else if (s.sum) html += '<p class="qsum"></p>';
-    if (s.tags && s.tags.length) html += '<ul class="qtags">' + s.tags.map(function (t) { t = String(t).trim(); return "<li>" + esc(t.charAt(0) === "#" ? t : "#" + t) + "</li>"; }).join("") + '</ul>';
     html += '<p class="qnote">진열 상품 ' + s.count + '개 중 가장 최근 상품이에요. 가격 비교는 KAMIS 공공시세 기준이에요.</p>' +
       '<a class="btn primary qlink" href="/s/' + encodeURIComponent(s.storeId) + '">이 가게 페이지 열기</a>' +
       '<button class="btn qclose" type="button" style="width:100%;margin-top:8px">닫기</button>';
     qs.innerHTML = html;
-    qs.querySelector("h2").textContent = s.name;
-    qs.querySelector(".qunit").textContent = "No." + s.number + " · " + s.title + (s.unit ? " · " + s.unit : "");
-    qs.querySelector(".qgrade b").textContent = gradeName(s.grade);
-    if (!s.tagline && s.sum) qs.querySelector(".qsum").textContent = s.sum;
     qs.querySelector(".qclose").addEventListener("click", function () { qs.hidden = true; });
     qs.scrollTop = 0; qs.hidden = false;
   }

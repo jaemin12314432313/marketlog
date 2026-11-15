@@ -2,9 +2,9 @@
 // 앱 설치 없이 내가 만든 가게의 AI 품질 판정 결과, 공공 시세 비교, AI 도슨트를 보고 공유할 수 있는 읽기 전용 페이지.
 import React, { useEffect, useState } from "react";
 import { boothApi, type BoothProduct } from "./boothApi";
-import { APP_BG, APP_CARD, AppHeader, BTN_DARK, BTN_OUTLINE, BTN_PRIMARY, GradePill, HeaderIconButton, MetricBars, PriceRow } from "./appUi";
-import { copyText, downloadBlob, makeProductPageCard, shareCardFile, shopCardFileName } from "./shopCard";
-import { getQualityMetrics } from "../components/ProductDetailModal";
+import { APP_BG, APP_CARD, AppHeader, BTN_DARK, GradePill, HeaderIconButton, MetricBars, PriceRow } from "./appUi";
+import { copyText } from "./shopCard";
+import { formatProductDisplayTitle, formatRelativeTime, getQualityMetrics, hideSummaryConfidence } from "../components/ProductDetailModal";
 
 // preview: 체험 태블릿 안에서 "내 가게 페이지"를 미리 보여줄 때 — 방문 수를 세지 않고, 공유 버튼은 숨긴다.
 export default function BoothResult({ productId, preview = false }: { productId: string; preview?: boolean }) {
@@ -14,9 +14,6 @@ export default function BoothResult({ productId, preview = false }: { productId:
   const [docent, setDocent] = useState<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [toast, setToast] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  // 공유 창을 못 띄우는 환경(http 주소, PC 등)에서 보여주는 카드 미리보기 / 링크 창
-  const [cardPreview, setCardPreview] = useState<{ url: string; blob: Blob; name: string } | null>(null);
   const [linkSheet, setLinkSheet] = useState(false);
 
   useEffect(() => {
@@ -73,22 +70,6 @@ export default function BoothResult({ productId, preview = false }: { productId:
     else setLinkSheet(true);
   };
 
-  // 이 페이지 내용 전체(가게·상품·AI 판정·시세·도슨트)를 한 장의 이미지로 만들어 폰에 저장/공유한다.
-  const saveCard = async () => {
-    if (!data || isSaving) return;
-    setIsSaving(true);
-    try {
-      const blob = await makeProductPageCard(data.product, data.store, docent, window.location.href);
-      const name = shopCardFileName(data.product, data.store.number);
-      const shared = await shareCardFile(blob, name, `${data.store.name} · CO-SHOW 가상 시장`);
-      if (!shared) setCardPreview({ url: URL.createObjectURL(blob), blob, name });
-    } catch {
-      setToast("저장하지 못했어요. 화면을 길게 눌러 캡처해주세요");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   if (error) {
     return (
       <div className={`${screenH} ${APP_BG} flex flex-col items-center justify-center gap-3 p-6 text-center`}>
@@ -108,13 +89,10 @@ export default function BoothResult({ productId, preview = false }: { productId:
 
   const { product: p, store } = data;
   const tags = (p.tags || "").split(",").map((t) => t.trim()).filter(Boolean);
-  const openedAt = store.openedAt
-    ? new Date(store.openedAt).toLocaleString("ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })
-    : "";
-  const meta = [p.origin, p.unit].filter(Boolean).join(" · ");
+  const registeredTime = formatRelativeTime(p.createdAt);
 
   return (
-    <div className={`${screenH} ${APP_BG} text-[#0F172A] pb-10`}>
+    <div className={`${screenH} bg-[#F8FAFC] text-[#0F172A] pb-10`}>
       <AppHeader right={preview ? undefined : <HeaderIconButton icon="ios_share" label="공유" onClick={share} />} />
 
       <div className="max-w-md mx-auto">
@@ -126,23 +104,23 @@ export default function BoothResult({ productId, preview = false }: { productId:
           </span>
         </div>
 
-        <main className="px-4 pt-4 space-y-4">
+        <main className="px-4 pt-3 space-y-5">
           {/* 가게·상품 이름 */}
-          <div className="px-1">
+          <div className="space-y-1.5 px-1">
             <div className="flex items-center justify-between">
               <span className="text-sm font-bold text-[#0052FF]">
                 {store.name}
               </span>
-              <GradePill grade={p.grade} showIcon={false} />
+              <span className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border ${p.grade?.startsWith("A") ? "text-[#10B981] bg-emerald-50 border-emerald-100" : "text-[#0052FF] bg-blue-50 border-blue-100"}`}>
+                {p.grade === "A+" ? "특상" : "보통"}
+              </span>
             </div>
-            <h1 className="mt-1.5 text-2xl font-extrabold tracking-tight break-keep">{p.title}</h1>
-            <p className="mt-1 text-xs font-medium text-slate-400">
-              {[meta, openedAt ? `${openedAt} 개점` : "", "CO-SHOW 가상 시장"].filter(Boolean).join(" · ")}
-            </p>
+            <h1 className="text-xl sm:text-2xl font-semibold text-[#0F172A] leading-snug">{formatProductDisplayTitle(p)}</h1>
+            {registeredTime && <p className="text-[11px] text-[#94A3B8] font-medium">{registeredTime} 등록</p>}
             {tags.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-1.5">
                 {tags.map((t) => (
-                  <span key={t} className="text-[11px] font-semibold text-[#0052FF] bg-blue-50 px-2 py-0.5 rounded-full">
+                  <span key={t} className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold">
                     {t.startsWith("#") ? t : `#${t}`}
                   </span>
                 ))}
@@ -151,8 +129,8 @@ export default function BoothResult({ productId, preview = false }: { productId:
           </div>
 
           {/* 가격 + AI 정밀 분석 지표 (앱 상세와 같은 카드) */}
-          <section className={`${APP_CARD} p-4 pb-5 space-y-3`}>
-            <div className="pb-3 border-b border-[#E2E8F0]">
+          <section className={`${APP_CARD} p-4 pb-5 sm:p-5 sm:pb-6 space-y-3`}>
+            <div className="pb-3 border-b border-[#D1D1D1]">
               <PriceRow price={p.price} publicPrice={p.publicPrice} />
             </div>
             <div className="flex justify-between items-center">
@@ -166,7 +144,7 @@ export default function BoothResult({ productId, preview = false }: { productId:
             {p.aiSummary && (
               <div className="border-t border-[#D1D1D1] pt-3 space-y-2">
                 <div className="font-extrabold text-[#0052FF] text-xs">AI 스캔 종합 의견</div>
-                <p className="text-slate-700 font-medium text-xs leading-relaxed">{p.aiSummary}</p>
+                <p className="text-slate-700 font-medium text-xs leading-relaxed">{hideSummaryConfidence(p.aiSummary)}</p>
               </div>
             )}
           </section>
@@ -212,11 +190,6 @@ export default function BoothResult({ productId, preview = false }: { productId:
 
           {!preview && (
             <section className="space-y-3 pt-1">
-              <button onClick={saveCard} disabled={isSaving} className={BTN_PRIMARY}>
-                <span className="material-symbols-outlined text-lg">download</span>
-                {isSaving ? "이미지 만드는 중..." : "이 페이지 이미지로 저장하기"}
-              </button>
-              <p className="text-center text-xs text-slate-500">상품과 가게 이야기를 이미지로 간직해요</p>
               <div className="grid grid-cols-2 gap-2.5">
                 {p.storeId && (
                   <a href={`/s/${p.storeId}`} className="flex min-h-12 items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-blue-100/60 px-3 text-sm font-semibold text-blue-900 transition hover:bg-blue-100 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
@@ -224,35 +197,17 @@ export default function BoothResult({ productId, preview = false }: { productId:
                     가게 전체 보기
                   </a>
                 )}
-                <a href={`/market3d.html${p.storeId ? `?shop=${encodeURIComponent(p.storeId)}` : ""}`} className={`flex min-h-12 items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-blue-100/60 px-3 text-sm font-semibold text-blue-900 transition hover:bg-blue-100 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${p.storeId ? "" : "col-span-2"}`}>
-                  <span className="material-symbols-outlined text-lg">view_in_ar</span>
-                  3D 시장
+                <a href={`/market3d.html${p.storeId ? `?shop=${encodeURIComponent(p.storeId)}` : ""}`} style={{ backgroundColor: "#0052FF", color: "#FFFFFF" }} className={`market-3d-button group relative flex min-h-12 items-center justify-center gap-1.5 overflow-hidden rounded-xl border border-[#0046D6] px-3 text-sm font-extrabold shadow-[0_5px_16px_rgba(0,82,255,0.3)] transition hover:-translate-y-0.5 hover:shadow-[0_8px_22px_rgba(0,82,255,0.4)] active:translate-y-0 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 motion-reduce:transition-none ${p.storeId ? "" : "col-span-2"}`}>
+                  <span className="market-3d-icon material-symbols-outlined text-lg motion-safe:group-hover:rotate-12 transition-transform motion-reduce:transition-none">view_in_ar</span>
+                  <span>3D 시장</span>
+                  <span className="material-symbols-outlined text-base motion-safe:group-hover:translate-x-1 transition-transform motion-reduce:transition-none" aria-hidden="true">arrow_forward</span>
                 </a>
               </div>
-              <button onClick={share} className={BTN_OUTLINE}>
-                <span className="material-symbols-outlined text-lg text-[#0052FF]">link</span>
-                친구에게 내 가게 자랑하기
-              </button>
             </section>
           )}
 
         </main>
       </div>
-
-      {cardPreview && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex flex-col items-center justify-center p-5 gap-4" onClick={() => { URL.revokeObjectURL(cardPreview.url); setCardPreview(null); }}>
-          <p className="text-white font-extrabold text-center">
-            이미지를 <span className="text-[#FDE68A]">길게 눌러</span> &lsquo;이미지 저장&rsquo;을 선택하세요
-          </p>
-          <img src={cardPreview.url} alt="내 가게 카드" className="max-h-[68vh] w-auto rounded-2xl shadow-2xl" onClick={(e) => e.stopPropagation()} />
-          <div className="flex gap-2 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => downloadBlob(cardPreview.blob, cardPreview.name)} className={BTN_PRIMARY}>
-              <span className="material-symbols-outlined">download</span>파일로 받기
-            </button>
-            <button onClick={() => { URL.revokeObjectURL(cardPreview.url); setCardPreview(null); }} className="px-6 py-3 rounded-xl bg-white/15 text-white font-extrabold">닫기</button>
-          </div>
-        </div>
-      )}
 
       {linkSheet && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-end justify-center" onClick={() => setLinkSheet(false)}>

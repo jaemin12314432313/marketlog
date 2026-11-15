@@ -244,7 +244,7 @@ def _create_booth_shop(db: Session, shop_name: str, item_name: str = "", grade: 
 
 
 # 관람객 유형(익명 통계용). 화면의 선택 칩과 같은 값이어야 한다.
-VISITOR_TYPES = ["초등학생", "중고등학생", "대학생", "일반", "교사·기관", "기업"]
+VISITOR_TYPES = ["초등학생", "중고등학생", "대학생", "직장인", "교육자", "기타", "일반", "교사·기관", "기업"]
 
 
 class OpenShopRequest(BaseModel):
@@ -535,6 +535,11 @@ def booth_market(db: Session = Depends(get_db)):
                     "id": main["id"],
                     "title": main.get("title") or "",
                     "unit": main.get("unit") or "",
+                    "origin": main.get("origin") or "",
+                    "createdAt": main.get("createdAt"),
+                    "freshnessScore": main.get("freshnessScore"),
+                    "defectScore": main.get("defectScore"),
+                    "uniformityScore": main.get("uniformityScore"),
                     "price": main.get("price") or 0,
                     "publicPrice": main.get("publicPrice") or 0,
                     "grade": main.get("grade") or "",

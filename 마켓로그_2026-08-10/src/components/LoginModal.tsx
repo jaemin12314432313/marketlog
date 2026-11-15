@@ -25,9 +25,23 @@ export type UserRole = "customer" | "merchant";
 // booth: CO-SHOW 부스 체험 — 가게 이름만 정하면 가게와 임시 상인 계정이 만들어지고 바로 로그인된다.
 type ViewMode = "login" | "signup" | "findId" | "findPw" | "booth";
 
-const BOOTH_NAME_IDEAS = ["싱싱청과", "달콤과일상회", "꿀사과네", "새콤달콤", "제철과일집", "햇살농원"];
 // "우리 가게 한마디" 예시 — 눌러서 바로 쓸 수 있다.
-const BOOTH_TAGLINE_IDEAS = ["새벽에 따온 꿀사과", "시세보다 싸고 맛은 특상", "AI가 인정한 과일 맛집", "한 번 맛보면 단골 확정"];
+const BOOTH_TAGLINE_IDEAS = [
+  "새벽에 따온 꿀사과", "시세보다 싸고 맛은 특상", "AI가 인정한 과일 맛집", "한 번 맛보면 단골 확정",
+  "오늘도 신선함을 가득 담았어요", "제철 과일의 달콤한 만남", "정성을 담아 고른 과일", "싱싱한 과일로 기분 좋은 하루",
+  "맛있는 과일을 합리적인 가격에", "달콤함이 가득한 우리 가게", "매일 새롭게 만나는 제철 과일", "가족에게 주는 마음으로 골랐어요",
+  "싱싱함과 맛을 함께 담아요", "한입 가득 자연의 달콤함", "오늘의 신선함을 만나보세요", "맛있는 순간을 선물합니다",
+  "과일 하나에도 정성을 담아요", "신선한 과일이 기다려요", "제철의 맛을 전해드려요", "기분 좋은 달콤함을 골라가세요",
+];
+
+function pickTaglineIdeas(previous: string[] = []): string[] {
+  const ideas = BOOTH_TAGLINE_IDEAS.filter((idea) => !previous.includes(idea));
+  for (let i = ideas.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [ideas[i], ideas[j]] = [ideas[j], ideas[i]];
+  }
+  return ideas.slice(0, 4);
+}
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -255,6 +269,7 @@ export const LoginModal = React.forwardRef<LoginModalHandle, LoginModalProps>(({
   const [boothVisitorType, setBoothVisitorType] = useState("");
   const [boothAffiliation, setBoothAffiliation] = useState("");
   const [boothTagline, setBoothTagline] = useState("");
+  const [boothTaglineIdeas, setBoothTaglineIdeas] = useState(() => pickTaglineIdeas());
   const handleOpenBoothShop = async (e: React.FormEvent | null, reenter = false) => {
     e?.preventDefault();
     const name = (reenter && boothExistingName) || boothShopName.trim();
@@ -537,18 +552,6 @@ export const LoginModal = React.forwardRef<LoginModalHandle, LoginModalProps>(({
               autoFocus
               className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 text-sm text-slate-900 focus:outline-none focus:border-[#0052FF] focus:ring-1 focus:ring-[#0052FF] font-semibold transition-all"
             />
-            <div className="flex flex-wrap gap-1.5">
-              {BOOTH_NAME_IDEAS.map((idea) => (
-                <button
-                  key={idea}
-                  type="button"
-                  onClick={() => setBoothShopName(idea)}
-                  className="px-2.5 py-1 rounded-full border border-slate-300 bg-white hover:bg-slate-100 text-xs font-bold text-slate-700"
-                >
-                  {idea}
-                </button>
-              ))}
-            </div>
           </div>
           <div className="space-y-2">
             <label className="text-xs font-extrabold text-slate-700">어떤 분이세요?</label>
@@ -586,9 +589,19 @@ export const LoginModal = React.forwardRef<LoginModalHandle, LoginModalProps>(({
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-extrabold text-slate-700">
-              우리 가게 한마디 <span className="font-semibold text-slate-400">(선택 · 비우면 자동으로 채워져요)</span>
-            </label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs font-extrabold text-slate-700">
+                우리 가게 한마디 <span className="font-semibold text-slate-400">(선택 · 비우면 자동으로 채워져요)</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setBoothTaglineIdeas((previous) => pickTaglineIdeas(previous))}
+                className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-semibold text-slate-500 active:text-[#0052FF] transition-colors"
+              >
+                <span className="material-symbols-outlined text-xs" aria-hidden="true">refresh</span>
+                새로고침
+              </button>
+            </div>
             <input
               type="text"
               value={boothTagline}
@@ -598,7 +611,7 @@ export const LoginModal = React.forwardRef<LoginModalHandle, LoginModalProps>(({
               className="w-full px-4 py-3 bg-white rounded-xl border border-slate-200 text-sm text-slate-900 focus:outline-none focus:border-[#0052FF] focus:ring-1 focus:ring-[#0052FF] font-semibold transition-all"
             />
             <div className="flex flex-wrap gap-1.5">
-              {BOOTH_TAGLINE_IDEAS.map((idea) => (
+              {boothTaglineIdeas.map((idea) => (
                 <button
                   key={idea}
                   type="button"
