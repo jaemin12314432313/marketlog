@@ -3,8 +3,6 @@ import {createRoot} from 'react-dom/client';
 import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import App from './App.tsx';
-import BoothKiosk from './booth/BoothKiosk';
-import BoothBoard from './booth/BoothBoard';
 import BoothResult from './booth/BoothResult';
 import BoothShopPage from './booth/BoothShopPage';
 import './index.css';
@@ -21,15 +19,13 @@ if (Capacitor.isNativePlatform()) {
   StatusBar.setStyle({ style: Style.Light }).catch(() => {});
 }
 
-// CO-SHOW 부스 화면은 주소로 구분한다 — 그 외 주소는 기존 앱 그대로.
-//   /booth/kiosk  공용 태블릿 체험 화면 (?t=1 처럼 태블릿 번호를 붙이면 기록에 남는다)
-//   /booth/board  부스 앞 대형 모니터 화면 (?admin=관리키 를 붙이면 숨기기 버튼이 생긴다)
+// CO-SHOW 공개 페이지는 주소로 구분한다 — 그 외 주소는 기존 앱 그대로.
+// (공용 태블릿 키오스크와 전광판 화면은 쓰지 않기로 해서 지웠다. 부스 체험은 앱의 로그인 창에서 시작하고,
+//  대형 모니터는 /market3d.html?monitor=1 로 3D 시장을 자동 관람 모드로 띄운다.)
 //   /r/{상품 id}   QR로 여는 관람객 결과 페이지(상품 1개)
 //   /s/{가게 id}   앱 내 정보 탭 QR로 여는 내 가게 페이지(상품 전체)
 function pickRoot() {
   const path = window.location.pathname.replace(/\/+$/, '');
-  if (path === '/booth/kiosk') return <BoothKiosk />;
-  if (path === '/booth/board') return <BoothBoard />;
   const result = path.match(/^\/r\/([\w-]+)$/);
   if (result) return <BoothResult productId={result[1]} />;
   const shop = path.match(/^\/s\/([\w-]+)$/);

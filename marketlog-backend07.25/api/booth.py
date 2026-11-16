@@ -496,19 +496,32 @@ def booth_result(product_id: str, preview: bool = False, db: Session = Depends(g
     }
 
 
+HALL_SIZE = 144  # 3D 시장 한 곳(1관)에 서는 가게 수 — 3D 화면의 12 x 12 칸과 같아야 한다
+
+
 @router.get("/market")
-def booth_market(db: Session = Depends(get_db)):
-    """3D 가상 시장용 — 숨기지 않은 부스 가게(최근 144곳)와 가게마다 대표 상품(가장 최근 상품)을 준다.
-    3D 화면이 몇 초마다 다시 불러서 새로 문을 연 가게를 시장에 세운다."""
+def booth_market(hall: int | None = None, shop: str | None = None, db: Session = Depends(get_db)):
+    """3D 가상 시장용 — 한 관(144곳)의 숨기지 않은 부스 가게와 가게마다 대표 상품(가장 최근 상품)을 준다.
+    가게 번호로 관을 나눈다(1~144번=1관, 145~288번=2관, …). hall을 주면 그 관, shop(가게 id)을 주면 그 가게가
+    있는 관, 둘 다 없으면 가장 최근 관(대형 모니터)이다. 3D 화면이 몇 초마다 다시 불러서 새 가게를 세운다."""
+    latest_number = db.query(func.max(BoothShop.number)).scalar() or 0
+    latest_hall = max(1, (latest_number - 1) // HALL_SIZE + 1)
+    if hall is None and shop:
+        found = db.query(BoothShop.number).filter(BoothShop.store_id == shop).first()
+        if found:
+            hall = (found[0] - 1) // HALL_SIZE + 1
+    hall = latest_hall if hall is None else min(max(1, hall), latest_hall)
     rows = (
         db.query(BoothShop, Store.name)
         .join(Store, Store.id == BoothShop.store_id)
-        .filter(BoothShop.hidden.is_(False))
-        .order_by(BoothShop.number.desc())
-        .limit(144)
+        .filter(
+            BoothShop.hidden.is_(False),
+            BoothShop.number > (hall - 1) * HALL_SIZE,
+            BoothShop.number <= hall * HALL_SIZE,
+        )
+        .order_by(BoothShop.number.asc())  # 오래된 가게부터(시장 가운데부터 채워진다)
         .all()
     )
-    rows.reverse()  # 오래된 가게부터(시장 가운데부터 채워진다)
     store_ids = [shop.store_id for shop, _ in rows]
     by_store: dict[str, list[Product]] = {}
     if store_ids:
@@ -547,7 +560,7 @@ def booth_market(db: Session = Depends(get_db)):
                 else None
             ),
         })
-    return {"success": True, "shops": shops}
+    return {"success": True, "shops": shops, "hall": hall, "latestHall": latest_hall, "latestNumber": latest_number, "hallSize": HALL_SIZE}
 
 
 @router.get("/shop/{store_id}")
