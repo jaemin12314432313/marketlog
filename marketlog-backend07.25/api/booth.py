@@ -539,6 +539,7 @@ def booth_market(db: Session = Depends(get_db)):
         }
 
     shops = []
+    names = {shop.store_id: name for shop, name in rows}
     for shop, name in rows:
         products = by_store.get(shop.store_id, [])
         # 3D 매대에 진열 상품을 여러 개 보여주고, 가까이 가면 골라 볼 수 있게 최근 6개까지 준다.
@@ -553,7 +554,57 @@ def booth_market(db: Session = Depends(get_db)):
             "product": items[0] if items else None,
             "products": items,
         })
-    return {"success": True, "shops": shops}
+    return {"success": True, "shops": shops, "ranking": _market_ranking(db, names)}
+
+
+# ---------- 3D 시장 랭킹: 가게(=체험한 관람객)마다 찾은 황금 사과 수, 둘러본 가게 수 ----------
+SCORE_EVENT = "market3d_score"
+
+
+def _read_score(detail: str | None) -> tuple[int, int]:
+    try:
+        d = json.loads(detail or "{}")
+        return int(d.get("apples") or 0), int(d.get("visited") or 0)
+    except (ValueError, TypeError, AttributeError):
+        return 0, 0
+
+
+def _market_ranking(db: Session, names: dict[str, str]) -> dict:
+    """숨기지 않은 가게만, 기록이 1 이상인 곳을 많은 순으로 3곳씩."""
+    scores = []
+    for store_id, detail in db.query(BoothEvent.product_id, BoothEvent.detail).filter(BoothEvent.type == SCORE_EVENT).all():
+        if store_id in names:
+            apples, visited = _read_score(detail)
+            scores.append((store_id, apples, visited))
+
+    def top(idx: int) -> list[dict]:
+        ranked = sorted((s for s in scores if s[idx] > 0), key=lambda s: -s[idx])[:3]
+        return [{"storeId": s[0], "name": names[s[0]], "count": s[idx]} for s in ranked]
+
+    return {"apples": top(1), "visited": top(2)}
+
+
+class MarketScoreRequest(BaseModel):
+    storeId: str = Field(..., max_length=64)
+    apples: int = Field(0, ge=0, le=100000)
+    visited: int = Field(0, ge=0, le=1000)
+
+
+@router.post("/market/score")
+def booth_market_score(payload: MarketScoreRequest, db: Session = Depends(get_db)):
+    """3D 시장에서 내 가게 이름으로 찾은 황금 사과 수·둘러본 가게 수를 올린다. 가게마다 최고 기록만 남긴다."""
+    if not db.query(BoothShop).filter(BoothShop.store_id == payload.storeId).first():
+        raise HTTPException(status_code=404, detail="가게를 찾을 수 없습니다.")
+    row = db.query(BoothEvent).filter(BoothEvent.type == SCORE_EVENT, BoothEvent.product_id == payload.storeId).first()
+    apples, visited = _read_score(row.detail if row else None)
+    apples, visited = max(apples, payload.apples), max(visited, payload.visited)
+    detail = json.dumps({"apples": apples, "visited": visited})
+    if row:
+        row.detail = detail
+    else:
+        db.add(BoothEvent(type=SCORE_EVENT, product_id=payload.storeId, detail=detail))
+    db.commit()
+    return {"success": True, "apples": apples, "visited": visited}
 
 
 @router.get("/shop/{store_id}")
