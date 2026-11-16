@@ -82,6 +82,10 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 os.makedirs("static/assets", exist_ok=True)
 app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
 
+os.makedirs("static/vendor", exist_ok=True)
+# 3D 시장(market3d.html)이 쓰는 three.js와 글꼴 — /vendor/... 로 불러온다
+app.mount("/vendor", StaticFiles(directory="static/vendor"), name="vendor")
+
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
