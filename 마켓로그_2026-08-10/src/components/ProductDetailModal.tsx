@@ -6,6 +6,11 @@ import { MARKETS_DATA } from "../data/initialData";
 import { UserRole } from "./LoginModal";
 import { BoothShopQrButton } from "../booth/BoothShopQrCard";
 
+export function hideSummaryConfidence(summary: string): string {
+  return summary.replace(/\s*\(\s*신뢰도\s*[:：]+\s*\d+(?:\.\d+)?\s*%\s*\)/g, "")
+    .replace(/\s*신뢰도\s*[:：]+\s*\d+(?:\.\d+)?\s*%/g, "").trim();
+}
+
 // 비전 파이프라인이 2단계(특상/보통) 등급으로 바뀌어서, 화면에도 A+/B 같은 영문 등급
 // 대신 실제 판정 체계와 맞는 한글 표기를 쓴다 (HomeFeed/ProductFilterModal과 동일 규칙).
 function displayGrade(grade: string): string {
@@ -14,7 +19,7 @@ function displayGrade(grade: string): string {
 
 // product.timeAgo는 등록 시점에 박제된 고정 문자열이라 시간이 지나도 안 바뀐다 — 실제
 // 경과 시간은 createdAt(진짜 타임스탬프)에서 매번 다시 계산해야 한다 (HomeFeed와 동일 규칙).
-function formatRelativeTime(createdAt?: string): string {
+export function formatRelativeTime(createdAt?: string): string {
   if (!createdAt) return "";
   const created = new Date(createdAt).getTime();
   if (Number.isNaN(created)) return "";
@@ -38,7 +43,7 @@ function discountPercent(product: ProductItem): number | null {
 // 원산지/단위를 따로따로 뱃지로 흩어놓는 대신, "[국내산] 해남 알배기 배추 1포기"처럼
 // 하나의 자연스러운 문장으로 합쳐서 보여준다 (HomeFeed와 동일 규칙) — 대분류(국내산/
 // 수입산)만 대괄호 태그로 남기고 상세 산지는 상품명 앞에 자연스럽게 붙인다.
-function formatProductDisplayTitle(product: ProductItem): React.ReactNode {
+export function formatProductDisplayTitle(product: ProductItem): React.ReactNode {
   const [originType, originDetail] = (product.origin || "").split(" · ").map((s) => s.trim());
   const typePart = originType ? `[${originType}] ` : "";
   const detailPart = originDetail ? `${originDetail} ` : "";
@@ -759,7 +764,6 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   onClose,
   isBookmarked,
   onToggleBookmark,
-  onNavigateToMap,
   onNavigateToRecipeMap,
   onNavigateToScanLocation,
   onSearchTag,
@@ -1167,7 +1171,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     <div className="font-extrabold text-[#0052FF] flex items-center gap-1.5 text-xs">
                       AI 스캔 종합 의견
                     </div>
-                    <p className="text-slate-700 font-medium text-xs leading-relaxed">{product.aiSummary}</p>
+                    <p className="text-slate-700 font-medium text-xs leading-relaxed">{hideSummaryConfidence(product.aiSummary)}</p>
                   </div>
                 )}
               </div>
@@ -1191,7 +1195,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     <span className="material-symbols-outlined text-base">psychology</span>
                     AI 스캔 종합 의견
                   </div>
-                  <p className="text-slate-700 font-medium text-xs leading-relaxed">{product.aiSummary}</p>
+                  <p className="text-slate-700 font-medium text-xs leading-relaxed">{hideSummaryConfidence(product.aiSummary)}</p>
                 </div>
               )}
 
@@ -1335,17 +1339,6 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </>
                 )}
 
-                <button
-                  onClick={() => {
-                    onClose();
-                    onNavigateToMap();
-                  }}
-                  className="w-full bg-[#0052FF] hover:bg-[#0043D6] text-white py-3.5 px-4 rounded-xl font-extrabold text-xs shadow-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-                >
-                  <span className="material-symbols-outlined text-lg">map</span>
-                  <span>상점 위치 지도에서 확인하기</span>
-                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                </button>
               </div>
             </div>
           )}

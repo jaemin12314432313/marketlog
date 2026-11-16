@@ -15,7 +15,6 @@ import {
 
 // 앱의 "등록 상품" 목록과 같은 가로형 상품 카드 — 누르면 상품 페이지(/r/{id})
 function ProductRow({ p }: { p: BoothProduct; key?: React.Key }) {
-  const pct = p.publicPrice > 0 ? Math.round(((p.publicPrice - p.price) / p.publicPrice) * 100) : null;
   const meta = [p.origin, p.unit].filter(Boolean).join(" · ");
   return (
     <a href={`/r/${p.id}`} className="group flex items-center gap-4 rounded-2xl border border-slate-100 bg-white p-3 shadow-[0_4px_18px_rgba(15,23,42,0.04)] transition hover:border-blue-200 hover:shadow-md active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
@@ -34,9 +33,6 @@ function ProductRow({ p }: { p: BoothProduct; key?: React.Key }) {
             {p.price.toLocaleString()}
             <span className="text-xs font-semibold ml-0.5">원</span>
           </span>
-          {pct != null && pct > 0 && (
-            <span className="text-[11px] font-semibold text-[#0052FF] bg-blue-50 px-1.5 py-0.5 rounded-full">{pct}% 저렴</span>
-          )}
         </div>
       </div>
       <span className="material-symbols-outlined text-slate-300 transition group-hover:text-blue-600">chevron_right</span>
@@ -150,7 +146,7 @@ export default function BoothShopPage({ storeId }: { storeId: string }) {
             {openedAt ? `${openedAt} 개점 · ` : ""}김대중컨벤션센터
           </p>
           <p className="mt-4 text-sm leading-relaxed text-slate-600 break-keep">&ldquo;{line}&rdquo;</p>
-          <div className="mt-5 grid grid-cols-2 border-t border-slate-100 divide-x divide-slate-100">
+          <div className="mt-5 grid grid-cols-2 border-t border-slate-300 divide-x divide-slate-300">
             {stats.map((s) => (
               <div key={s.label} className="px-3 pt-4 text-center">
                 <p className="text-[11px] font-medium text-slate-500">{s.label}</p>
@@ -190,10 +186,10 @@ export default function BoothShopPage({ storeId }: { storeId: string }) {
           )}
         </section>
 
-        <a href={`/market3d.html?shop=${encodeURIComponent(storeId)}`} className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-[#0F172A] transition hover:bg-blue-100/70 active:scale-[0.99]">
-          <span className="material-symbols-outlined rounded-xl bg-white p-2 text-[#0052FF]">view_in_ar</span>
-          <span className="flex-1"><span className="block text-sm font-bold">3D 시장 둘러보기</span><span className="mt-0.5 block text-xs text-slate-500">다른 가게도 구경해 보세요</span></span>
-          <span className="material-symbols-outlined text-blue-400">chevron_right</span>
+        <a href={`/market3d.html?shop=${encodeURIComponent(storeId)}`} style={{ backgroundColor: "#0052FF", color: "#FFFFFF" }} className="market-3d-button flex items-center gap-3 rounded-2xl border border-[#0046D6] p-4 shadow-[0_5px_16px_rgba(0,82,255,0.3)] transition hover:-translate-y-0.5 active:scale-[0.98] motion-reduce:transition-none">
+          <span className="market-3d-icon material-symbols-outlined rounded-xl bg-white p-2 text-[#0052FF]">view_in_ar</span>
+          <span className="flex-1"><span className="block text-sm font-bold">3D 시장 둘러보기</span><span className="mt-0.5 block text-xs text-blue-100">다른 가게도 구경해 보세요</span></span>
+          <span className="material-symbols-outlined text-white" aria-hidden="true">chevron_right</span>
         </a>
 
         {/* 서비스 소개 */}

@@ -1,35 +1,25 @@
 // 부스 가게 QR — 상품 상세 "레시피" 탭 맨 아래 버튼으로 열린다.
-// 두 가지 QR을 고를 수 있다:
-//  - 내 가게: 그 상품을 올린 가게의 페이지(/s/{가게 id}, 진열 상품 전체)
-//  - 3D 시장: 다른 관람객들의 가게까지 둘러보는 3D 가상 시장(/market3d.html?shop={가게 id}, 내 가게 앞에서 시작)
+// 내 가게 페이지(/s/{가게 id}, 진열 상품 전체)로 연결한다.
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import QRCode from "qrcode";
-import { boothApi, market3dUrl, shopPageUrl, type BoothShopInfo } from "./boothApi";
-
-type QrMode = "shop" | "market";
-
-const MODE_TEXT: Record<QrMode, { title: string; sub: string }> = {
-  shop: { title: "폰 카메라로 찍어서 내 가게를 가져가세요", sub: "앱 설치 없이 열리고, 내 가게 요약본을 저장할 수 있어요" },
-  market: { title: "3D 시장에서 다른 가게를 구경해보세요", sub: "다른 관람객들이 연 가게를 걸어 다니며 볼 수 있어요" },
-};
+import { boothApi, shopPageUrl, type BoothShopInfo } from "./boothApi";
 
 function BoothShopQrPopup({ storeId, shopName, onClose }: { storeId: string; shopName: string; onClose: () => void }) {
-  const [mode, setMode] = useState<QrMode>("shop");
   const [shop, setShop] = useState<BoothShopInfo | null>(null);
   const [productCount, setProductCount] = useState<number | null>(null);
-  const [qr, setQr] = useState<Record<QrMode, string>>({ shop: "", market: "" });
+  const [qr, setQr] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [shopUrl, marketUrl] = await Promise.all([shopPageUrl(storeId), market3dUrl(storeId)]);
+        const shopUrl = await shopPageUrl(storeId);
         const opts = { width: 640, margin: 2, errorCorrectionLevel: "M" as const, color: { dark: "#0F172A", light: "#FFFFFF" } };
-        const [shopImg, marketImg] = await Promise.all([QRCode.toDataURL(shopUrl, opts), QRCode.toDataURL(marketUrl, opts)]);
+        const shopImg = await QRCode.toDataURL(shopUrl, opts);
         if (cancelled) return;
-        setQr({ shop: shopImg, market: marketImg });
+        setQr(shopImg);
         const res = await boothApi.shop(storeId, true);
         if (cancelled) return;
         setShop(res.store);
@@ -57,31 +47,9 @@ function BoothShopQrPopup({ storeId, shopName, onClose }: { storeId: string; sho
           <p className="mt-1 text-2xl font-extrabold text-[#0F172A]">{shop?.name || shopName}</p>
           {productCount != null && <p className="mt-0.5 text-sm font-medium text-slate-500">진열 상품 {productCount}개</p>}
 
-          {/* 내 가게 / 3D 시장 */}
-          <div className="mt-4 w-full grid grid-cols-2 gap-1 p-1 rounded-xl bg-slate-100">
-            {(
-              [
-                ["shop", "storefront", "내 가게"],
-                ["market", "view_in_ar", "3D 시장"],
-              ] as [QrMode, string, string][]
-            ).map(([m, icon, label]) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setMode(m)}
-                className={`py-2 rounded-lg text-sm font-extrabold flex items-center justify-center gap-1 transition ${
-                  mode === m ? "bg-white text-[#0052FF] shadow-sm" : "text-slate-500"
-                }`}
-              >
-                <span className="material-symbols-outlined text-base">{icon}</span>
-                {label}
-              </button>
-            ))}
-          </div>
-
           <div className="mt-4 w-64 h-64 max-w-full rounded-2xl border border-[#E2E8F0] bg-white p-1 flex items-center justify-center">
-            {qr[mode] ? (
-              <img src={qr[mode]} alt={mode === "shop" ? "내 가게 페이지 QR" : "3D 가상 시장 QR"} className="w-full h-full" />
+            {qr ? (
+              <img src={qr} alt="내 가게 페이지 QR" className="w-full h-full" />
             ) : error ? (
               <p className="text-xs font-semibold text-slate-400 px-3">{error}</p>
             ) : (
@@ -89,8 +57,8 @@ function BoothShopQrPopup({ storeId, shopName, onClose }: { storeId: string; sho
             )}
           </div>
 
-          <p className="mt-4 text-base font-extrabold text-[#0F172A]">{MODE_TEXT[mode].title}</p>
-          <p className="mt-1 text-xs font-medium text-slate-400">{MODE_TEXT[mode].sub}</p>
+          <p className="mt-4 text-base font-extrabold text-[#0F172A]">폰 카메라로 찍어서 내 가게를 가져가세요</p>
+          <p className="mt-1 text-xs font-medium text-slate-400">앱 설치 없이 열리고, 내 가게 요약본을 저장할 수 있어요</p>
 
           <button onClick={onClose} className="mt-5 w-full py-3 rounded-xl bg-slate-100 text-slate-700 font-extrabold">
             닫기
@@ -113,7 +81,7 @@ export function BoothShopQrButton({ storeId, shopName }: { storeId: string; shop
         className="w-full bg-[#0F172A] hover:bg-black text-white py-3.5 px-4 rounded-xl font-semibold text-sm shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
       >
         <span className="material-symbols-outlined text-lg">qr_code_2</span>
-        <span>내 가게 · 3D 시장 QR</span>
+        <span>내 가게 QR</span>
       </button>
       {open && <BoothShopQrPopup storeId={storeId} shopName={shopName} onClose={() => setOpen(false)} />}
     </>

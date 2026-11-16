@@ -4,7 +4,7 @@ import { Capacitor } from "@capacitor/core";
 import { API_BASE_URL, analyzeProduct } from "../lib/api";
 
 // 입장 화면의 관람객 유형 칩 — 백엔드 VISITOR_TYPES와 같은 값이어야 한다.
-export const VISITOR_TYPES = ["초등학생", "중고등학생", "대학생", "일반", "교사·기관", "기업"] as const;
+export const VISITOR_TYPES = ["초등학생", "중고등학생", "대학생", "직장인", "교육자", "기타"] as const;
 
 export class BoothApiError extends Error {
   status?: number;

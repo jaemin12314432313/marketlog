@@ -7,3 +7,23 @@
      보인다. 우리가 직접 hover/active 스타일을 주고 있으니 기본 하이라이트는 끈다. */
   -webkit-tap-highlight-color: transparent;
 }
+
+@media (prefers-reduced-motion: no-preference) {
+  .market-3d-button {
+    animation: market-3d-glow 2.5s ease-in-out infinite;
+  }
+
+  .market-3d-icon {
+    animation: market-3d-float 2.5s ease-in-out infinite;
+  }
+
+  @keyframes market-3d-glow {
+    0%, 100% { transform: scale(1); box-shadow: 0 5px 16px rgba(0, 82, 255, 0.3); }
+    50% { transform: scale(1.025); box-shadow: 0 5px 22px rgba(0, 82, 255, 0.55), 0 0 0 4px rgba(0, 82, 255, 0.12); }
+  }
+
+  @keyframes market-3d-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+  }
+}

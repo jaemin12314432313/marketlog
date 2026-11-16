@@ -51,6 +51,18 @@ function formatPriceInput(raw: string): string {
 // 원산지도 상품명에 "완도산"처럼 수식어로 섞어 쓰지 않고 별도 필드로 받는다 —
 // 대분류(국내산/수입산) + 상세 지역(필수)을 "국내산 · 완도" 형태 문자열로 합쳐 저장한다.
 const PRODUCT_ORIGIN_OPTIONS = ["국내산", "수입산"];
+const FRUIT_ORIGIN_OPTIONS: Record<string, string[]> = {
+  사과: ["청송", "영주", "문경"],
+  배: ["나주", "천안", "안성"],
+  감: ["청도", "상주", "영동"],
+  감귤: ["제주시 애월", "제주시 조천", "서귀포시 남원"],
+};
+
+function getFruitOrigins(title: string, category: ProductItem["category"]): string[] {
+  if (category !== "과일") return [];
+  const item = ["감귤", "사과", "배", "감"].find((name) => title.includes(name));
+  return item ? FRUIT_ORIGIN_OPTIONS[item] : [];
+}
 
 function parseProductOrigin(origin: string): { type: string; detail: string } {
   const trimmed = origin.trim();
@@ -156,8 +168,10 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
   const [deletingProduct, setDeletingProduct] = useState<ProductItem | null>(null);
   const [title, setTitle] = useState("");
   const [unitAmount, setUnitAmount] = useState("1");
+  const [unitCustom, setUnitCustom] = useState(false);
   const [originType, setOriginType] = useState(PRODUCT_ORIGIN_OPTIONS[0]);
   const [originDetail, setOriginDetail] = useState("");
+  const [originCustom, setOriginCustom] = useState(false);
   const [category, setCategory] = useState<ProductItem["category"]>("수산물");
   const [price, setPrice] = useState<number | "">("");
   const [publicPrice, setPublicPrice] = useState<number | "">("");
@@ -227,10 +241,13 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
   const handleEditProduct = (p: ProductItem) => {
     setEditingProductId(p.id);
     setTitle(p.title);
-    setUnitAmount(parseProductUnitAmount(p.unit || ""));
+    const amount = parseProductUnitAmount(p.unit || "");
+    setUnitAmount(amount);
+    setUnitCustom(!/^[1-9]$/.test(amount));
     const parsedOrigin = parseProductOrigin(p.origin || "");
     setOriginType(parsedOrigin.type);
     setOriginDetail(parsedOrigin.detail);
+    setOriginCustom(false);
     setCategory(p.category);
     setPrice(p.price);
     setPublicPrice(p.publicPrice || "");
@@ -265,8 +282,10 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     setEditingProductId(null);
     setTitle("");
     setUnitAmount("1");
+    setUnitCustom(false);
     setOriginType(PRODUCT_ORIGIN_OPTIONS[0]);
     setOriginDetail("");
+    setOriginCustom(false);
     setCategory("수산물");
     setPrice("");
     setPublicPrice("");
@@ -304,8 +323,10 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
         // 재스캔하는 거라면(editingProductId 있음) 이미 채워진 과거 값을 그대로 둔다.
         if (!editingProductId) {
           setUnitAmount("1");
+          setUnitCustom(false);
           setOriginType(PRODUCT_ORIGIN_OPTIONS[0]);
           setOriginDetail("");
+          setOriginCustom(false);
           setPrice(data.sellingPrice || 0);
         }
         setCategory(data.category as ProductItem["category"]);
@@ -362,6 +383,10 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     }
     if (!originDetail.trim()) {
       alert("원산지 상세 지역(예: 완도)을 입력해 주세요.");
+      return;
+    }
+    if (!unitAmount.trim() || !Number.isFinite(Number(unitAmount)) || Number(unitAmount) <= 0) {
+      alert("단위/중량을 0보다 크게 입력해 주세요.");
       return;
     }
     // 등급/신선도/공공시세는 전부 AI 스캔에서만 채워진다 — 스캔 없이 등록되면 이 값들이
@@ -742,7 +767,11 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
             <div className="flex items-center gap-1.5">
               <select
                 value={originType}
-                onChange={(e) => setOriginType(e.target.value)}
+                onChange={(e) => {
+                  setOriginType(e.target.value);
+                  setOriginDetail("");
+                  setOriginCustom(false);
+                }}
                 disabled={!aiSummary}
                 className={`w-20 shrink-0 px-2 py-2.5 rounded-xl border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                   aiSummary
@@ -756,6 +785,53 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                   </option>
                 ))}
               </select>
+              {originType === "국내산" && getFruitOrigins(title, category).length > 0 ? (
+                originCustom || (!!originDetail && !getFruitOrigins(title, category).includes(originDetail)) ? (
+                  <div className="relative flex-1 min-w-0">
+                    <input
+                      type="text"
+                      aria-label="원산지 지역 직접 입력"
+                      placeholder="직접입력"
+                      value={originDetail}
+                      onChange={(e) => setOriginDetail(e.target.value)}
+                      disabled={!aiSummary}
+                      className="absolute z-10 left-px top-px bottom-px w-[calc(100%-1.5rem)] px-3 appearance-none border-0 shadow-none rounded-l-xl bg-white text-xs font-medium text-slate-900 placeholder:text-slate-900 outline-none focus:outline-none focus:ring-0 disabled:bg-slate-100"
+                      required
+                    />
+                    <select
+                      aria-label="원산지 지역 선택"
+                      value="custom"
+                      onChange={(e) => {
+                        if (e.target.value !== "custom") {
+                          setOriginCustom(false);
+                          setOriginDetail(e.target.value);
+                        }
+                      }}
+                      disabled={!aiSummary}
+                      className="w-full px-3 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:border-slate-200 disabled:text-slate-400 disabled:bg-slate-100"
+                    >
+                      {getFruitOrigins(title, category).map((region) => <option className="text-slate-900" key={region} value={region}>{region}</option>)}
+                      <option className="text-slate-900" value="custom">직접 입력</option>
+                    </select>
+                  </div>
+                ) : (
+                <select
+                  aria-label="원산지 지역"
+                  value={originDetail}
+                  onChange={(e) => {
+                    const custom = e.target.value === "custom";
+                    setOriginCustom(custom);
+                    setOriginDetail(custom ? "" : e.target.value);
+                  }}
+                  disabled={!aiSummary}
+                  className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:border-slate-200 disabled:text-slate-400 disabled:bg-slate-100"
+                >
+                  <option value="" disabled hidden>지역 선택</option>
+                  {getFruitOrigins(title, category).map((region) => <option key={region} value={region}>{region}</option>)}
+                  <option value="custom">직접 입력</option>
+                </select>
+                )
+              ) : (
               <input
                 type="text"
                 placeholder={aiSummary ? "완도" : "AI 스캔을 먼저 진행해주세요"}
@@ -769,6 +845,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                 }`}
                 required
               />
+              )}
             </div>
           </div>
 
@@ -777,21 +854,58 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-700">단위/중량 * (kg 기준)</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="1"
-                  value={unitAmount}
-                  onChange={(e) => setUnitAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+              <div className="flex items-center gap-1">
+                {unitCustom ? (
+                  <div className="relative flex-1 min-w-0">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      aria-label="단위/중량 직접 입력 (kg)"
+                      placeholder="직접입력"
+                      value={unitAmount}
+                      onChange={(e) => setUnitAmount(e.target.value.replace(/[^0-9.]/g, ""))}
+                      disabled={!aiSummary}
+                      className="absolute z-10 left-px top-px bottom-px w-[calc(100%-1.75rem)] pl-2 pr-0 appearance-none border-0 shadow-none rounded-l-xl bg-white text-xs font-medium text-slate-900 placeholder:text-slate-900 outline-none focus:outline-none focus:ring-0 disabled:bg-slate-100"
+                    />
+                    <select
+                      aria-label="단위/중량 선택"
+                      value="custom"
+                      onChange={(e) => {
+                        if (e.target.value !== "custom") {
+                          setUnitCustom(false);
+                          setUnitAmount(e.target.value);
+                        }
+                      }}
+                      disabled={!aiSummary}
+                      className="w-full px-2 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:border-slate-200 disabled:text-slate-400 disabled:bg-slate-100"
+                    >
+                      {Array.from({ length: 9 }, (_, i) => String(i + 1)).map((amount) => <option className="text-slate-900" key={amount} value={amount}>{amount}</option>)}
+                      <option className="text-slate-900" value="custom">직접 입력</option>
+                    </select>
+                  </div>
+                ) : (
+                <select
+                  aria-label="단위/중량 선택"
+                  value={unitCustom ? "custom" : unitAmount}
+                  onChange={(e) => {
+                    const custom = e.target.value === "custom";
+                    setUnitCustom(custom);
+                    setUnitAmount(custom ? "" : e.target.value);
+                  }}
                   disabled={!aiSummary}
-                  className={`flex-1 min-w-0 px-3.5 py-2.5 rounded-xl border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                  className={`flex-1 min-w-0 px-2 py-2.5 rounded-xl border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                     aiSummary
-                      ? "border-slate-300 text-slate-900"
+                      ? "border-slate-300 text-slate-900 bg-white"
                       : "border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed"
                   }`}
-                />
-                <span className="w-12 shrink-0 text-center px-2 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-xs text-slate-600 font-bold">
+                >
+                  {Array.from({ length: 9 }, (_, i) => String(i + 1)).map((amount) => (
+                    <option key={amount} value={amount}>{amount}</option>
+                  ))}
+                  <option value="custom">직접 입력</option>
+                </select>
+                )}
+                <span className="w-9 shrink-0 text-center px-1 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-xs text-slate-600 font-bold">
                   kg
                 </span>
               </div>
@@ -1156,8 +1270,10 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
           // 거라면(editingProductId 있음) 이미 채워진 과거 값을 그대로 둔다.
           if (!editingProductId) {
             setUnitAmount("1");
+            setUnitCustom(false);
             setOriginType(PRODUCT_ORIGIN_OPTIONS[0]);
             setOriginDetail("");
+            setOriginCustom(false);
             setPrice(scannedProduct.price || "");
           }
           setCategory(scannedProduct.category);
