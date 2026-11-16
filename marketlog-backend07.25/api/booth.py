@@ -533,39 +533,91 @@ def booth_market(hall: int | None = None, shop: str | None = None, db: Session =
         ):
             by_store.setdefault(product.store_id, []).append(product)
 
+    def market_item(product: Product, number: int) -> dict:
+        d = _booth_product_dict(product, number)
+        return {
+            "id": d["id"],
+            "title": d.get("title") or "",
+            "unit": d.get("unit") or "",
+            "origin": d.get("origin") or "",
+            "price": d.get("price") or 0,
+            "publicPrice": d.get("publicPrice") or 0,
+            "grade": d.get("grade") or "",
+            "confidence": d.get("gradeConfidencePercent"),
+            "attributeLabels": d.get("attributeLabels") or {},
+            "aiSummary": d.get("aiSummary") or "",
+            "description": d.get("description") or "",  # 사장님 한마디(홍보 문구)
+            "tags": [t for t in (d.get("tags") or "").split(",") if t.strip()][:3],
+            # 사진은 크기가 커서 목록에 넣지 않고, 상세를 열 때 /api/v1/booth/result/{id}/image 로 받는다
+        }
+
     shops = []
+    names = {shop.store_id: name for shop, name in rows}
     for shop, name in rows:
         products = by_store.get(shop.store_id, [])
-        main = _booth_product_dict(products[0], shop.number) if products else None
+        # 3D 매대에 진열 상품을 여러 개 보여주고, 가까이 가면 골라 볼 수 있게 최근 6개까지 준다.
+        # "product"(대표 상품 1개)는 예전 화면과의 호환을 위해 그대로 둔다.
+        items = [market_item(p, shop.number) for p in products[:6]]
         shops.append({
             "storeId": shop.store_id,
             "number": shop.number,
             "name": name,
             "tagline": shop.tagline,
             "productCount": len(products),
-            "product": (
-                {
-                    "id": main["id"],
-                    "title": main.get("title") or "",
-                    "unit": main.get("unit") or "",
-                    "origin": main.get("origin") or "",
-                    "createdAt": main.get("createdAt"),
-                    "freshnessScore": main.get("freshnessScore"),
-                    "defectScore": main.get("defectScore"),
-                    "uniformityScore": main.get("uniformityScore"),
-                    "price": main.get("price") or 0,
-                    "publicPrice": main.get("publicPrice") or 0,
-                    "grade": main.get("grade") or "",
-                    "confidence": main.get("gradeConfidencePercent"),
-                    "attributeLabels": main.get("attributeLabels") or {},
-                    "aiSummary": main.get("aiSummary") or "",
-                    "tags": [t for t in (main.get("tags") or "").split(",") if t.strip()][:3],
-                }
-                if main
-                else None
-            ),
+            "product": items[0] if items else None,
+            "products": items,
         })
-    return {"success": True, "shops": shops, "hall": hall, "latestHall": latest_hall, "latestNumber": latest_number, "hallSize": HALL_SIZE}
+    return {"success": True, "shops": shops, "ranking": _market_ranking(db, names), "hall": hall, "latestHall": latest_hall, "latestNumber": latest_number, "hallSize": HALL_SIZE}
+
+
+# ---------- 3D 시장 랭킹: 가게(=체험한 관람객)마다 찾은 황금 사과 수, 둘러본 가게 수 ----------
+SCORE_EVENT = "market3d_score"
+
+
+def _read_score(detail: str | None) -> tuple[int, int]:
+    try:
+        d = json.loads(detail or "{}")
+        return int(d.get("apples") or 0), int(d.get("visited") or 0)
+    except (ValueError, TypeError, AttributeError):
+        return 0, 0
+
+
+def _market_ranking(db: Session, names: dict[str, str]) -> dict:
+    """숨기지 않은 가게만, 기록이 1 이상인 곳을 많은 순으로 3곳씩."""
+    scores = []
+    for store_id, detail in db.query(BoothEvent.product_id, BoothEvent.detail).filter(BoothEvent.type == SCORE_EVENT).all():
+        if store_id in names:
+            apples, visited = _read_score(detail)
+            scores.append((store_id, apples, visited))
+
+    def top(idx: int) -> list[dict]:
+        ranked = sorted((s for s in scores if s[idx] > 0), key=lambda s: -s[idx])[:3]
+        return [{"storeId": s[0], "name": names[s[0]], "count": s[idx]} for s in ranked]
+
+    return {"apples": top(1), "visited": top(2)}
+
+
+class MarketScoreRequest(BaseModel):
+    storeId: str = Field(..., max_length=64)
+    apples: int = Field(0, ge=0, le=100000)
+    visited: int = Field(0, ge=0, le=1000)
+
+
+@router.post("/market/score")
+def booth_market_score(payload: MarketScoreRequest, db: Session = Depends(get_db)):
+    """3D 시장에서 내 가게 이름으로 찾은 황금 사과 수·둘러본 가게 수를 올린다. 가게마다 최고 기록만 남긴다."""
+    if not db.query(BoothShop).filter(BoothShop.store_id == payload.storeId).first():
+        raise HTTPException(status_code=404, detail="가게를 찾을 수 없습니다.")
+    row = db.query(BoothEvent).filter(BoothEvent.type == SCORE_EVENT, BoothEvent.product_id == payload.storeId).first()
+    apples, visited = _read_score(row.detail if row else None)
+    apples, visited = max(apples, payload.apples), max(visited, payload.visited)
+    detail = json.dumps({"apples": apples, "visited": visited})
+    if row:
+        row.detail = detail
+    else:
+        db.add(BoothEvent(type=SCORE_EVENT, product_id=payload.storeId, detail=detail))
+    db.commit()
+    return {"success": True, "apples": apples, "visited": visited}
 
 
 @router.get("/shop/{store_id}")
