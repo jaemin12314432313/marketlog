@@ -223,7 +223,13 @@ def get_map_stores(market_name: str = "양동시장", db: Session = Depends(get_
         rows = (
             db.query(Store, Product)
             .outerjoin(Product, Product.store_id == Store.id)
-            .filter(Store.market_id == market.id, Store.category.notin_(MAP_EXCLUDED_CATEGORIES))
+            .filter(
+                Store.market_id == market.id,
+                Store.category.notin_(MAP_EXCLUDED_CATEGORIES),
+                # 개발 중에 만든 시험용 점포(test_…, 테스트…)는 지도/레시피 매칭에 나오지 않게 한다.
+                ~Store.name.ilike("%test%"),
+                ~Store.name.like("%테스트%"),
+            )
             .all()
         )
         stores_by_id: dict[str, Store] = {}

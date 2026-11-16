@@ -5,6 +5,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import asyncio
+import threading
 import torch
 import base64
 import io
@@ -31,18 +32,25 @@ router = APIRouter(tags=["Consumer"])
 torch.set_num_threads(1)
 vision_pipeline = None
 _models_load_attempted = False
+_models_lock = threading.Lock()
 
 def ensure_models_loaded():
+    # 다른 스레드가 로드하는 동안 여기서 같이 기다린다. (예전에는 플래그를 로드 전에 먼저 세워서,
+    # 로드 중에 들어온 요청이 모델 없이 샘플(Mock) 결과를 받아 갔다.)
     global vision_pipeline, _models_load_attempted
     if _models_load_attempted:
         return
-    _models_load_attempted = True
-    try:
-        from mlv2.pipeline import Pipeline
-        vision_pipeline = Pipeline(device="cpu")
-        print("AI 모델 로드 완료")
-    except Exception as e:
-        print(f"모델 로드 실패 (Mock 모드): {e}")
+    with _models_lock:
+        if _models_load_attempted:
+            return
+        try:
+            from mlv2.pipeline import Pipeline
+            vision_pipeline = Pipeline(device="cpu")
+            print("AI 모델 로드 완료")
+        except Exception as e:
+            print(f"모델 로드 실패 (Mock 모드): {e}")
+        finally:
+            _models_load_attempted = True
 
 # 등급 매핑 — mlv2 옛 그레이더(감자 등 폴백 경로)는 2단계(특상/보통)로 판정한다.
 # attribute_quality_v3(2026-08-18 인계분부터)도 내부적으로는 상/중/하 3단계로 계산하지만

@@ -126,6 +126,13 @@ export default function App() {
     if (isBoothMode) setSelectedMarket(COSHOW_MARKET);
     else setSelectedMarket((prev) => (prev.id === COSHOW_MARKET.id ? MARKETS_DATA[0] : prev));
   }, [isBoothMode]);
+  // 부스 모드에서 레시피 지도(연계 점포)를 볼 때만 지도가 실제 양동시장 점포를 쓴다(아래 onNavigateToRecipeMap).
+  // 지도 탭을 벗어나면 다시 CO-SHOW 가상 시장으로 돌려 놓아야 상품 상세/피드가 양동시장 정보로 바뀌지 않는다.
+  useEffect(() => {
+    if (isBoothMode && activeTab !== "map") {
+      setSelectedMarket((prev) => (prev.id === COSHOW_MARKET.id ? prev : COSHOW_MARKET));
+    }
+  }, [isBoothMode, activeTab]);
   // 피드 요청이 겹치면(로그인 직후 전체 피드 → 부스 피드) 늦게 도착한 옛 응답이 화면을 덮어쓰지 않게
   // 가장 마지막 요청의 응답만 반영한다.
   const feedRequestSeq = useRef(0);
@@ -484,6 +491,7 @@ export default function App() {
             onFocusCoordinateHandled={() => setMapFocusCoordinate(null)}
             recipeIngredients={recipeIngredients}
             recipeStartShopName={recipeStartShopName}
+            recipeNotice={isBoothMode && recipeIngredients ? "예시 화면 · 실제 양동시장 점포 정보예요" : null}
             // 화면 위 뒤로가기 버튼은 없앴다 — 하드웨어/제스처 뒤로가기가 이미 위
             // backButton 리스너에서 같은 동작(mapReturnProduct로 복귀 + 레시피 상태
             // 정리)을 처리하므로 중복이었다.
@@ -597,7 +605,8 @@ export default function App() {
             setRecipeStartShopName(null);
           }}
           onNavigateToRecipeMap={(ingredients) => {
-            const productMarket = MARKETS_DATA.find((m) => m.id === selectedProduct.marketId);
+            // 부스(CO-SHOW 가상 시장) 상품이면 재료를 파는 점포는 실제 양동시장 점포에서 찾는다.
+            const productMarket = MARKETS_DATA.find((m) => m.id === (isBoothMode ? "yangdong" : selectedProduct.marketId));
             if (productMarket) setSelectedMarket(productMarket);
             setRecipeIngredients(ingredients);
             setRecipeStartShopName(selectedProduct.shopName);

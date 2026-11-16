@@ -40,6 +40,8 @@ interface MapViewProps {
   // 위치"가 아니라 이 점포부터 출발하는 걸로 계산한다. 그 재료를 이미 여기서 사기로
   // 하고 온 거니, 동선도 여기서부터 나머지 재료를 도는 게 실제 장보기 흐름에 맞는다.
   recipeStartShopName?: string | null;
+  // 지도 위에 작게 띄우는 안내 문구(예: 부스 체험에서 "양동시장 실제 점포 기준 예시"). 없으면 안 띄운다.
+  recipeNotice?: string | null;
 }
 
 const NAVER_SCRIPT_ID = "naver-maps-sdk";
@@ -231,6 +233,7 @@ export const MapView: React.FC<MapViewProps> = ({
   onBack,
   recipeIngredients,
   recipeStartShopName,
+  recipeNotice,
 }) => {
   // 키보드가 올라오면 안드로이드 웹뷰가 실제 뷰포트 높이(window.innerHeight)를 줄여버려서,
   // h-screen(100vh) 기준으로 top-1/3, bottom-Npx로 배치해둔 줌 버튼/현재 위치 버튼이 화면
@@ -251,11 +254,11 @@ export const MapView: React.FC<MapViewProps> = ({
   const [activePin, setActivePin] = useState<string | null>(null);
   const [naverLoaded, setNaverLoaded] = useState(false);
   // 체크리스트 X를 누르면 완전히 사라지는 대신 오른쪽에 작은 탭으로 접혀 있다가 다시
-  // 눌러서 펼칠 수 있게 한다 — 새로 다른 레시피로 들어오면(재료 목록이 바뀌면) 이전에
-  // 접어뒀던 상태가 남아있지 않게 펼친 상태로 초기화한다.
-  const [isRecipeChecklistMinimized, setIsRecipeChecklistMinimized] = useState(false);
+  // 눌러서 펼칠 수 있게 한다. 지도를 처음 열 때(레시피로 들어올 때마다)는 지도가 먼저 보이도록
+  // 기본을 접힌 상태로 둔다 — 오른쪽 작은 버튼을 누르면 펼쳐진다.
+  const [isRecipeChecklistMinimized, setIsRecipeChecklistMinimized] = useState(true);
   useEffect(() => {
-    setIsRecipeChecklistMinimized(false);
+    setIsRecipeChecklistMinimized(true);
   }, [recipeIngredients]);
   // 재료 구성이 같은 레시피(정렬한 재료 이름 목록이 같음)는 같은 키를 갖는다 — 그
   // 레시피로 다시 들어오면 전에 빼뒀던 재료/골라둔 점포를 이 기기에서 그대로 복원한다.
@@ -1357,6 +1360,12 @@ export const MapView: React.FC<MapViewProps> = ({
       {currentZoom < MIN_ZOOM_FOR_MARKERS && stores.length > 0 && !recipeRelevantStoreIds && (
         <div className="absolute top-[calc(5rem+env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-20 bg-white/95 text-[#334155] text-xs font-semibold px-3 py-1.5 rounded-full shadow-md border border-[#E2E8F0] pointer-events-none">
           더 확대하면 점포가 표시됩니다
+        </div>
+      )}
+
+      {recipeNotice && (
+        <div className="absolute top-[calc(5rem+env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-20 max-w-[calc(100vw-2rem)] bg-[#FFF8E1]/95 text-[#7A5A00] text-xs font-semibold px-3 py-1.5 rounded-full shadow-md border border-[#F2C200]/60 pointer-events-none text-center">
+          {recipeNotice}
         </div>
       )}
 

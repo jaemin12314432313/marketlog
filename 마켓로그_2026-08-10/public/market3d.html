@@ -131,6 +131,45 @@
   .qtags { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; padding: 0; list-style: none; }
   .qtags li { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: var(--line); }
   .qnote { margin: 16px 0 12px; font-size: 12px; color: var(--muted); }
+  /* 모니터 모드(?monitor=1): 조작 화면을 모두 숨기고, 새 가게가 열릴 때마다 큰 안내를 띄운다 */
+  .hallnav { position: absolute; top: 92px; display: flex; gap: 8px; align-items: center; z-index: 6; }
+  .hallnav[hidden] { display: none !important; }
+  .hallnav button { font-size: 12px; font-weight: 800; color: var(--accent); background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; cursor: pointer; }
+  .hallnav button:disabled { opacity: 0.4; cursor: default; }
+  .hallnav button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .hallnav span { font-size: 12px; font-weight: 800; color: var(--fg); background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; }
+  .monitor .hallnav { display: none !important; }
+  .monitor .joy, .monitor .btns, .monitor .hint, .monitor .minimap, .monitor .card, .monitor .qs, .monitor .toast, .monitor #myLink { display: none !important; }
+  .monitor .plate { transform-origin: top left; transform: scale(1.5); }
+  .monb { position: absolute; left: 3%; bottom: 5%; transform: translateX(-24px); opacity: 0; transition: opacity 0.5s, transform 0.5s; text-align: left; background: rgba(13, 14, 17, 0.72); color: #fff; border-left: 6px solid #f2c200; border-radius: 12px; padding: 12px 22px 14px 18px; max-width: 42vw; pointer-events: none; backdrop-filter: blur(6px); }
+  .monb.on { opacity: 1; transform: translateX(0); }
+  .monb[hidden] { display: none !important; }
+  .monb-no { color: #f2c200; font-size: clamp(11px, 1.05vw, 17px); font-weight: 600; letter-spacing: 0.06em; }
+  .monb-name { font-family: var(--font-display); font-size: clamp(20px, 2.3vw, 38px); line-height: 1.2; margin: 2px 0 4px; font-weight: 800; overflow-wrap: anywhere; }
+  .monb-line { font-size: clamp(13px, 1.3vw, 21px); opacity: 0.95; }
+  .monb-line b { color: #f2c200; font-variant-numeric: tabular-nums; }
+  .monb-chips { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .monb-chips span { font-size: clamp(11px, 1.05vw, 17px); background: rgba(255, 255, 255, 0.14); border-radius: 999px; padding: 3px 12px; }
+  .monside { display: none; }
+  .monitor .monside { display: none !important; }
+  .monitor .monside { display: flex; flex-direction: column; position: absolute; right: 0; top: 0; bottom: 0; width: 30%; background: #111317; color: #fff; border-left: 4px solid #f2c200; padding: 2.2vh 1.6vw; box-sizing: border-box; gap: 1.6vh; overflow: hidden; }
+  .ms-head small { color: #f2c200; font-size: clamp(11px, 0.9vw, 16px); letter-spacing: 0.08em; }
+  .ms-head h2 { margin: 0.4vh 0; font-family: var(--font-display); font-size: clamp(22px, 2.3vw, 42px); font-weight: 800; }
+  .ms-head span { color: rgba(255, 255, 255, 0.6); font-size: clamp(12px, 1vw, 18px); }
+  .ms-list { display: flex; flex-direction: column; gap: 1.2vh; flex: 1; min-height: 0; }
+  .ms-card { background: rgba(255, 255, 255, 0.07); border-radius: 12px; padding: 1.2vh 1vw; animation: msIn 0.6s ease both; }
+  .ms-card.new { background: rgba(242, 194, 0, 0.16); border: 2px solid #f2c200; }
+  .ms-no { color: #f2c200; font-size: clamp(10px, 0.85vw, 15px); font-weight: 700; letter-spacing: 0.05em; }
+  .ms-name { font-family: var(--font-display); font-weight: 800; font-size: clamp(16px, 1.55vw, 28px); line-height: 1.2; overflow-wrap: anywhere; }
+  .ms-line { font-size: clamp(12px, 1vw, 18px); opacity: 0.9; }
+  .ms-line b { color: #f2c200; }
+  .ms-chips { margin-top: 0.6vh; display: flex; gap: 6px; flex-wrap: wrap; }
+  .ms-chips span { font-size: clamp(10px, 0.85vw, 15px); background: rgba(255, 255, 255, 0.14); border-radius: 999px; padding: 2px 10px; }
+  @keyframes msIn { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+  
+  .monempty { position: absolute; left: 0; right: 0; bottom: 12%; margin: 0; text-align: center; color: #fff; font-family: var(--font-display); font-size: clamp(24px, 3.4vw, 56px); text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6); pointer-events: none; }
+  .monempty[hidden] { display: none !important; }
+  @media (prefers-reduced-motion: reduce) { .monb { transition: none; } }
   .nogl { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; padding: 24px; text-align: center; color: var(--muted); }
   .app.nogl-on .nogl { display: flex; }
   .app.nogl-on #gl, .app.nogl-on .joy, .app.nogl-on .btns, .app.nogl-on .minimap, .app.nogl-on .hint { display: none; }
@@ -141,9 +180,10 @@
   <canvas id="gl" aria-label="RE:LOCAL 2026 CO-SHOW 가상 전시장. 왼쪽 아래 조이스틱으로 걷고, 화면을 끌어서 시야를 돌립니다."></canvas>
 
   <div class="topbar hud-x">
-    <div class="plate"><small>CO-SHOW 2026</small><strong>3D 가상 시장</strong><span id="stats"></span></div>
+    <div class="plate"><small>CO-SHOW 2026</small><strong id="hallname">3D 가상 시장</strong><span id="stats"></span></div>
     <a class="sample" id="myLink" href="#" hidden>내 가게 페이지</a>
   </div>
+  <div class="hallnav hud-x" id="hallnav" hidden></div>
   <canvas class="minimap" id="mini" width="144" height="186" aria-hidden="true"></canvas>
   <div class="toast" id="toast" role="status"></div>
 
@@ -154,6 +194,8 @@
   <div class="btns" style="right:max(16px, env(safe-area-inset-right, 0px))">
     <button class="btn primary" id="goMine" type="button">내 가게로 가기</button>
     <button class="btn" id="aerial" type="button" aria-pressed="false">위에서 보기</button>  </div>
+  <aside class="monside" id="monside"></aside>
+  <p class="monempty" id="monempty" hidden>부스에서 첫 가게를 열어보세요</p>
   <section class="qs" id="qs" hidden aria-live="polite"></section>
   <p class="nogl" id="nogl">이 기기에서는 3D 화면을 열 수 없습니다. 다른 브라우저로 열어 주세요.</p>
 </div>
@@ -162,6 +204,7 @@
 /* 마켓로그 CO-SHOW 3D 가상 시장 — 팀원 데모(coshow-market-demo)를 실제 부스 가게 데이터에 연결한 버전.
    ?shop={가게 id} 로 열면 내 가게 앞에서 시작한다. 데이터: GET /api/v1/booth/market (몇 초마다 다시 불러 새 가게를 세움) */
 var MARKET_PARAMS = new URLSearchParams(location.search);
+var MONITOR = MARKET_PARAMS.get("monitor") === "1"; /* 대형 모니터용 자동 관람 모드 */
 var MARKET_API = (function () {
   var o = MARKET_PARAMS.get("api");
   if (o) return o.replace(/\/$/, "");
@@ -170,8 +213,41 @@ var MARKET_API = (function () {
   if (location.port === "3000" || location.port === "5173") return location.protocol + "//" + location.hostname + ":8000";
   return location.origin;
 })();
+/* 시장은 가게 144곳씩 "1관, 2관…"으로 나뉜다. ?hall=N 은 그 관, ?shop={가게 id} 는 그 가게가 있는 관, 둘 다 없으면 가장 최근 관(대형 모니터) */
+var HALL = 1, HALL_COUNT = 1, HALL0 = null, LATEST_NO = 0, NEXT_SWITCH = 0, MY_HALL = 0;
+function gotoHall(n) {
+  var p = new URLSearchParams(location.search);
+  if (p.get("shop")) { if (n === MY_HALL) p.set("myhall", String(MY_HALL)); else p.delete("shop"); }
+  p.set("hall", String(n));
+  location.replace(location.pathname + "?" + p.toString());
+}
+function renderHallNav() {
+  var el = document.getElementById("hallnav"); if (!el || MONITOR) return;
+  if (HALL_COUNT < 2) { el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML = '<button type="button" data-h="' + (HALL - 1) + '"' + (HALL <= 1 ? " disabled" : "") + '>‹ 이전 관</button><span>' + HALL + "관 / " + HALL_COUNT + '관</span><button type="button" data-h="' + (HALL + 1) + '"' + (HALL >= HALL_COUNT ? " disabled" : "") + '>다음 관 ›</button>';
+  el.onclick = function (e) { var b = e.target.closest ? e.target.closest("button") : null; if (b && !b.disabled) gotoHall(+b.getAttribute("data-h")); };
+}
 function loadMarket() {
-  return fetch(MARKET_API + "/api/v1/booth/market", { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }).then(function (j) { return j.shops || []; });
+  var q = MARKET_PARAMS.get("hall") ? "?hall=" + encodeURIComponent(MARKET_PARAMS.get("hall")) : MARKET_PARAMS.get("shop") ? "?shop=" + encodeURIComponent(MARKET_PARAMS.get("shop")) : "";
+  return fetch(MARKET_API + "/api/v1/booth/market" + q, { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }).then(function (j) {
+    if (HALL0 == null) HALL0 = j.hall || 1;
+    else if (!q && j.hall && j.hall !== HALL0) location.reload(); /* 가장 최근 관을 보던 화면은 새 관이 열리면 새로 연다 */
+    var first = HALL0 === null || NEXT_SWITCH === 0;
+    HALL = j.hall || 1; HALL_COUNT = j.latestHall || HALL;
+    if (first) { MY_HALL = MARKET_PARAMS.get("shop") ? (MARKET_PARAMS.get("hall") ? +MARKET_PARAMS.get("myhall") || 0 : HALL) : 0; NEXT_SWITCH = Date.now() + (HALL === HALL_COUNT ? 300000 : 120000); }
+    if (MONITOR) {
+      var ln = j.latestNumber || 0;
+      /* 다른 관을 보여 주는 중에 최신 관에 새 가게가 열리면 바로 최신 관으로 간다 */
+      if (LATEST_NO && ln > LATEST_NO && HALL !== HALL_COUNT) { gotoHall(HALL_COUNT); }
+      LATEST_NO = ln;
+      /* 관을 돌려 가며 보여 준다: 최신 관 5분, 지난 관 2분 */
+      if (HALL_COUNT > 1 && Date.now() >= NEXT_SWITCH) gotoHall(HALL >= HALL_COUNT ? 1 : HALL + 1);
+    }
+    renderHallNav();
+    var hn = document.getElementById("hallname"); if (hn) hn.textContent = HALL_COUNT > 1 ? "3D 가상 시장 · " + HALL + "관" : "3D 가상 시장";
+    return j.shops || [];
+  });
 }
 loadMarket().then(function (shops) { startMarket(shops, MARKET_PARAMS.get("shop")); }).catch(function () {
   var app = document.getElementById("app"), msg = document.getElementById("nogl");
@@ -180,6 +256,7 @@ loadMarket().then(function (shops) { startMarket(shops, MARKET_PARAMS.get("shop"
 function startMarket(SHOP_DATA, MINE_ID) {
   var $ = function (id) { return document.getElementById(id); };
   var app = $("app"), canvas = $("gl");
+  if (MONITOR) app.classList.add("monitor");
   if (typeof THREE === "undefined") { app.classList.add("nogl-on"); return; }
   var renderer;
   try { renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true }); }
@@ -459,8 +536,10 @@ function startMarket(SHOP_DATA, MINE_ID) {
   var feedTex = canvasTex(1024, 640, function (g, w, h) {
     g.fillStyle = "#0d0e11"; g.fillRect(0, 0, w, h); g.fillStyle = "#f2c200"; g.fillRect(0, 96, w, 6);
     g.textBaseline = "middle"; g.textAlign = "left"; g.font = FONT(64); g.fillText("방금 문을 연 가게", 36, 52);
+    var newest = []; for (var ni = 0; ni < filled; ni++) newest.push(ni);
+    newest.sort(function (a, b) { return (stalls[b].number || 0) - (stalls[a].number || 0); });
     for (var i = 0; i < 6; i++) {
-      var k = filled - 1 - i; if (k < 0) break; var s = stalls[k], y = 150 + i * 80;
+      var k = newest[i]; if (k == null) break; var s = stalls[k], y = 150 + i * 80;
       g.fillStyle = "#ffffff"; g.textAlign = "left"; g.font = FONT(46); g.fillText(s.name, 36, y);
       g.fillStyle = "#f2c200"; g.textAlign = "right"; g.fillText(s.has ? s.title + " " + s.price.toLocaleString("ko-KR") + "원" : "준비 중", w - 36, y);
     }
@@ -851,7 +930,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
   }
   cardEl.addEventListener("click", function () { if (shownSlot >= 0) openSheet(shownSlot); });
   var visited = {}, stampN = 0;
-  function stats() { $("stats").textContent = "가게 " + filled + "곳 · 둘러본 가게 " + stampN + "곳"; }
+  function stats() { $("stats").textContent = MONITOR ? "가게 " + filled + "곳" : "가게 " + filled + "곳 · 둘러본 가게 " + stampN + "곳"; }
   stats();
   var toastEl = $("toast"), toastT = 0;
   function toast(msg) { toastEl.textContent = msg; toastEl.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(function () { toastEl.classList.remove("on"); }, 3200); }
@@ -990,7 +1069,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
     });
   }
   /* 8초마다 서버를 다시 불러, 새 가게는 대기열에 넣고 기존 가게는 최신 상품으로 바꾼다 */
-  var pending = [];
+  var pending = [], recyclePtr = 0;
   function refresh() {
     loadMarket().then(function (list) {
       var known = {}, i; for (i = 0; i < filled; i++) known[stalls[i].storeId] = i;
@@ -1031,6 +1110,47 @@ function startMarket(SHOP_DATA, MINE_ID) {
   }
   if (window.ResizeObserver) new ResizeObserver(resize).observe(app); else window.addEventListener("resize", resize);
   resize(); cam.dist = cam.gDist; cam.eff = cam.dist;
+
+  /* ---------- 모니터 모드(?monitor=1): 손대지 않아도 시장을 돌아다니고, 새 가게가 열리면 그 앞으로 간다 ---------- */
+  var mon = { t: 0, cut: null, queue: [], pos: new THREE.Vector3(0, 22, 44), look: new THREE.Vector3(0, 1, 4), ready: false, shown: -1 };
+  var monEmpty = $("monempty"), monSide = $("monside"), monPos = new THREE.Vector3(), monLook = new THREE.Vector3();
+  function monitorFocus(k) { if (mon.queue.length < 4) mon.queue.push(k); }
+  function setHallVisible(on) { ceil.visible = on; trussLines.visible = on; lamps.visible = on; }
+  /* 오른쪽 목록: 가장 최근에 열린 가게부터 6곳 */
+  function monList() {
+    var h = '<div class="ms-head"><small>MARKETLOG · CO-SHOW 2026</small><h2>방금 열린 가게</h2><span>지금까지 ' + filled + '곳이 문을 열었어요</span></div><div class="ms-list">';
+    for (var i = 0, k = filled - 1; k >= 0 && i < 6; k--, i++) {
+      var s = stalls[k], pct = pctOf(s);
+      h += '<div class="ms-card' + (i === 0 ? " new" : "") + '"><div class="ms-no">No.' + s.number + (i === 0 ? ' · NEW' : '') + '</div><div class="ms-name">' + esc(s.name) + '</div>' +
+        '<div class="ms-line">' + esc(s.title) + (s.unit ? " · " + esc(s.unit) : "") + (s.price ? ' · <b>' + won(s.price) + '</b>' : "") + '</div>' +
+        (s.grade ? '<div class="ms-chips"><span>AI 등급 ' + gradeName(s.grade) + '</span>' + (pct != null && pct > 0 ? '<span>시세보다 ' + pct + '% 저렴</span>' : '') + '</div>' : '') + '</div>';
+    }
+    monSide.innerHTML = h + '</div>';
+  }
+  function monitorCam(dt) {
+    me.visible = false; setHallVisible(false);
+    monEmpty.hidden = filled > 0;
+    
+    mon.t += dt;
+    if (!mon.cut && mon.queue.length) { mon.cut = { k: mon.queue.shift(), t: 0, len: 6 }; mon.last = mon.t; }
+    else if (!mon.cut && filled > 0 && mon.t - (mon.last || 0) > 14) { mon.cut = { k: Math.floor(Math.random() * filled), t: 0, len: 5 }; mon.last = mon.t; }
+    if (mon.cut) {
+      /* 새 가게 정면 컷 (약 6초) */
+      var c = mon.cut, s = stalls[c.k], dir = s.side ? 1 : -1; c.t += dt;
+      monPos.set(s.x + 1.6 + Math.sin(c.t * 0.5) * 0.6, 3.1, s.z + dir * 5.2);
+      monLook.set(s.x, 1.7, s.z);
+      player.x = s.x; player.z = s.z + dir * 3;
+      if (c.t > c.len) { mon.cut = null; mon.last = mon.t; }
+    } else {
+      /* 시장 위를 낮게 천천히 돌기 */
+      var a = mon.t * 0.06, r = 27 + Math.sin(mon.t * 0.1) * 5;
+      monPos.set(Math.sin(a) * r, 13 + Math.sin(mon.t * 0.13) * 2.5, 4 + Math.cos(a) * r);
+      monLook.set(0, 1.5, 4); player.x = 0; player.z = 4;
+    }
+    var k2 = mon.ready ? 1 - Math.exp(-dt * (mon.cut ? 1.8 : 1.2)) : 1;
+    mon.pos.lerp(monPos, k2); mon.look.lerp(monLook, k2); mon.ready = true;
+    camera.position.copy(mon.pos); camera.lookAt(mon.look);
+  }
 
   function frame() {
     var dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
@@ -1083,16 +1203,25 @@ function startMarket(SHOP_DATA, MINE_ID) {
       camera.lookAt(player.x - Math.sin(cam.yaw) * lpc, eye + Math.sin(cam.lp), player.z - Math.cos(cam.yaw) * lpc);
     }
 
+    if (MONITOR) monitorCam(dt);
     stepWalkers(dt, t);
     sun.position.set(player.x + 18, 36, player.z + 14); sun.target.position.set(player.x, 0, player.z); sun.target.updateMatrixWorld();
     lodTimer -= dt; if (lodTimer <= 0) { lodTimer = 0.2; updateDetail(); }
 
     /* 새로 문을 연 가게: 서버에서 받아 온 순서대로 하나씩 솟아오르게 */
     spawnTimer -= dt;
-    if (spawnTimer <= 0 && pending.length && filled < CAP && !spawn) {
-      spawnTimer = 1.2; var nk = filled; fillStall(stalls[nk], pending.shift()); paintSlot(nk); filled++;
+    if (spawnTimer <= 0 && pending.length && !spawn) {
+      /* 144칸이 다 차면 가장 오래된 칸부터 새 가게로 바꿔서 계속 올라오게 한다 */
+      var full = filled >= CAP, nk = full ? recyclePtr : filled;
+      if (full) recyclePtr = (recyclePtr + 1) % CAP;
+      spawnTimer = 1.2; fillStall(stalls[nk], pending.shift()); paintSlot(nk);
+      if (full) {
+        labels.forEach(function (l) { if (l.slot === nk) { l.slot = -1; l.sp.visible = false; } });
+        details.forEach(function (d) { if (d.k === nk) { fillCrate(d.crate, stalls[nk].fi); drawDetailSign(d, stalls[nk]); d.sigFor = nk; } });
+      } else { filled++; }
       parts.forEach(function (o) { o.mesh.count = filled; }); aoM.count = filled; setAO(nk); setSlot(nk, 0.001); spawn = { k: nk, t: 0 };
       toast(stalls[nk].name + "이(가) 문을 열었어요 · No." + stalls[nk].number); stats(); feedTex.redraw(); topTex.redraw();
+      if (MONITOR) monitorFocus(nk);
     }
     if (spawn) {
       spawn.t += dt / 0.7; var u = Math.min(spawn.t, 1), sc = 1 + 2.2 * Math.pow(u - 1, 3) + 1.2 * Math.pow(u - 1, 2); setSlot(spawn.k, u >= 1 ? 1 : Math.max(sc, 0.001)); if (u >= 1) spawn = null;
