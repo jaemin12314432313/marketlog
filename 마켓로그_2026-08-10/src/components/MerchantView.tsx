@@ -212,7 +212,8 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
 
   const getAiRecommendations = (rawTitle: string, rawCategory: string, index: number) => {
     const name = rawTitle.trim() || `${rawCategory || "인기"} 상품`;
-    const market = marketName || "전통시장";
+    // 전시 시장 이름("CO-SHOW 가상 시장")이 홍보 문구에 그대로 박히지 않게 "전통시장"으로 바꾼다.
+    const market = !marketName || /CO-?SHOW|가상 시장/i.test(marketName) ? "전통시장" : marketName;
     // 전시 품목(양파·사과·귤)은 그 품목 문구를 맨 앞에 둬서 첫 추천부터 어울리게 한다.
     const itemSets: string[][] = [];
     if (name.includes("양파")) {
