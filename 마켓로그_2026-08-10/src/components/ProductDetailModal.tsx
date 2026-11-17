@@ -387,7 +387,8 @@ function getRecipeRecommendations(product: ProductItem): RecipeRecommendation[] 
         "유자청 만들기 레시피",
         [
           { name: `${title} (본 상품)`, amount: "적당량", isMain: true },
-          { name: "설탕", amount: "동량", isMain: true },
+          { name: "생강", amount: "1쪽", isMain: true },
+          { name: "설탕", amount: "동량", isMain: false },
           { name: "꿀", amount: "적당량", isMain: false },
         ],
         "TFB9wk30SlA"
@@ -401,7 +402,7 @@ function getRecipeRecommendations(product: ProductItem): RecipeRecommendation[] 
         [
           { name: `${title} (본 상품)`, amount: "적당량", isMain: true },
           { name: "양상추", amount: "적당량", isMain: false },
-          { name: "견과류", amount: "약간", isMain: true },
+          { name: "땅콩", amount: "한 줌 (견과류)", isMain: true },
           { name: "올리브오일", amount: "적당량", isMain: false },
           { name: "레몬즙", amount: "약간", isMain: false },
           { name: "꿀 (또는 올리고당)", amount: "약간", isMain: false },
