@@ -158,7 +158,27 @@ export default function BoothShopPage({ storeId }: { storeId: string }) {
           </div>
         </section>
 
-        {/* AI 도슨트 — 결과 페이지에서 가게 페이지로 옮겼다 */}
+        {/* 진열 상품 */}
+        <section>
+          <div className="flex items-end justify-between mb-3 px-1">
+            <div><h2 className="text-lg font-bold tracking-tight text-[#0F172A]">오늘의 진열대</h2><p className="mt-0.5 text-xs text-slate-500">상품을 눌러 자세히 살펴보세요</p></div>
+            <span className="text-xs font-semibold text-slate-400">{products.length}개 상품</span>
+          </div>
+          {products.length === 0 ? (
+            <div className={`${APP_CARD} p-8 text-center`}>
+              <span className="material-symbols-outlined text-4xl text-slate-300">inventory_2</span>
+              <p className="mt-2 text-sm font-semibold text-slate-500">아직 진열한 상품이 없어요.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {products.map((p) => (
+                <ProductRow key={p.id} p={p} />
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* AI 도슨트 — 오늘의 진열대 아래 */}
         {products.length > 0 && (
           <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-[0_4px_18px_rgba(15,23,42,0.04)]">
             <div className="mb-4 flex items-center gap-3">
@@ -187,26 +207,6 @@ export default function BoothShopPage({ storeId }: { storeId: string }) {
             )}
           </section>
         )}
-
-        {/* 진열 상품 */}
-        <section>
-          <div className="flex items-end justify-between mb-3 px-1">
-            <div><h2 className="text-lg font-bold tracking-tight text-[#0F172A]">오늘의 진열대</h2><p className="mt-0.5 text-xs text-slate-500">상품을 눌러 자세히 살펴보세요</p></div>
-            <span className="text-xs font-semibold text-slate-400">{products.length}개 상품</span>
-          </div>
-          {products.length === 0 ? (
-            <div className={`${APP_CARD} p-8 text-center`}>
-              <span className="material-symbols-outlined text-4xl text-slate-300">inventory_2</span>
-              <p className="mt-2 text-sm font-semibold text-slate-500">아직 진열한 상품이 없어요.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {products.map((p) => (
-                <ProductRow key={p.id} p={p} />
-              ))}
-            </div>
-          )}
-        </section>
 
         <a href={`/market3d.html?shop=${encodeURIComponent(storeId)}`} style={{ backgroundColor: "#0052FF", color: "#FFFFFF" }} className="market-3d-button flex items-center gap-3 rounded-2xl border border-[#0046D6] p-4 shadow-[0_5px_16px_rgba(0,82,255,0.3)] transition hover:-translate-y-0.5 active:scale-[0.98] motion-reduce:transition-none">
           <span className="market-3d-icon material-symbols-outlined rounded-xl bg-white p-2 text-[#0052FF]">view_in_ar</span>
