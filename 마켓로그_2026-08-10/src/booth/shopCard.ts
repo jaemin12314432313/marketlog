@@ -3,6 +3,7 @@
 //  - makeShopSummaryCard: 내 가게 페이지(/s/{id})의 "요약본 저장" — 가게 전체
 import QRCode from "qrcode";
 import { boothResultImageUrl, type BoothProduct } from "./boothApi";
+import { priceForCompare } from "../lib/priceUnit";
 
 const W = 1080;
 const H = 1350;
@@ -64,7 +65,7 @@ function dateText(value?: string | null) {
 }
 
 function diffPercent(p: BoothProduct) {
-  return p.publicPrice ? Math.round(((p.publicPrice - p.price) / p.publicPrice) * 100) : null;
+  return p.publicPrice ? Math.round(((p.publicPrice - priceForCompare(p.price, p.unit)) / p.publicPrice) * 100) : null;
 }
 
 // 가게 한줄평 — 진열 상품 데이터(특상 수·시세 대비·품목)로 문장을 만든다. 페이지와 요약 이미지가 같이 쓴다.

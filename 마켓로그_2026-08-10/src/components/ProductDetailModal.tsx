@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Browser } from "@capacitor/browser";
 import { ProductItem, MarketInfo, AttributeGradeLabel } from "../types";
+import { priceForCompare } from "../lib/priceUnit";
 import { fetchStoreByName, StoreInfo } from "../lib/api";
 import { MARKETS_DATA } from "../data/initialData";
 import { UserRole } from "./LoginModal";
@@ -36,7 +37,7 @@ export function formatRelativeTime(createdAt?: string): string {
 // 오히려 더 비싸면(마이너스 할인) 뱃지를 아예 숨긴다.
 function discountPercent(product: ProductItem): number | null {
   if (!product.publicPrice || product.publicPrice <= 0) return null;
-  const percent = Math.round(((product.publicPrice - product.price) / product.publicPrice) * 100);
+  const percent = Math.round(((product.publicPrice - priceForCompare(product.price, product.unit)) / product.publicPrice) * 100);
   return percent > 0 ? percent : null;
 }
 

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ProductItem } from "../types";
+import { priceForCompare } from "../lib/priceUnit";
 
 // 비전 파이프라인이 2단계(특상/보통) 등급으로 바뀌어서, 화면에도 A+/B 같은 영문 등급
 // 대신 실제 판정 체계와 맞는 한글 표기를 쓴다 (HomeFeed 등과 동일 규칙).
@@ -25,7 +26,7 @@ function formatRelativeTime(createdAt?: string): string {
 // HomeFeed와 동일한 공공시세 대비 할인율 계산 — 저장한 상품 카드도 피드와 같은 기준으로 보여준다.
 function discountPercent(product: ProductItem): number | null {
   if (!product.publicPrice || product.publicPrice <= 0) return null;
-  const percent = Math.round(((product.publicPrice - product.price) / product.publicPrice) * 100);
+  const percent = Math.round(((product.publicPrice - priceForCompare(product.price, product.unit)) / product.publicPrice) * 100);
   return percent > 0 ? percent : null;
 }
 

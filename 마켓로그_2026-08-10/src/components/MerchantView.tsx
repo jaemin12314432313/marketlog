@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { ProductItem } from "../types";
+import { priceForCompare } from "../lib/priceUnit";
 import { getStoreLocation, getStoreProfile, analyzeProduct } from "../lib/api";
 import { MerchantAiScanModal } from "./MerchantAiScanModal";
 
@@ -35,7 +36,7 @@ const PRODUCT_UNIT = "kg";
 // 감귤은 KAMIS 소매 시세가 "10개" 기준이라, kg로 바꿔 쓰면 개당 무게 가정 때문에 시세가 어긋난다 —
 // 감귤만 "10개" 단위로 고정해서 판매가와 공공시세를 같은 10개 기준으로 비교한다.
 const COUNT_ITEM_KEYWORD = "귤";
-const COUNT_ITEM_UNIT = "10개";
+const COUNT_OPTIONS = ["10", "20", "30", "40", "50"]; // 개수를 고르면 판매가는 그 개수의 가격이고, 시세 비교는 10개 가격으로 환산한다
 
 // 상품 목록에 저장된 "1.5kg" 같은 값에서 수량만 다시 뽑아 입력칸에 채워준다. 예전에
 // 다른 단위(개/포기 등)로 저장된 값이어도 앞의 숫자만 취하고 단위는 kg로 맞춘다.
@@ -185,7 +186,8 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
   const [title, setTitle] = useState("");
   const [unitAmount, setUnitAmount] = useState("1");
   const [unitCustom, setUnitCustom] = useState(false);
-  const isCountItem = title.includes(COUNT_ITEM_KEYWORD); // 감귤: "10개" 단위
+  const [countAmount, setCountAmount] = useState("10"); // 감귤: 개수(10/20/30...)
+  const isCountItem = title.includes(COUNT_ITEM_KEYWORD); // 감귤은 kg이 아니라 개수 단위
   const [originType, setOriginType] = useState(PRODUCT_ORIGIN_OPTIONS[0]);
   const [originDetail, setOriginDetail] = useState("");
   const [originCustom, setOriginCustom] = useState(false);
@@ -327,6 +329,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     const amount = parseProductUnitAmount(p.unit || "");
     setUnitAmount(amount);
     setUnitCustom(!/^[1-9]$/.test(amount));
+    setCountAmount(/개\s*$/.test(p.unit || "") && COUNT_OPTIONS.includes(amount) ? amount : "10");
     const parsedOrigin = parseProductOrigin(p.origin || "");
     setOriginType(parsedOrigin.type);
     setOriginDetail(parsedOrigin.detail);
@@ -482,10 +485,11 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
       return;
     }
 
+    const unit = isCountItem ? `${countAmount}개` : unitAmount.trim() ? `${unitAmount.trim()}${PRODUCT_UNIT}` : "";
     const numPublicPrice = publicPrice ? Number(publicPrice) : Math.round(numPrice * 1.2);
-    const diffPercent = Math.round(((numPublicPrice - numPrice) / numPublicPrice) * 100);
+    // 감귤은 시세가 10개 기준이라 20개 가격이면 10개 가격으로 환산해서 비교한다.
+    const diffPercent = Math.round(((numPublicPrice - priceForCompare(numPrice, unit)) / numPublicPrice) * 100);
     const priceTag = diffPercent > 0 ? `공공 시세 대비 ${diffPercent}% 저렴` : "시세 적정가";
-    const unit = isCountItem ? COUNT_ITEM_UNIT : unitAmount.trim() ? `${unitAmount.trim()}${PRODUCT_UNIT}` : "";
     const origin = buildProductOrigin(originType, originDetail);
     const tags = selectedTags.join(",");
 
@@ -936,12 +940,24 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
               단위를 kg 하나로 고정한다. 무게와 가격은 서로 짝을 이루는 값이라 한 줄에 뒀다. */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700">{isCountItem ? "단위/수량 * (10개 기준)" : "단위/중량 * (kg 기준)"}</label>
+              <label className="text-xs font-semibold text-slate-700">{isCountItem ? "단위/수량 * (개수)" : "단위/중량 * (kg 기준)"}</label>
               <div className="flex items-center gap-1">
                 {isCountItem ? (
-                  <div className="flex-1 min-w-0 px-2 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-xs font-bold text-slate-700">
-                    {COUNT_ITEM_UNIT} (고정)
-                  </div>
+                  <select
+                    aria-label="개수 선택"
+                    value={countAmount}
+                    onChange={(e) => setCountAmount(e.target.value)}
+                    disabled={!aiSummary}
+                    className={`flex-1 min-w-0 px-2 py-2.5 rounded-xl border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                      aiSummary
+                        ? "border-slate-300 text-slate-900 bg-white"
+                        : "border-slate-200 text-slate-400 bg-slate-100 cursor-not-allowed"
+                    }`}
+                  >
+                    {COUNT_OPTIONS.map((n) => (
+                      <option key={n} value={n}>{n}개</option>
+                    ))}
+                  </select>
                 ) : unitCustom ? (
                   <div className="relative flex-1 min-w-0">
                     <input
@@ -1001,7 +1017,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700">판매 가격 (원) *</label>
+              <label className="text-xs font-semibold text-slate-700">{isCountItem ? `판매 가격 (원, ${countAmount}개 가격) *` : "판매 가격 (원) *"}</label>
               <input
                 type="text"
                 inputMode="numeric"

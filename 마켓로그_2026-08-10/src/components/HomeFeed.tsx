@@ -3,6 +3,7 @@ import { ProductItem, MarketInfo } from "../types";
 import { UserRole } from "./LoginModal";
 import { ProductFilterModal } from "./ProductFilterModal";
 import { MARKETS_DATA } from "../data/initialData";
+import { priceForCompare } from "../lib/priceUnit";
 
 // 비전 파이프라인이 2단계(특상/보통) 등급으로 바뀌어서, 화면에도 A+/B 같은 영문 등급
 // 대신 실제 판정 체계와 맞는 한글 표기를 쓴다 (데이터 자체는 여전히 A+/B 등 문자로 저장됨).
@@ -30,7 +31,7 @@ function formatRelativeTime(createdAt?: string): string {
 // 0 이하) 오히려 더 비싸면(마이너스 할인) 뱃지를 아예 숨긴다.
 function discountPercent(product: ProductItem): number | null {
   if (!product.publicPrice || product.publicPrice <= 0) return null;
-  const percent = Math.round(((product.publicPrice - product.price) / product.publicPrice) * 100);
+  const percent = Math.round(((product.publicPrice - priceForCompare(product.price, product.unit)) / product.publicPrice) * 100);
   return percent > 0 ? percent : null;
 }
 

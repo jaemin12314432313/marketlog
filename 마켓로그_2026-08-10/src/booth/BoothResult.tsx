@@ -131,7 +131,7 @@ export default function BoothResult({ productId, preview = false }: { productId:
           {/* 가격 + AI 정밀 분석 지표 (앱 상세와 같은 카드) */}
           <section className={`${APP_CARD} p-4 pb-5 sm:p-5 sm:pb-6 space-y-3`}>
             <div className="pb-3 border-b border-[#D1D1D1]">
-              <PriceRow price={p.price} publicPrice={p.publicPrice} />
+              <PriceRow price={p.price} publicPrice={p.publicPrice} unit={p.unit} />
             </div>
             <div className="flex justify-between items-center">
               <h3 className="text-sm font-bold text-[#0F172A] tracking-wider">AI 정밀 분석 지표</h3>

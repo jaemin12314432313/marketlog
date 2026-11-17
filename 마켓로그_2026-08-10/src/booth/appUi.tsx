@@ -3,6 +3,7 @@
 import React from "react";
 import logoIcon from "../assets/logo-icon.png";
 import type { AttributeGradeLabel } from "../types";
+import { priceForCompare, unitFactor } from "../lib/priceUnit";
 
 export const APP_BG = "bg-[#F1F5F9]";
 // 앱 카드: 흰 바탕 + 연한 테두리 + 얕은 그림자
@@ -99,9 +100,11 @@ export function MetricBars({ labels }: { labels?: Record<string, { grade: Attrib
 }
 
 // 앱의 "현장 판매가 / 공공 시세" 두 칸
-export function PriceRow({ price, publicPrice }: { price: number; publicPrice: number }) {
+export function PriceRow({ price, publicPrice, unit }: { price: number; publicPrice: number; unit?: string }) {
   const [showInfo, setShowInfo] = React.useState(false);
-  const pct = publicPrice > 0 ? Math.round(((publicPrice - price) / publicPrice) * 100) : null;
+  // 감귤처럼 시세가 10개 기준인 품목은 "20개 가격"을 10개 가격으로 환산해서 비교한다.
+  const pct = publicPrice > 0 ? Math.round(((publicPrice - priceForCompare(price, unit)) / publicPrice) * 100) : null;
+  const countBasis = unitFactor(unit) !== 1 || /개$/.test((unit || "").trim());
   return (
     <div className="grid grid-cols-2 gap-3">
       <div>
@@ -115,7 +118,7 @@ export function PriceRow({ price, publicPrice }: { price: number; publicPrice: n
       </div>
       <div>
         <span className="text-xs font-bold text-[#0F172A] h-4 flex items-center gap-1 relative">
-          공공 시세
+          공공 시세{countBasis ? " (10개 기준)" : ""}
           <button type="button" onClick={() => setShowInfo((value) => !value)} className="material-symbols-outlined text-xs text-slate-400 hover:text-slate-600 cursor-pointer leading-none" style={{ fontSize: "14px" }} aria-label="공공 시세 안내" aria-expanded={showInfo}>info</button>
           {showInfo && <span className="absolute left-0 top-full mt-1 z-20 w-56 bg-[#0F172A] text-white text-[11px] font-medium leading-relaxed rounded-lg p-2.5 shadow-xl">한국농수산식품유통공사(KAMIS)에서 제공하는 해당 품목의 최신 소매 평균 시세입니다.</span>}
         </span>
