@@ -255,6 +255,12 @@
   .pop { position: absolute; left: 50%; top: 36%; z-index: 6; font-size: 34px; font-weight: 800; color: #f2b400; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55); pointer-events: none; animation: popup 1s ease-out forwards; }
   @keyframes popup { 0% { opacity: 0; transform: translate(-50%, 12px) scale(0.8); } 20% { opacity: 1; transform: translate(-50%, 0) scale(1.15); } 100% { opacity: 0; transform: translate(-50%, -64px) scale(1); } }
   .gm-box .gm-rank { margin: 8px 0 2px; font-size: 16px; font-weight: 800; color: var(--fg); }
+  .gm-hero { margin: 2px 0 0; font-size: 46px; font-weight: 800; color: #f2b400; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .gm-box .gm-sub { margin: 6px 0 0; font-size: 15px; font-weight: 700; color: var(--fg); }
+  .gm-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 7px; text-align: left; }
+  .gm-list li { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: var(--fg); background: var(--chip); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
+  .gm-list b { width: 26px; text-align: center; font-size: 20px; font-weight: 400; }
+  .gm-box .gm-foot { margin: 12px 0 0; font-size: 12px; }
   /* 보물찾기 안내·결과 창 */
   .gm { position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15, 23, 42, 0.55); }
   .gm[hidden] { display: none !important; }
@@ -1156,11 +1162,16 @@ function startMarket(SHOP_DATA, MINE_ID) {
     list.forEach(function (r) { r.me = !!my && r.storeId === mine.storeId; });
     return list.sort(function (a, b) { return b.count - a.count; }).slice(0, 3);
   }
-  /* 보물찾기는 3분 한 판: idle(시작 전 안내) → playing → over(결과), 구경만 하면 free */
-  var ROUND_SEC = Math.max(5, Math.min(600, +MARKET_PARAMS.get("round") || 180)), game = { state: "idle", left: ROUND_SEC }; /* ?round=초 로 시험용 시간 변경 */
+  /* 보물찾기: idle(시작 전 안내) → playing(시간 제한 없이 계속) → free(구경만). 상품이 없어서 오래 머물러도 되게 무제한으로 둔다.
+     ?round=초 를 붙이면 그 시간만큼 한 판으로 끝나는 시험 모드가 된다(자동 시험용). */
+  var ROUND_SEC = Math.max(0, Math.min(600, +MARKET_PARAMS.get("round") || 0)), game = { state: "idle", left: ROUND_SEC, since: 0 };
+  function playedText() {
+    var s = Math.max(0, Math.floor((performance.now() - game.since) / 1000));
+    return s < 60 ? s + "초째" : Math.floor(s / 60) + "분째";
+  }
   function stats() {
     $("stats").textContent = MONITOR ? "가게 " + filled + "곳"
-      : game.state === "playing" ? "⏱ " + mmss(game.left) + " · 황금 보물 " + appleGot + "개 · 둘러본 가게 " + stampN + "곳"
+      : game.state === "playing" ? (ROUND_SEC ? "⏱ " + mmss(game.left) : "🍎 " + playedText()) + " · 황금 보물 " + appleGot + "개 · 둘러본 가게 " + stampN + "곳"
       : "가게 " + filled + "곳 · 둘러본 가게 " + stampN + "곳 · 찾은 황금 보물 " + appleGot + "개";
     var key = appleGot + "/" + stampN;
     if (key !== lastScore) {
@@ -1351,6 +1362,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
   function appleFree(x, z) { return Math.abs(x) < 25.5 && z > -31 && z < 41 && !blocked(x, z, 0) && !onStall(x, z); }
   function stepApples(dt, t) {
     if (game.state !== "playing") return; /* 한 판이 아닐 때(안내·결과·구경)는 사과를 줍거나 퀴즈가 뜨지 않는다 */
+    if (!gm.hidden) return; /* 순위·기록 창이 떠 있는 동안에도 잠시 멈춘다 */
     var nearDig = null, nearest = 99;
     for (var i = 0; i < apples.length; i++) {
       var a = apples[i];
@@ -1424,11 +1436,18 @@ function startMarket(SHOP_DATA, MINE_ID) {
     gm.hidden = true; clearApples(); stopPlayUi(); nearEl.textContent = "";
     appleGot = 0; visited = {}; stampN = 0; lastScore = "";
     APPLE_KINDS.forEach(spawnApple);
-    game.state = "playing"; game.left = ROUND_SEC; game.endAt = performance.now() + ROUND_SEC * 1000; gBtn.hidden = true; gTick = 0;
-    stats(); toast("⏱ 3분 시작! 황금 사과·양파·귤을 찾아보세요"); sfx("start");
+    game.state = "playing"; game.left = ROUND_SEC; game.since = performance.now(); game.endAt = performance.now() + ROUND_SEC * 1000; gTick = 0;
+    syncGBtn();
+    stats(); toast(ROUND_SEC ? "⏱ " + mmss(ROUND_SEC) + " 시작! 황금 보물을 찾아보세요" : "🍎 시작! 황금 사과·양파·귤이 숨어 있어요"); sfx("start");
+  }
+  /* 위쪽 버튼: 시작 전·구경 중에는 "보물찾기", 하는 중(무제한)에는 "순위 보기", 시간제 시험 중에는 숨김 */
+  function syncGBtn() {
+    if (MONITOR) { gBtn.hidden = true; return; }
+    gBtn.hidden = game.state === "playing" && ROUND_SEC > 0;
+    gBtn.textContent = game.state === "playing" ? "📊 순위 보기" : "🍎 보물찾기";
   }
   function browseOnly() {
-    gm.hidden = true; game.state = "free"; clearApples(); stopPlayUi(); nearEl.textContent = ""; gBtn.hidden = MONITOR; stats();
+    gm.hidden = true; game.state = "free"; clearApples(); stopPlayUi(); nearEl.textContent = ""; syncGBtn(); stats();
   }
   /* 끝났을 때 내 순위 문구: 서버 기록에 방금 기록을 합쳐 황금 사과 TOP 3 안에 있는지 본다 */
   function rankText(n) {
@@ -1438,40 +1457,62 @@ function startMarket(SHOP_DATA, MINE_ID) {
     var third = list.length >= 3 ? list[2].count : 0;
     return third ? "TOP 3까지 " + Math.max(1, third - n + 1) + "개 더!" : "TOP 3에 도전해 보세요";
   }
+  /* 점수를 보낸 뒤 랭킹을 다시 받아서 결과 창의 순위 문구를 채운다 */
+  function fillRank(n) {
+    if (MINE < 0) return;
+    clearTimeout(scoreT); topTex.redraw(); pillarTex.redraw(); visitTex.redraw();
+    var fill = function () { var el = gm.querySelector("#gmRank"); if (el && !gm.hidden) el.textContent = rankText(n); };
+    sendScore().then(function () { return loadMarket(); }).then(fill).catch(fill);
+  }
+  var RANK_BODY = function (extra) {
+    return (MINE >= 0 ? '<p class="gm-rank" id="gmRank">순위를 확인하는 중…</p><p style="font-size:12px">가게 이름으로 랭킹에 기록돼요</p>' : '<p style="font-size:12px">내 가게를 열면 랭킹에 기록돼요</p>');
+  };
+  /* 무제한 모드: "순위 보기"를 누르면 지금까지의 기록과 순위를 보여 주고, 계속 찾거나 그만둘 수 있다 */
+  function showStatus() {
+    var n = appleGot, v = stampN;
+    gmShow("지금까지 기록", '<div class="big">✨ ' + n + '개</div><p>' + playedText().replace("째", " 동안") + ' 찾았어요<br>둘러본 가게 ' + v + '곳</p>' + RANK_BODY(),
+      [{ t: "그만하기", fn: browseOnly }, { t: "계속 찾기", primary: true, fn: function () { gm.hidden = true; } }]);
+    fillRank(n);
+  }
+  /* 시간제(시험용 ?round=초)에서만 쓰인다 */
   function endRound() {
     game.state = "over"; clearApples(); stopPlayUi(); nearEl.textContent = ""; gBtn.hidden = true;
     var n = appleGot, v = stampN;
     sfx("end"); buzz([80, 60, 120]);
-    if (MINE >= 0) { clearTimeout(scoreT); topTex.redraw(); pillarTex.redraw(); visitTex.redraw(); }
     stats();
-    gmShow("⏱ 끝! 수고했어요", '<p>3분 동안 찾은 황금 보물 (사과 · 양파 · 귤)</p><div class="big">✨ ' + n + '개</div><p>둘러본 가게 ' + v + '곳</p>' +
-      (MINE >= 0 ? '<p class="gm-rank" id="gmRank">순위를 확인하는 중…</p><p style="font-size:12px">가게 이름으로 랭킹에 기록돼요</p>' : '<p style="font-size:12px">내 가게를 열면 랭킹에 기록돼요</p>'),
+    gmShow("⏱ 끝! 수고했어요", '<p>' + mmss(ROUND_SEC) + ' 동안 찾은 황금 보물 (사과 · 양파 · 귤)</p><div class="big">✨ ' + n + '개</div><p>둘러본 가게 ' + v + '곳</p>' + RANK_BODY(),
       [{ t: "구경하기", fn: browseOnly }, { t: "다시 도전", primary: true, fn: startRound }]);
-    if (MINE >= 0) {
-      /* 점수를 보낸 뒤 랭킹을 다시 받아서 결과 창의 순위 문구를 채운다 */
-      sendScore().then(function () { return loadMarket(); }).then(function () {
-        var el = gm.querySelector("#gmRank"); if (el && !gm.hidden) el.textContent = rankText(n);
-      }).catch(function () { var el = gm.querySelector("#gmRank"); if (el) el.textContent = rankText(n); });
-    }
+    fillRank(n);
   }
   function gameIntro() {
     if (game.state === "playing") return;
-    gmShow("🍎 황금 보물 찾기", '<p>시장 곳곳에 숨은 황금 사과 · 양파 · 귤을 <b>3분 안에</b> 최대한 많이 찾아보세요!</p>' +
-      '<p style="font-size:12px">지붕 위 · 땅속(여러 번 파기) · 도망가는 보물 · 납작한 보물 · 퀴즈 보물이 있어요<br>꽤 가까워지면 힌트가 떠요 · 기록은 가게 이름으로 랭킹에 올라가요</p>',
+    gmShow("황금 보물 찾기", (ROUND_SEC ? '<div class="gm-hero">⏱ ' + mmss(ROUND_SEC) + '</div><p class="gm-sub">🍎 🧅 🍊 황금 보물을 최대한 많이 찾아요!</p>'
+      : '<div class="gm-hero">🍎 🧅 🍊</div><p class="gm-sub">시장 곳곳에 숨은 황금 보물을 마음껏 찾아요!</p>') +
+      '<ul class="gm-list">' +
+      '<li><b>🏠</b>가게 지붕 위에 올라가 보세요</li>' +
+      '<li><b>⛏</b>흙더미는 세 번 파면 나와요</li>' +
+      '<li><b>🏃</b>도망가는 보물을 잡아요</li>' +
+      '<li><b>❓</b>퀴즈를 맞히면 가져가요</li>' +
+      '<li><b>👀</b>바닥에 납작하게 숨은 것도 있어요</li>' +
+      '</ul>' +
+      '<p class="gm-foot">가까워지면 ✨ 힌트가 떠요 · ' + (MINE >= 0 ? 'TOP 3는 3D 전광판에 올라가요' : '내 가게를 열면 랭킹에 올라가요') + '</p>',
       [{ t: "구경만 할래요", fn: browseOnly }, { t: "시작하기", primary: true, fn: startRound }]);
   }
   function gameTick(dt) {
     if (game.state !== "playing") return;
-    /* 프레임이 느린 폰에서도 3분이 실제 3분이 되도록 프레임 시간이 아니라 시계로 센다 */
-    game.left = Math.max(0, (game.endAt - performance.now()) / 1000); gTick += dt;
-    if (game.left <= 0) { endRound(); return; }
+    /* 프레임이 느린 폰에서도 시간이 실제 시간이 되도록 프레임 시간이 아니라 시계로 센다 */
+    gTick += dt;
+    if (ROUND_SEC) {
+      game.left = Math.max(0, (game.endAt - performance.now()) / 1000);
+      if (game.left <= 0) { endRound(); return; }
+    }
     if (gTick >= 0.5) { gTick = 0; stats(); }
   }
-  gBtn.addEventListener("click", gameIntro);
+  gBtn.addEventListener("click", function () { if (game.state === "playing") showStatus(); else gameIntro(); });
   /* 시험용: ?debug=1 로 열면 자동 시험이 사과 위치로 순간이동해 줍기·힌트·효과를 확인할 수 있다 */
   if (MARKET_PARAMS.get("debug") === "1") window.__g = { player: player, apples: function () { return apples; }, got: function () { return appleGot; }, game: game };
   if (MONITOR) { game.state = "free"; clearApples(); gBtn.hidden = true; }
-  else { gBtn.hidden = false; setTimeout(gameIntro, 700); }
+  else { syncGBtn(); setTimeout(gameIntro, 700); }
 
   var mini = $("mini"), mg = mini.getContext("2d");
   function drawMini() {

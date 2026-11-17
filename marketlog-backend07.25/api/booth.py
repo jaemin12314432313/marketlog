@@ -605,7 +605,7 @@ def _market_ranking(db: Session, names: dict[str, str]) -> dict:
 
 class MarketScoreRequest(BaseModel):
     storeId: str = Field(..., max_length=64)
-    apples: int = Field(0, ge=0, le=50)  # 황금 사과는 한 판에 7개 — 조작으로 큰 점수를 보내도 상한에서 막는다
+    apples: int = Field(0, ge=0, le=500)  # 시간 제한 없이 오래 찾을 수 있어 넉넉하게 — 터무니없는 조작 점수만 상한에서 막는다
     visited: int = Field(0, ge=0, le=300)  # 한 관(144곳)을 한 바퀴 돌아도 이 이상은 못 센다
 
 
