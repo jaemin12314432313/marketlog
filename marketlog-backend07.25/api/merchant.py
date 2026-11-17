@@ -95,6 +95,12 @@ def create_product(
 ):
     shop_name = require_merchant(current_user)
     market_id = merchant_market_id(db, current_user)
+    # CO-SHOW 부스: 장난 가격(1원 등)이 "시세보다 99% 저렴"으로 모두가 보는 화면에 뜨지 않게 막는다.
+    if market_id == "coshow":
+        if payload.price > 1_000_000:
+            raise HTTPException(status_code=400, detail="가격이 너무 커요. 1kg 기준 가격으로 다시 적어주세요.")
+        if payload.publicPrice > 0 and payload.price * 5 < payload.publicPrice:
+            raise HTTPException(status_code=400, detail="공공 시세보다 너무 낮은 가격이에요. 가격을 다시 확인해 주세요.")
     store = require_store_ready(db, market_id, shop_name)
     market = db.query(Market).filter(Market.id == market_id).first()
     product = Product(

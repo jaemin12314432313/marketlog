@@ -456,7 +456,7 @@ function getRecipeRecommendations(product: ProductItem): RecipeRecommendation[] 
         "사과잼 레시피",
         [
           { name: `${title} (본 상품)`, amount: "5개", isMain: true },
-          { name: "설탕", amount: "적당량", isMain: true },
+          { name: "설탕", amount: "적당량", isMain: false },
           { name: "레몬즙", amount: "약간", isMain: false },
         ],
         "RXmVL7_f6Y0"

@@ -319,7 +319,7 @@ function loadMarket() {
       if (HALL_COUNT > 1 && Date.now() >= NEXT_SWITCH) gotoHall(HALL >= HALL_COUNT ? 1 : HALL + 1);
     }
     renderHallNav();
-    var hn = document.getElementById("hallname"); if (hn) hn.textContent = HALL_COUNT > 1 ? "3D 가상 시장 · " + HALL + "관" : "3D 가상 시장";
+    var hn = document.getElementById("hallname"); if (hn) hn.textContent = "3D 가상 시장 · " + HALL + "관";
     MARKET_RANK = j.ranking || MARKET_RANK; /* 3D 랭킹 전광판용 */
     return j.shops || [];
   });
@@ -1114,7 +1114,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
     return list.sort(function (a, b) { return b.count - a.count; }).slice(0, 3);
   }
   function stats() {
-    $("stats").textContent = MONITOR ? "가게 " + filled + "곳 · 찾은 황금 사과 " + appleGot + "개" : "가게 " + filled + "곳 · 둘러본 가게 " + stampN + "곳 · 찾은 황금 사과 " + appleGot + "개";
+    $("stats").textContent = MONITOR ? "가게 " + filled + "곳" : "가게 " + filled + "곳 · 둘러본 가게 " + stampN + "곳 · 찾은 황금 사과 " + appleGot + "개";
     var key = appleGot + "/" + stampN;
     if (key !== lastScore) {
       lastScore = key; topTex.redraw(); pillarTex.redraw(); visitTex.redraw();
