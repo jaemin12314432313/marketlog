@@ -1,5 +1,6 @@
 // QR로 들어오는 관람객 개인 폰 화면 (/r/{상품 id}).
-// 앱 설치 없이 내가 만든 가게의 AI 품질 판정 결과, 공공 시세 비교, AI 도슨트를 보고 공유할 수 있는 읽기 전용 페이지.
+// 앱 설치 없이 내가 만든 가게의 AI 품질 판정 결과와 공공 시세 비교를 보고 공유할 수 있는 읽기 전용 페이지.
+// (AI 도슨트는 가게 페이지 /s/{가게 id}에 있다.)
 import React, { useEffect, useState } from "react";
 import { boothApi, type BoothProduct } from "./boothApi";
 import { APP_BG, APP_CARD, AppHeader, BTN_DARK, GradePill, HeaderIconButton, MetricBars, PriceRow } from "./appUi";
@@ -11,8 +12,6 @@ export default function BoothResult({ productId, preview = false }: { productId:
   const screenH = preview ? "min-h-full" : "min-h-[100dvh]";
   const [data, setData] = useState<{ product: BoothProduct; store: { name: string; number: number; openedAt: string | null } } | null>(null);
   const [error, setError] = useState("");
-  const [docent, setDocent] = useState<string | null>(null);
-  const [isSpeaking, setIsSpeaking] = useState(false);
   const [toast, setToast] = useState("");
   const [linkSheet, setLinkSheet] = useState(false);
 
@@ -24,10 +23,6 @@ export default function BoothResult({ productId, preview = false }: { productId:
         if (!preview) document.title = `${res.store.name} · CO-SHOW 가상 시장 | 마켓로그`;
       })
       .catch((err) => setError(err?.status === 404 ? "가게를 찾을 수 없어요." : "잠시 후 다시 열어주세요."));
-    boothApi
-      .docent(productId)
-      .then((res) => setDocent(res.script))
-      .catch(() => setDocent(""));
   }, [productId, preview]);
 
   useEffect(() => {
@@ -35,25 +30,6 @@ export default function BoothResult({ productId, preview = false }: { productId:
     const timer = window.setTimeout(() => setToast(""), 2000);
     return () => clearTimeout(timer);
   }, [toast]);
-
-  useEffect(() => () => window.speechSynthesis?.cancel(), []);
-
-  const toggleSpeak = () => {
-    const synth = window.speechSynthesis;
-    if (!synth || !docent) return;
-    if (isSpeaking) {
-      synth.cancel();
-      setIsSpeaking(false);
-      return;
-    }
-    const utter = new SpeechSynthesisUtterance(docent);
-    utter.lang = "ko-KR";
-    utter.rate = 1.0;
-    utter.onend = () => setIsSpeaking(false);
-    utter.onerror = () => setIsSpeaking(false);
-    synth.speak(utter);
-    setIsSpeaking(true);
-  };
 
   const share = async () => {
     const url = window.location.href;
@@ -160,33 +136,7 @@ export default function BoothResult({ productId, preview = false }: { productId:
             </section>
           )}
 
-          {/* AI 도슨트 */}
-          <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-[0_4px_18px_rgba(15,23,42,0.04)]">
-            <div className="mb-4 flex items-center gap-3">
-              <span className="material-symbols-outlined rounded-xl bg-blue-50 p-2 text-[#0052FF]">record_voice_over</span>
-              <div><h2 className="text-sm font-bold">AI 도슨트</h2><p className="mt-0.5 text-xs text-slate-500">가게의 이야기를 들어보세요</p></div>
-            </div>
-            {docent === null ? (
-              <div className="space-y-2">
-                <div className="h-4 bg-slate-100 rounded animate-pulse" />
-                <div className="h-4 bg-slate-100 rounded animate-pulse w-5/6" />
-                <div className="h-4 bg-slate-100 rounded animate-pulse w-2/3" />
-                <p className="text-xs text-slate-400 pt-1">AI가 가게 소개를 쓰는 중이에요...</p>
-              </div>
-            ) : docent ? (
-              <>
-                <p className="text-sm leading-7 text-slate-700 break-keep">{docent}</p>
-                {"speechSynthesis" in window && (
-                  <button onClick={toggleSpeak} aria-pressed={isSpeaking} className="mt-4 inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-blue-50 px-4 text-sm font-semibold text-[#0052FF] transition hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
-                    <span className="material-symbols-outlined text-lg text-[#0052FF]">{isSpeaking ? "stop_circle" : "play_circle"}</span>
-                    {isSpeaking ? "멈추기" : "음성으로 듣기"}
-                  </button>
-                )}
-              </>
-            ) : (
-              <p className="text-sm text-slate-500">도슨트를 불러오지 못했어요. 잠시 후 새로고침해주세요.</p>
-            )}
-          </section>
+          {/* AI 도슨트는 가게 페이지(/s/...)로 옮겼다 */}
 
           {!preview && (
             <section className="space-y-3 pt-1">

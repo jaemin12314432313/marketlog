@@ -1,14 +1,13 @@
 // QR로 여는 "내 가게 페이지" (/s/{가게 id}).
-// 관람객이 부스에서 연 가게와 진열한 상품 전체를 앱 설치 없이 보고, 요약본 이미지로 저장할 수 있다.
+// 관람객이 부스에서 연 가게와 진열한 상품 전체, 그리고 가게의 AI 도슨트를 앱 설치 없이 볼 수 있다.
 // 화면 모양은 마켓로그 앱과 같게(appUi.tsx) 맞춘다.
 import React, { useEffect, useState } from "react";
 import { boothApi, type BoothProduct, type BoothShopInfo } from "./boothApi";
-import { copyText, downloadBlob, makeShopSummaryCard, shareCardFile, shopOneLiner } from "./shopCard";
+import { copyText, shopOneLiner } from "./shopCard";
 import {
   APP_BG,
   APP_CARD,
   AppHeader,
-  BTN_PRIMARY,
   CardTitle,
   HeaderIconButton,
 } from "./appUi";
@@ -43,9 +42,10 @@ function ProductRow({ p }: { p: BoothProduct; key?: React.Key }) {
 export default function BoothShopPage({ storeId }: { storeId: string }) {
   const [data, setData] = useState<{ store: BoothShopInfo; products: BoothProduct[] } | null>(null);
   const [error, setError] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState("");
-  const [cardPreview, setCardPreview] = useState<{ url: string; blob: Blob; name: string } | null>(null);
+  // AI 도슨트: null=불러오는 중, ""=불러오지 못함/상품 없음
+  const [docent, setDocent] = useState<string | null>(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   useEffect(() => {
     boothApi
@@ -53,6 +53,15 @@ export default function BoothShopPage({ storeId }: { storeId: string }) {
       .then((res) => {
         setData(res);
         document.title = `${res.store.name} · CO-SHOW 가상 시장 | 마켓로그`;
+        // 도슨트는 가게에서 가장 최근에 진열한 상품을 바탕으로 가게 이야기를 들려 준다.
+        if (res.products.length > 0) {
+          boothApi
+            .docent(res.products[0].id)
+            .then((d) => setDocent(d.script))
+            .catch(() => setDocent(""));
+        } else {
+          setDocent("");
+        }
       })
       .catch((err) => setError(err?.status === 404 ? "가게를 찾을 수 없어요." : "잠시 후 다시 열어주세요."));
   }, [storeId]);
@@ -63,31 +72,23 @@ export default function BoothShopPage({ storeId }: { storeId: string }) {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const closePreview = () => {
-    if (cardPreview) URL.revokeObjectURL(cardPreview.url);
-    setCardPreview(null);
-  };
+  useEffect(() => () => window.speechSynthesis?.cancel(), []);
 
-  const saveCard = async () => {
-    if (!data || isSaving) return;
-    setIsSaving(true);
-    try {
-      const blob = await makeShopSummaryCard(
-        data.store.name,
-        data.store.number,
-        data.products,
-        data.store.openedAt,
-        `${window.location.origin}/s/${storeId}`,
-        data.store.tagline
-      );
-      const name = `마켓로그_${data.store.name}.png`;
-      const shared = await shareCardFile(blob, name, `${data.store.name} · CO-SHOW 가상 시장`);
-      if (!shared) setCardPreview({ url: URL.createObjectURL(blob), blob, name });
-    } catch {
-      setToast("저장하지 못했어요. 화면을 캡처해주세요");
-    } finally {
-      setIsSaving(false);
+  const toggleSpeak = () => {
+    const synth = window.speechSynthesis;
+    if (!synth || !docent) return;
+    if (isSpeaking) {
+      synth.cancel();
+      setIsSpeaking(false);
+      return;
     }
+    const utter = new SpeechSynthesisUtterance(docent);
+    utter.lang = "ko-KR";
+    utter.rate = 1.0;
+    utter.onend = () => setIsSpeaking(false);
+    utter.onerror = () => setIsSpeaking(false);
+    synth.speak(utter);
+    setIsSpeaking(true);
   };
 
   const share = async () => {
@@ -157,14 +158,35 @@ export default function BoothShopPage({ storeId }: { storeId: string }) {
           </div>
         </section>
 
-        {/* 버튼 */}
-        <div className="space-y-2.5">
-          <button onClick={saveCard} disabled={isSaving} className={BTN_PRIMARY}>
-            <span className="material-symbols-outlined text-lg">download</span>
-            {isSaving ? "요약본 만드는 중..." : "내 가게 요약본 저장하기"}
-          </button>
-          <p className="text-center text-xs text-slate-400">가게 정보와 진열 상품을 이미지로 간직해요</p>
-        </div>
+        {/* AI 도슨트 — 결과 페이지에서 가게 페이지로 옮겼다 */}
+        {products.length > 0 && (
+          <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-[0_4px_18px_rgba(15,23,42,0.04)]">
+            <div className="mb-4 flex items-center gap-3">
+              <span className="material-symbols-outlined rounded-xl bg-blue-50 p-2 text-[#0052FF]">record_voice_over</span>
+              <div><h2 className="text-sm font-bold">AI 도슨트</h2><p className="mt-0.5 text-xs text-slate-500">가게의 이야기를 들어보세요</p></div>
+            </div>
+            {docent === null ? (
+              <div className="space-y-2">
+                <div className="h-4 bg-slate-100 rounded animate-pulse" />
+                <div className="h-4 bg-slate-100 rounded animate-pulse w-5/6" />
+                <div className="h-4 bg-slate-100 rounded animate-pulse w-2/3" />
+                <p className="text-xs text-slate-400 pt-1">AI가 가게 소개를 쓰는 중이에요...</p>
+              </div>
+            ) : docent ? (
+              <>
+                <p className="text-sm leading-7 text-slate-700 break-keep">{docent}</p>
+                {"speechSynthesis" in window && (
+                  <button onClick={toggleSpeak} aria-pressed={isSpeaking} className="mt-4 inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-blue-50 px-4 text-sm font-semibold text-[#0052FF] transition hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+                    <span className="material-symbols-outlined text-lg text-[#0052FF]">{isSpeaking ? "stop_circle" : "play_circle"}</span>
+                    {isSpeaking ? "멈추기" : "음성으로 듣기"}
+                  </button>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-slate-500">도슨트를 불러오지 못했어요. 잠시 후 새로고침해주세요.</p>
+            )}
+          </section>
+        )}
 
         {/* 진열 상품 */}
         <section>
@@ -218,23 +240,6 @@ export default function BoothShopPage({ storeId }: { storeId: string }) {
           CO-SHOW 2026 · 팀 테라바이트
         </p>
       </main>
-
-      {cardPreview && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex flex-col items-center justify-center p-5 gap-4" onClick={closePreview}>
-          <p className="text-white font-extrabold text-center">
-            이미지를 <span className="text-[#FDE68A]">길게 눌러</span> &lsquo;이미지 저장&rsquo;을 선택하세요
-          </p>
-          <img src={cardPreview.url} alt="내 가게 카드" className="max-h-[68vh] w-auto rounded-2xl shadow-2xl" onClick={(e) => e.stopPropagation()} />
-          <div className="flex gap-2 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => downloadBlob(cardPreview.blob, cardPreview.name)} className={BTN_PRIMARY}>
-              <span className="material-symbols-outlined">download</span>파일로 받기
-            </button>
-            <button onClick={closePreview} className="px-6 py-3 rounded-xl bg-white/15 text-white font-extrabold">
-              닫기
-            </button>
-          </div>
-        </div>
-      )}
 
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 max-w-[90vw] break-all bg-[#0F172A] text-white text-sm font-bold rounded-full px-4 py-2 shadow-lg">
