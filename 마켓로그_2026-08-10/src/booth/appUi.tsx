@@ -3,7 +3,7 @@
 import React from "react";
 import logoIcon from "../assets/logo-icon.png";
 import type { AttributeGradeLabel } from "../types";
-import { priceForCompare, unitBasisLabel } from "../lib/priceUnit";
+import { perBasisText, priceForCompare, unitBasisLabel } from "../lib/priceUnit";
 
 export const APP_BG = "bg-[#F1F5F9]";
 // 앱 카드: 흰 바탕 + 연한 테두리 + 얕은 그림자
@@ -105,6 +105,7 @@ export function PriceRow({ price, publicPrice, unit }: { price: number; publicPr
   // 감귤처럼 시세가 10개 기준인 품목은 "20개 가격"을 10개 가격으로 환산해서 비교한다.
   const pct = publicPrice > 0 ? Math.round(((publicPrice - priceForCompare(price, unit)) / publicPrice) * 100) : null;
   const basisLabel = unitBasisLabel(unit);
+  const perBasis = perBasisText(price, unit); // 예: "1kg당 2,000원" — 시세와 같은 기준 가격
   return (
     <div className="grid grid-cols-2 gap-3">
       <div>
@@ -115,6 +116,7 @@ export function PriceRow({ price, publicPrice, unit }: { price: number; publicPr
             <span className="inline-block translate-y-px text-[11px] font-semibold text-[#0052FF] bg-blue-50 px-1.5 py-0.5 rounded-full">{pct}% 저렴</span>
           )}
         </div>
+        {perBasis && <p className="mt-0.5 text-[11px] font-semibold text-slate-400">{unit} 가격 · {perBasis}</p>}
       </div>
       <div>
         <span className="text-xs font-bold text-[#0F172A] h-4 flex items-center gap-1 relative">

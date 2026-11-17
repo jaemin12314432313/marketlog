@@ -178,6 +178,7 @@
   .ps-prices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid #D1D1D1; }
   .ps-lbl { font-size: 12px; font-weight: 700; }
   .ps-price { font-size: 20px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .ps-per { font-size: 11px; font-weight: 600; color: #94A3B8; margin-top: 2px; }
   .ps-price em { font-style: normal; font-size: 11px; font-weight: 600; color: #0052FF; background: #EFF6FF; padding: 2px 6px; border-radius: 999px; vertical-align: 3px; }
   .ps-ai-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   .ps-ai-head h3 { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: 0.02em; }
@@ -398,6 +399,14 @@ function startMarket(SHOP_DATA, MINE_ID) {
     if (!(n > 0)) { m = t.match(/^(\d+(?:\.\d+)?)\s*kg$/i); n = m ? +m[1] : 0; }
     return n > 0 ? price / n : price;
   }
+  /* 판매가 옆에 "1kg당 ○○원"을 같이 보여 주려고, 단위가 kg·개일 때 시세 기준 라벨과 배율을 돌려준다 */
+  function basisInfo(unit) {
+    var t = String(unit || "").trim(), m = t.match(/^(\d+(?:\.\d+)?)\s*개$/);
+    if (m && +m[1] > 0) return { f: +m[1] / 10, label: "10개" };
+    m = t.match(/^(\d+(?:\.\d+)?)\s*kg$/i);
+    if (m && +m[1] > 0) return { f: +m[1], label: "1kg" };
+    return null;
+  }
   function pctOf(st) { return st.pub > 0 ? Math.round((1 - cmpPrice(st.price, st.unit) / st.pub) * 100) : null; }
   var SHOW_ON_COUNTER = 3; /* 매대 상자에 칸을 나눠 담는 최대 품목 수 */
   /* ---------- hall plan: stalls in 12 x 12 slots, opened from the center outward ---------- */
@@ -595,7 +604,11 @@ function startMarket(SHOP_DATA, MINE_ID) {
       g.fillStyle = "#ffffff"; fit(g, it.title || "", 70, 560); g.fillText(it.title || "", 200, y);
       var pct = it.pub > 0 ? Math.round((1 - cmpPrice(it.price, it.unit) / it.pub) * 100) : null;
       g.textAlign = "right"; g.fillStyle = "#f2c200"; g.font = FONT(70); g.fillText((it.price || 0).toLocaleString("ko-KR") + "원", w - 70, y);
-      if (pct != null && pct > 0) { g.fillStyle = "#4d8bff"; g.font = FONT(40); g.fillText("시세보다 " + pct + "% ↓", w - 70, y + 50); }
+      if (pct != null && pct > 0) {
+        /* 3kg·20개 묶음 가격이면 시세와 같은 기준(1kg·10개) 가격을 같이 적어서 퍼센트가 맞아 보이게 한다 */
+        var bi2 = basisInfo(it.unit), pre = bi2 && bi2.f !== 1 && it.price ? bi2.label + "당 " + Math.round(it.price / bi2.f).toLocaleString("ko-KR") + "원 기준 " : "시세보다 ";
+        g.fillStyle = "#4d8bff"; g.font = FONT(40); g.fillText(pre + pct + "% ↓", w - 70, y + 50);
+      }
     });
     if ((s.items || []).length > 3) { g.textAlign = "left"; g.fillStyle = "#9aa3b2"; g.font = FONT(40); g.fillText("외 " + (s.items.length - 3) + "개 상품", 70, 850); }
   });
@@ -915,7 +928,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
   var joy = { x: 0, y: 0, id: null }, keys = {};
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
   function seen() { $("hint").classList.add("gone"); }
-  function homeDist() { return camera.aspect < 0.8 ? 6.6 : 8.2; }
+  function homeDist() { return camera.aspect < 0.8 ? 7.6 : 8.2; }
   var joyEl = $("joy"), knob = $("knob");
   function setJoy(e) {
     var r = joyEl.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2), mx = r.width / 2 - 22, d = Math.hypot(dx, dy);
@@ -1051,6 +1064,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
     }
     var top = it.grade === "A+", gname = gradeName(it.grade);
     var pct = it.pub > 0 ? Math.round((it.pub - cmpPrice(it.price, it.unit)) / it.pub * 100) : 0;
+    var bi = basisInfo(it.unit);
     var attrs = Object.keys(it.attrs || {});
     var html = '<div class="ps-hero"><img alt="" src="' + MARKET_API + '/api/v1/booth/result/' + encodeURIComponent(it.id) + '/image">' +
       '<div class="ps-grad"></div><span class="ps-badge' + (top ? " top" : "") + '">' + PS_CHECK + esc(gname) + '</span>' +
@@ -1062,8 +1076,9 @@ function startMarket(SHOP_DATA, MINE_ID) {
       '<h2 class="ps-title"></h2>';
     if (it.tags && it.tags.length) html += '<div class="ps-tags">' + it.tags.map(function (t) { t = String(t).trim(); return "<span>" + esc(t.charAt(0) === "#" ? t : "#" + t) + "</span>"; }).join("") + '</div>';
     html += '<div class="ps-card"><div class="ps-prices">' +
-      '<div><span class="ps-lbl">현장 판매가</span><div class="ps-price">' + won(it.price) + (pct > 0 ? ' <em>' + pct + '% 저렴</em>' : "") + '</div></div>' +
-      '<div><span class="ps-lbl">공공 시세</span><div class="ps-price">' + (it.pub > 0 ? won(it.pub) : "-") + '</div></div></div>';
+      '<div><span class="ps-lbl">현장 판매가</span><div class="ps-price">' + won(it.price) + (pct > 0 ? ' <em>' + pct + '% 저렴</em>' : "") + '</div>' +
+      (bi && bi.f !== 1 && it.price ? '<div class="ps-per">' + esc(it.unit) + ' 가격 · ' + bi.label + '당 ' + won(Math.round(it.price / bi.f)) + '</div>' : "") + '</div>' +
+      '<div><span class="ps-lbl">공공 시세' + (bi ? ' (' + bi.label + ' 기준)' : "") + '</span><div class="ps-price">' + (it.pub > 0 ? won(it.pub) : "-") + '</div></div></div>';
     if (attrs.length) {
       html += '<div class="ps-ai-head"><h3>AI 정밀 분석 지표</h3><span class="ps-pill' + (top ? " top" : "") + '">' + PS_CHECK + '품질 등급 ' + esc(gname) + '</span></div><div class="ps-metrics">' +
         attrs.map(function (a) {
@@ -1495,7 +1510,10 @@ function startMarket(SHOP_DATA, MINE_ID) {
 
   function resize() {
     var w = app.clientWidth, h = app.clientHeight; if (!w || !h) return;
-    renderer.setSize(w, h, false); if (composer) composer.setSize(w, h); camera.aspect = w / h; camera.fov = camera.aspect < 0.8 ? 82 : 66; camera.updateProjectionMatrix();
+    renderer.setSize(w, h, false); if (composer) composer.setSize(w, h); camera.aspect = w / h;
+    /* 세로 폰 화면은 세로 시야각을 고정해 두면 가로 시야가 45°쯤으로 너무 좁다 — 가로 시야 약 72°를 목표로 세로 시야각을 키운다(너무 왜곡되지 않게 104°까지) */
+    camera.fov = camera.aspect < 0.8 ? clamp(2 * Math.atan(Math.tan(36 * Math.PI / 180) / camera.aspect) * 180 / Math.PI, 82, 104) : 66;
+    camera.updateProjectionMatrix();
     if (!aerial) cam.gDist = homeDist();
   }
   if (window.ResizeObserver) new ResizeObserver(resize).observe(app); else window.addEventListener("resize", resize);
