@@ -249,6 +249,12 @@
   #gBtn { position: absolute; top: 164px; right: 0; }
   button.sample { font-family: inherit; cursor: pointer; }
   .monitor .tbr { display: none !important; }
+  /* 가까이 왔을 때만 뜨는 힌트(plate 안), +1 표시 */
+  .plate span.near { display: block; font-size: 12px; font-weight: 800; color: #d97706; min-height: 0; }
+  .plate span.near:empty { display: none; }
+  .pop { position: absolute; left: 50%; top: 36%; z-index: 6; font-size: 34px; font-weight: 800; color: #f2b400; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55); pointer-events: none; animation: popup 1s ease-out forwards; }
+  @keyframes popup { 0% { opacity: 0; transform: translate(-50%, 12px) scale(0.8); } 20% { opacity: 1; transform: translate(-50%, 0) scale(1.15); } 100% { opacity: 0; transform: translate(-50%, -64px) scale(1); } }
+  .gm-box .gm-rank { margin: 8px 0 2px; font-size: 16px; font-weight: 800; color: var(--fg); }
   /* 보물찾기 안내·결과 창 */
   .gm { position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15, 23, 42, 0.55); }
   .gm[hidden] { display: none !important; }
@@ -268,7 +274,7 @@
   <canvas id="gl" aria-label="RE:LOCAL 2026 CO-SHOW 가상 전시장. 왼쪽 아래 조이스틱으로 걷고, 화면을 끌어서 시야를 돌립니다."></canvas>
 
   <div class="topbar hud-x">
-    <div class="plate"><small>CO-SHOW 2026</small><strong id="hallname">3D 가상 시장</strong><span id="stats"></span></div>
+    <div class="plate"><small>CO-SHOW 2026</small><strong id="hallname">3D 가상 시장</strong><span id="stats"></span><span class="near" id="near"></span></div>
     <div class="tbr"><a class="sample" id="myLink" href="#" hidden>내 가게 페이지</a><button class="sample" id="gBtn" type="button" hidden>🍎 보물찾기</button></div>
   </div>
   <div class="hallnav hud-x" id="hallnav" hidden></div>
@@ -646,10 +652,10 @@ function startMarket(SHOP_DATA, MINE_ID) {
   /* 가운데 기둥(이정표): 황금 사과를 가장 많이 찾은 가게 TOP 3 */
   var pillarTex = canvasTex(512, 1024, function (g, w, h) {
     g.fillStyle = "#0d0e11"; g.fillRect(0, 0, w, h); g.textAlign = "center"; g.textBaseline = "middle";
-    g.fillStyle = "#f2c200"; g.font = FONT(58); g.fillText("황금 사과", w / 2, 80); g.fillText("많이 찾은 가게", w / 2, 146);
+    g.fillStyle = "#f2c200"; g.font = FONT(58); g.fillText("황금 보물", w / 2, 80); g.fillText("많이 찾은 가게", w / 2, 146);
     g.fillStyle = "#ffffff"; g.font = FONT(76); g.fillText("TOP 3", w / 2, 226); g.fillStyle = "#f2c200"; g.fillRect(40, 280, w - 80, 8);
     var list = typeof rankList === "function" ? rankList("apples") : [];
-    if (!list.length) { g.fillStyle = "#9aa3b2"; g.font = FONT(44); g.fillText("황금 사과를 찾으면", w / 2, 520); g.fillText("순위가 나와요", w / 2, 580); }
+    if (!list.length) { g.fillStyle = "#9aa3b2"; g.font = FONT(44); g.fillText("황금 보물을 찾으면", w / 2, 520); g.fillText("순위가 나와요", w / 2, 580); }
     list.forEach(function (r, i) {
       var y = 370 + i * 200;
       g.fillStyle = i === 0 ? "#f2c200" : "#ffffff"; g.font = FONT(80); g.fillText(String(i + 1), w / 2, y);
@@ -677,9 +683,9 @@ function startMarket(SHOP_DATA, MINE_ID) {
   /* 오른쪽 벽 전광판: 황금 사과를 가장 많이 찾은 가게 TOP 3 */
   var topTex = canvasTex(1024, 640, function (g, w, h) {
     g.fillStyle = "#0d0e11"; g.fillRect(0, 0, w, h); g.fillStyle = "#f2c200"; g.fillRect(0, 96, w, 6);
-    g.textBaseline = "middle"; g.textAlign = "left"; g.fillStyle = "#ffffff"; g.font = FONT(60); g.fillText("황금 사과 많이 찾은 가게 TOP 3", 36, 52);
+    g.textBaseline = "middle"; g.textAlign = "left"; g.fillStyle = "#ffffff"; g.font = FONT(60); g.fillText("황금 보물 많이 찾은 가게 TOP 3", 36, 52);
     var list = typeof rankList === "function" ? rankList("apples") : [];
-    if (!list.length) { g.fillStyle = "#9aa3b2"; g.font = FONT(44); g.fillText("황금 사과를 찾으면 순위가 나와요", 40, 300); }
+    if (!list.length) { g.fillStyle = "#9aa3b2"; g.font = FONT(44); g.fillText("황금 보물을 찾으면 순위가 나와요", 40, 300); }
     list.forEach(function (r, i) {
       var y = 195 + i * 135;
       g.textAlign = "left"; g.fillStyle = i === 0 ? "#f2c200" : "#ffffff"; g.font = FONT(96); g.fillText(String(i + 1), 40, y);
@@ -1154,8 +1160,8 @@ function startMarket(SHOP_DATA, MINE_ID) {
   var ROUND_SEC = Math.max(5, Math.min(600, +MARKET_PARAMS.get("round") || 180)), game = { state: "idle", left: ROUND_SEC }; /* ?round=초 로 시험용 시간 변경 */
   function stats() {
     $("stats").textContent = MONITOR ? "가게 " + filled + "곳"
-      : game.state === "playing" ? "⏱ " + mmss(game.left) + " · 황금 사과 " + appleGot + "개 · 둘러본 가게 " + stampN + "곳"
-      : "가게 " + filled + "곳 · 둘러본 가게 " + stampN + "곳 · 찾은 황금 사과 " + appleGot + "개";
+      : game.state === "playing" ? "⏱ " + mmss(game.left) + " · 황금 보물 " + appleGot + "개 · 둘러본 가게 " + stampN + "곳"
+      : "가게 " + filled + "곳 · 둘러본 가게 " + stampN + "곳 · 찾은 황금 보물 " + appleGot + "개";
     var key = appleGot + "/" + stampN;
     if (key !== lastScore) {
       lastScore = key; topTex.redraw(); pillarTex.redraw(); visitTex.redraw();
@@ -1164,7 +1170,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
   }
   var lastScore = "", scoreT = 0;
   function sendScore() {
-    fetch(MARKET_API + "/api/v1/booth/market/score", { method: "POST", headers: { "Content-Type": "application/json" },
+    return fetch(MARKET_API + "/api/v1/booth/market/score", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ storeId: mine.storeId, apples: appleGot, visited: stampN }) }).catch(function () {});
   }
   stats();
@@ -1175,13 +1181,18 @@ function startMarket(SHOP_DATA, MINE_ID) {
      바닥 후보 자리는 모두 통로라서, 나중에 새 가게가 생겨도 사과가 가게 안에 묻히지 않는다.
      사과마다 root(바닥 위치) 아래에 사과 모양(g)과 흙더미·받침대 같은 소품을 둔다. */
   var apples = [], digTarget = null, DIG_TIMES = 3;
-  var haloMat, goldMat, stemMat, leafMat, bodyGeo, stemGeo, leafGeo, dirtMat, moundGeo, pebbleGeo, pedMat, pedGeo, qMat;
+  var haloMat, goldMat, stemMat, leafMat, bodyGeo, stemGeo, leafGeo, dirtMat, moundGeo, pebbleGeo, pedMat, pedGeo, qMat, onionMat, orangeMat, tipGeo;
+  /* 황금 사과·황금 양파·황금 귤 — 전시 품목과 맞춰 모양과 금빛을 섞는다 */
+  var GOLD_NAME = { apple: "황금 사과", onion: "황금 양파", orange: "황금 귤" }, GOLD_ICON = { apple: "🍎", onion: "🧅", orange: "🍊" };
   (function () {
     var haloCan = mkCanvas(64), hg = haloCan.getContext("2d"), grd = hg.createRadialGradient(32, 32, 0, 32, 32, 32);
     grd.addColorStop(0, "rgba(255,226,120,0.9)"); grd.addColorStop(0.4, "rgba(255,200,60,0.35)"); grd.addColorStop(1, "rgba(255,200,60,0)");
     hg.fillStyle = grd; hg.fillRect(0, 0, 64, 64);
     haloMat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(haloCan), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
     goldMat = new THREE.MeshStandardMaterial({ color: 0xffc83d, metalness: 0.85, roughness: 0.22, emissive: 0x7a5200, emissiveIntensity: 0.6 });
+    onionMat = new THREE.MeshStandardMaterial({ color: 0xffe08a, metalness: 0.8, roughness: 0.28, emissive: 0x7a5a10, emissiveIntensity: 0.55 });
+    orangeMat = new THREE.MeshStandardMaterial({ color: 0xffa940, metalness: 0.8, roughness: 0.25, emissive: 0x7a3a00, emissiveIntensity: 0.55 });
+    tipGeo = new THREE.ConeGeometry(0.11, 0.3, 10);
     stemMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2b, roughness: 0.8 }); leafMat = new THREE.MeshStandardMaterial({ color: 0x5fbf4a, roughness: 0.6 });
     bodyGeo = new THREE.SphereGeometry(0.32, 20, 16); stemGeo = new THREE.CylinderGeometry(0.025, 0.03, 0.18, 6); leafGeo = new THREE.SphereGeometry(0.1, 8, 6);
     dirtMat = new THREE.MeshStandardMaterial({ color: 0x5a4330, roughness: 1 }); moundGeo = new THREE.SphereGeometry(0.55, 16, 10); pebbleGeo = new THREE.SphereGeometry(0.07, 6, 5);
@@ -1193,14 +1204,28 @@ function startMarket(SHOP_DATA, MINE_ID) {
   })();
   function makeApple(x, y, z, kind, orig) {
     var root = new THREE.Group(), g = new THREE.Group();
-    var body = new THREE.Mesh(bodyGeo, goldMat); body.scale.set(1, 0.9, 1); body.castShadow = true; g.add(body);
-    var stem = new THREE.Mesh(stemGeo, stemMat); stem.position.y = 0.33; g.add(stem);
-    var leaf = new THREE.Mesh(leafGeo, leafMat); leaf.scale.set(1.4, 0.35, 0.7); leaf.position.set(0.1, 0.36, 0); leaf.rotation.z = -0.5; g.add(leaf);
+    var variant = ["apple", "onion", "orange"][Math.floor(Math.random() * 3)];
+    var body, stem, leaf;
+    if (variant === "onion") {
+      /* 황금 양파: 아래가 통통하고 위가 뾰족, 뿌리 쪽에 잔뿌리 */
+      body = new THREE.Mesh(bodyGeo, onionMat); body.scale.set(1.05, 0.85, 1.05); body.castShadow = true; g.add(body);
+      var tip = new THREE.Mesh(tipGeo, onionMat); tip.position.y = 0.36; g.add(tip);
+      for (var ri = 0; ri < 4; ri++) { var rt = new THREE.Mesh(pebbleGeo, stemMat); rt.scale.set(0.5, 0.5, 0.5); rt.position.set(Math.cos(ri * 1.57) * 0.08, -0.28, Math.sin(ri * 1.57) * 0.08); g.add(rt); }
+    } else if (variant === "orange") {
+      /* 황금 귤: 살짝 납작하고 꼭지에 작은 잎 */
+      body = new THREE.Mesh(bodyGeo, orangeMat); body.scale.set(1.08, 0.78, 1.08); body.castShadow = true; g.add(body);
+      stem = new THREE.Mesh(stemGeo, stemMat); stem.scale.set(0.8, 0.5, 0.8); stem.position.y = 0.26; g.add(stem);
+      leaf = new THREE.Mesh(leafGeo, leafMat); leaf.scale.set(1.2, 0.35, 0.7); leaf.position.set(0.08, 0.28, 0); leaf.rotation.z = -0.5; g.add(leaf);
+    } else {
+      body = new THREE.Mesh(bodyGeo, goldMat); body.scale.set(1, 0.9, 1); body.castShadow = true; g.add(body);
+      stem = new THREE.Mesh(stemGeo, stemMat); stem.position.y = 0.33; g.add(stem);
+      leaf = new THREE.Mesh(leafGeo, leafMat); leaf.scale.set(1.4, 0.35, 0.7); leaf.position.set(0.1, 0.36, 0); leaf.rotation.z = -0.5; g.add(leaf);
+    }
     var halo = new THREE.Sprite(haloMat.clone()); halo.scale.set(1.5, 1.5, 1); g.add(halo);
     g.scale.setScalar(0.7); g.position.y = y; root.add(g);
     /* 납작 사과: 바닥에 눌어붙은 것처럼 납작하게, 반짝임 없이. 주우면 원래 모양으로 부풀며 떠오른다 */
     if (kind === "flat") { g.scale.set(0.85, 0.12, 0.85); halo.visible = false; }
-    var a = { root: root, g: g, halo: halo, x: x, z: z, y: y, got: false, fade: 0, ph: Math.random() * 6.28, kind: kind || "plain", orig: orig || kind || "plain", born: performance.now(), dig: 0, armed: true, wait: 0 };
+    var a = { variant: variant, root: root, g: g, halo: halo, x: x, z: z, y: y, got: false, fade: 0, ph: Math.random() * 6.28, kind: kind || "plain", orig: orig || kind || "plain", born: performance.now(), dig: 0, armed: true, wait: 0 };
     if (a.kind === "buried") {
       /* 땅속 사과: 사과는 숨기고 흙더미(+자갈)만 보인다. 바닥과 비슷한 색이라 잘 봐야 보인다 */
       g.visible = false;
@@ -1242,6 +1267,42 @@ function startMarket(SHOP_DATA, MINE_ID) {
   }
   APPLE_KINDS.forEach(spawnApple);
 
+  /* ---------- 효과: 소리·진동·+1 표시 ---------- */
+  var actx = null;
+  function audio() {
+    try {
+      if (!actx) { var AC = window.AudioContext || window.webkitAudioContext; if (AC) actx = new AC(); }
+      if (actx && actx.state === "suspended") actx.resume();
+    } catch (e) { actx = null; }
+    return actx;
+  }
+  function tone(f, d, type, vol, delay) {
+    var c = audio(); if (!c) return;
+    var t0 = c.currentTime + (delay || 0), o = c.createOscillator(), g = c.createGain();
+    o.type = type || "sine"; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol || 0.15, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+    o.connect(g); g.connect(c.destination); o.start(t0); o.stop(t0 + d + 0.03);
+  }
+  function sfx(kind) {
+    if (kind === "get") { tone(880, 0.12, "triangle", 0.18); tone(1318, 0.22, "triangle", 0.16, 0.09); }
+    else if (kind === "dig") tone(170, 0.09, "square", 0.07);
+    else if (kind === "ok") { tone(784, 0.12, "triangle", 0.16); tone(1175, 0.2, "triangle", 0.16, 0.1); }
+    else if (kind === "bad") tone(210, 0.28, "sawtooth", 0.08);
+    else if (kind === "start") { tone(523, 0.1, "triangle", 0.14); tone(784, 0.18, "triangle", 0.14, 0.1); }
+    else if (kind === "end") { tone(659, 0.15, "triangle", 0.16); tone(784, 0.15, "triangle", 0.16, 0.14); tone(1047, 0.32, "triangle", 0.18, 0.28); }
+  }
+  function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
+  function pop(text) {
+    var el = document.createElement("div"); el.className = "pop"; el.textContent = text; $("app").appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 1100);
+  }
+  /* 사과는 원래 찾기 어렵다 — 방향이나 거리 숫자는 알려 주지 않고, 꽤 가까이 왔을 때만 살짝 알려 준다 */
+  var nearEl = $("near");
+  function showNear(d) {
+    var txt = d < 3.5 ? "🔥 아주 가까워요!" : d < 7 ? "✨ 근처에 있어요" : "";
+    if (nearEl.textContent !== txt) nearEl.textContent = txt;
+  }
+
   /* ---------- 땅 파기 ---------- */
   var jumpBtn = $("jump");
   function setDigTarget(a) {
@@ -1250,11 +1311,11 @@ function startMarket(SHOP_DATA, MINE_ID) {
   }
   function dig() {
     var a = digTarget; if (!a) return;
-    a.dig++; a.mound.scale.y = Math.max(0.15, 1 - a.dig / DIG_TIMES); a.mound.rotation.y += 0.6;
+    a.dig++; a.mound.scale.y = Math.max(0.15, 1 - a.dig / DIG_TIMES); a.mound.rotation.y += 0.6; sfx("dig"); buzz(25);
     if (a.dig < DIG_TIMES) { toast("⛏ 파는 중… " + a.dig + "/" + DIG_TIMES); return; }
     /* 다 팠다: 흙더미를 치우고 사과가 땅에서 튀어나온다(바로 앞에 서 있으니 곧 주워진다) */
     a.root.remove(a.mound); a.kind = "plain"; a.g.visible = true; a.g.position.y = -0.3; a.rise = 0; setDigTarget(null);
-    toast("✨ 땅속에서 황금 사과가 나왔어요!");
+    toast("✨ 땅속에서 황금 보물이 나왔어요!");
   }
 
   /* ---------- 퀴즈 ---------- */
@@ -1271,7 +1332,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
     quizApple = a; a.armed = false; qs.className = "qs";
     var item = QUIZ[Math.floor(Math.random() * QUIZ.length)];
     var opts = item.a.map(function (t, i) { return { t: t, ok: i === 0 }; }).sort(function () { return Math.random() - 0.5; });
-    qs.innerHTML = '<div class="qhead"><div><h2>❓ 퀴즈 사과</h2><p class="qunit">정답을 맞히면 황금 사과를 가져갈 수 있어요</p></div></div>' +
+    qs.innerHTML = '<div class="qhead"><div><h2>❓ 퀴즈 보물</h2><p class="qunit">정답을 맞히면 황금 보물을 가져갈 수 있어요</p></div></div>' +
       '<p class="qsum" style="font-size:17px;font-weight:700;margin-top:14px"></p><div class="qopts">' +
       opts.map(function (o, i) { return '<button type="button" class="btn" data-i="' + i + '">' + esc(o.t) + '</button>'; }).join("") +
       '</div><button class="btn qclose" type="button" style="width:100%;margin-top:12px">나중에 풀기</button>';
@@ -1279,8 +1340,8 @@ function startMarket(SHOP_DATA, MINE_ID) {
     Array.prototype.forEach.call(qs.querySelectorAll(".qopts button"), function (b) {
       b.addEventListener("click", function () {
         qs.hidden = true; quizApple = null;
-        if (opts[+b.getAttribute("data-i")].ok) { a.kind = "plain"; if (a.q) { a.root.remove(a.q); a.q = null; } toast("⭕ 정답! 황금 사과를 가져가세요"); }
-        else { a.wait = 10; toast("❌ 땡! 10초 뒤에 다시 도전할 수 있어요"); }
+        if (opts[+b.getAttribute("data-i")].ok) { a.kind = "plain"; if (a.q) { a.root.remove(a.q); a.q = null; } toast("⭕ 정답! " + GOLD_NAME[a.variant] + "를 가져가세요"); sfx("ok"); }
+        else { a.wait = 10; toast("❌ 땡! 10초 뒤에 다시 도전할 수 있어요"); sfx("bad"); buzz(120); }
       });
     });
     qs.querySelector(".qclose").addEventListener("click", function () { qs.hidden = true; quizApple = null; a.wait = 2; });
@@ -1290,7 +1351,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
   function appleFree(x, z) { return Math.abs(x) < 25.5 && z > -31 && z < 41 && !blocked(x, z, 0) && !onStall(x, z); }
   function stepApples(dt, t) {
     if (game.state !== "playing") return; /* 한 판이 아닐 때(안내·결과·구경)는 사과를 줍거나 퀴즈가 뜨지 않는다 */
-    var nearDig = null;
+    var nearDig = null, nearest = 99;
     for (var i = 0; i < apples.length; i++) {
       var a = apples[i];
       if (a.got) {
@@ -1298,6 +1359,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
         continue;
       }
       var dist = Math.hypot(a.x - player.x, a.z - player.z);
+      if (dist < nearest) nearest = dist;
       if (a.kind === "buried") {
         if (dist < 1.3 && player.grounded && player.y < 0.5) nearDig = a;
         continue; /* 땅속 사과는 파기 전엔 줍지 못한다 */
@@ -1325,12 +1387,15 @@ function startMarket(SHOP_DATA, MINE_ID) {
       }
       if (dist < 1.0 && Math.abs(player.y + 0.9 - a.y) < (a.kind === "flat" ? 1.0 : 0.8) && !(a.rise != null && a.rise < 1) && performance.now() - a.born > 800) {
         a.got = true; appleGot++;
-        toast((a.orig === "runner" ? "🏃 도망가던 황금 사과를 잡았어요!" : a.orig === "buried" ? "⛏ 땅속 황금 사과를 캤어요!" : a.orig === "quiz" ? "❓ 퀴즈 황금 사과 획득!" : a.orig === "flat" ? "🫓 바닥에 붙은 황금 사과 발견!" : "🍎 황금 사과를 찾았어요!") +
-          " (" + appleGot + "개째) · 어딘가에 새 사과가 생겼어요");
+        var gname = GOLD_NAME[a.variant] || "황금 사과", gicon = GOLD_ICON[a.variant] || "🍎";
+        toast((a.orig === "runner" ? "🏃 도망가던 " + gname + "를 잡았어요!" : a.orig === "buried" ? "⛏ 땅속 " + gname + "를 캤어요!" : a.orig === "quiz" ? "❓ 퀴즈 " + gname + " 획득!" : a.orig === "flat" ? "🫓 바닥에 붙은 " + gname + " 발견!" : gicon + " " + gname + "를 찾았어요!") +
+          " (" + appleGot + "개째) · 어딘가에 새로 숨었어요");
+        sfx("get"); buzz(60); pop("+1 " + gicon);
         spawnApple(a.orig);
         stats();
       }
     }
+    showNear(nearest);
     setDigTarget(nearDig);
     if (apples.some(function (x) { return x.dead; })) apples = apples.filter(function (x) { return !x.dead; });
   }
@@ -1355,28 +1420,44 @@ function startMarket(SHOP_DATA, MINE_ID) {
     if (quizApple) { qs.hidden = true; quizApple = null; } /* 퀴즈를 풀던 중 시간이 끝나면 닫는다 */
   }
   function startRound() {
-    gm.hidden = true; clearApples(); stopPlayUi();
+    audio(); /* 버튼을 누른 순간(손님 조작)에 소리를 켠다 — 그래야 폰에서 소리가 난다 */
+    gm.hidden = true; clearApples(); stopPlayUi(); nearEl.textContent = "";
     appleGot = 0; visited = {}; stampN = 0; lastScore = "";
     APPLE_KINDS.forEach(spawnApple);
     game.state = "playing"; game.left = ROUND_SEC; game.endAt = performance.now() + ROUND_SEC * 1000; gBtn.hidden = true; gTick = 0;
-    stats(); toast("⏱ 3분 시작! 황금 사과를 찾아보세요");
+    stats(); toast("⏱ 3분 시작! 황금 사과·양파·귤을 찾아보세요"); sfx("start");
   }
   function browseOnly() {
-    gm.hidden = true; game.state = "free"; clearApples(); stopPlayUi(); gBtn.hidden = MONITOR; stats();
+    gm.hidden = true; game.state = "free"; clearApples(); stopPlayUi(); nearEl.textContent = ""; gBtn.hidden = MONITOR; stats();
+  }
+  /* 끝났을 때 내 순위 문구: 서버 기록에 방금 기록을 합쳐 황금 사과 TOP 3 안에 있는지 본다 */
+  function rankText(n) {
+    var list = rankList("apples"), idx = -1;
+    list.forEach(function (r, i) { if (r.me) idx = i; });
+    if (idx >= 0) return "🏆 지금 " + (idx + 1) + "위예요!";
+    var third = list.length >= 3 ? list[2].count : 0;
+    return third ? "TOP 3까지 " + Math.max(1, third - n + 1) + "개 더!" : "TOP 3에 도전해 보세요";
   }
   function endRound() {
-    game.state = "over"; clearApples(); stopPlayUi(); gBtn.hidden = true;
+    game.state = "over"; clearApples(); stopPlayUi(); nearEl.textContent = ""; gBtn.hidden = true;
     var n = appleGot, v = stampN;
-    if (MINE >= 0) { clearTimeout(scoreT); sendScore(); topTex.redraw(); pillarTex.redraw(); visitTex.redraw(); }
+    sfx("end"); buzz([80, 60, 120]);
+    if (MINE >= 0) { clearTimeout(scoreT); topTex.redraw(); pillarTex.redraw(); visitTex.redraw(); }
     stats();
-    gmShow("⏱ 끝! 수고했어요", '<p>3분 동안 찾은 황금 사과</p><div class="big">🍎 ' + n + '개</div><p>둘러본 가게 ' + v + '곳<br>' +
-      (MINE >= 0 ? '가게 이름으로 랭킹에 기록됐어요' : '내 가게를 열면 랭킹에 기록돼요') + '</p>',
+    gmShow("⏱ 끝! 수고했어요", '<p>3분 동안 찾은 황금 보물 (사과 · 양파 · 귤)</p><div class="big">✨ ' + n + '개</div><p>둘러본 가게 ' + v + '곳</p>' +
+      (MINE >= 0 ? '<p class="gm-rank" id="gmRank">순위를 확인하는 중…</p><p style="font-size:12px">가게 이름으로 랭킹에 기록돼요</p>' : '<p style="font-size:12px">내 가게를 열면 랭킹에 기록돼요</p>'),
       [{ t: "구경하기", fn: browseOnly }, { t: "다시 도전", primary: true, fn: startRound }]);
+    if (MINE >= 0) {
+      /* 점수를 보낸 뒤 랭킹을 다시 받아서 결과 창의 순위 문구를 채운다 */
+      sendScore().then(function () { return loadMarket(); }).then(function () {
+        var el = gm.querySelector("#gmRank"); if (el && !gm.hidden) el.textContent = rankText(n);
+      }).catch(function () { var el = gm.querySelector("#gmRank"); if (el) el.textContent = rankText(n); });
+    }
   }
   function gameIntro() {
     if (game.state === "playing") return;
-    gmShow("🍎 황금 사과 찾기", '<p>시장 곳곳에 숨은 황금 사과를 <b>3분 안에</b> 최대한 많이 찾아보세요!</p>' +
-      '<p style="font-size:12px">지붕 위 · 땅속(여러 번 파기) · 도망가는 사과 · 납작 사과 · 퀴즈 사과가 있어요<br>기록은 가게 이름으로 랭킹에 올라가요</p>',
+    gmShow("🍎 황금 보물 찾기", '<p>시장 곳곳에 숨은 황금 사과 · 양파 · 귤을 <b>3분 안에</b> 최대한 많이 찾아보세요!</p>' +
+      '<p style="font-size:12px">지붕 위 · 땅속(여러 번 파기) · 도망가는 보물 · 납작한 보물 · 퀴즈 보물이 있어요<br>꽤 가까워지면 힌트가 떠요 · 기록은 가게 이름으로 랭킹에 올라가요</p>',
       [{ t: "구경만 할래요", fn: browseOnly }, { t: "시작하기", primary: true, fn: startRound }]);
   }
   function gameTick(dt) {
@@ -1387,6 +1468,8 @@ function startMarket(SHOP_DATA, MINE_ID) {
     if (gTick >= 0.5) { gTick = 0; stats(); }
   }
   gBtn.addEventListener("click", gameIntro);
+  /* 시험용: ?debug=1 로 열면 자동 시험이 사과 위치로 순간이동해 줍기·힌트·효과를 확인할 수 있다 */
+  if (MARKET_PARAMS.get("debug") === "1") window.__g = { player: player, apples: function () { return apples; }, got: function () { return appleGot; }, game: game };
   if (MONITOR) { game.state = "free"; clearApples(); gBtn.hidden = true; }
   else { gBtn.hidden = false; setTimeout(gameIntro, 700); }
 
