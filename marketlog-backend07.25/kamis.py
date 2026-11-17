@@ -8,6 +8,7 @@ import asyncio
 import os
 import ssl
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 
 import httpx
@@ -81,7 +82,7 @@ def _fetch_category(category: str, regday: str) -> "tuple[list, bool]":
     }
     try:
         resp = httpx.get(
-            KAMIS_BASE_URL, params=params, timeout=10,
+            KAMIS_BASE_URL, params=params, timeout=8,
             headers={"User-Agent": KAMIS_USER_AGENT},
             verify=_KAMIS_SSL_CONTEXT,
         )
@@ -95,11 +96,14 @@ def _fetch_category(category: str, regday: str) -> "tuple[list, bool]":
 
 
 def _build_prices_for_date(regday: str) -> "tuple[dict, bool]":
-    categories = {cfg["category"] for cfg in ITEM_CONFIG.values()}
+    categories = sorted({cfg["category"] for cfg in ITEM_CONFIG.values()})
     items_by_category: dict = {}
     all_ok = True
-    for cat in categories:
-        items, ok = _fetch_category(cat, regday)
+    # 카테고리마다 따로 불러야 해서, 하나씩 차례로 부르면 KAMIS가 느릴 때 (10초 x 3)이 요청 제한(25초)을
+    # 넘겨 공공시세가 매번 정적 폴백으로 떨어졌다 — 동시에 불러서 가장 느린 한 번만큼만 기다린다.
+    with ThreadPoolExecutor(max_workers=len(categories)) as pool:
+        results = list(pool.map(lambda cat: _fetch_category(cat, regday), categories))
+    for cat, (items, ok) in zip(categories, results):
         items_by_category[cat] = items
         all_ok = all_ok and ok
 
@@ -137,8 +141,13 @@ def _refresh_cache() -> None:
         if prices:
             regday_used = regday
             break
-    _cache["prices"] = prices
-    _cache["regday"] = regday_used
+        if not ok:
+            break  # 네트워크 문제로 실패한 거라면 며칠 전 날짜를 계속 두드려도 소용없다 — 다음 쿨다운에 다시 시도
+    if prices:
+        _cache["prices"] = prices
+        _cache["regday"] = regday_used
+    # 이번에 못 받았으면(KAMIS 장애·타임아웃) 직전에 성공했던 시세를 그대로 둔다 — 비워 버리면
+    # 터무니없는 정적 폴백 값(예: 사과 15,000원/kg)으로 떨어진다.
     if had_failure:
         # 일시적 실패 — 오늘 날짜로 확정 짓지 않고, 쿨다운 후 같은 날 안에도 다시 시도한다.
         _cache["date"] = None
