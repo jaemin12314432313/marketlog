@@ -320,7 +320,8 @@ var MARKET_RANK = { apples: [], visited: [] }; /* 서버 랭킹: 가게(=체험�
 var HALL = 1, HALL_COUNT = 1, HALL0 = null, LATEST_NO = 0, NEXT_SWITCH = 0, MY_HALL = 0;
 function gotoHall(n) {
   var p = new URLSearchParams(location.search);
-  if (p.get("shop")) { if (n === MY_HALL) p.set("myhall", String(MY_HALL)); else p.delete("shop"); }
+  /* 내 가게 정보(shop)는 다른 관에서도 남겨 둔다 — 그래야 다른 관에서 보물찾기를 해도 점수가 내 이름으로 올라간다 */
+  if (p.get("shop")) p.set("myhall", String(MY_HALL));
   p.set("hall", String(n));
   location.replace(location.pathname + "?" + p.toString());
 }
@@ -875,6 +876,10 @@ function startMarket(SHOP_DATA, MINE_ID) {
   var pad = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.15, 40), new THREE.MeshBasicMaterial({ color: 0x2f7bff, side: THREE.DoubleSide, transparent: true, opacity: 0.9 }));
   pad.rotation.x = -Math.PI / 2; var frontOff = mine.side ? 2.8 : -2.8; pad.position.set(mine.x, 0.1, mine.z + frontOff); scene.add(pad);
   beacon.visible = pad.visible = MINE >= 0;
+  /* 점수를 올릴 때 쓰는 내 가게: 다른 관에 와 있어도 주소의 shop 값으로 내 이름 그대로 기록한다 */
+  var SCORE_ID = MINE >= 0 ? mine.storeId : (MARKET_PARAMS.get("shop") || "");
+  try { if (MINE >= 0) sessionStorage.setItem("ml_myname", mine.name); } catch (e) {}
+  var SCORE_NAME = MINE >= 0 ? mine.name : (function () { try { return sessionStorage.getItem("ml_myname") || "나"; } catch (e) { return "나"; } })();
 
   /* ---------- name labels for the nearest stalls (pooled sprites) ---------- */
   var labels = [], LABELS = 0;
@@ -1153,13 +1158,13 @@ function startMarket(SHOP_DATA, MINE_ID) {
   /* 랭킹 목록: 서버 기록에 지금 내 기록을 합쳐 많은 순 3곳 */
   function rankList(kind) {
     var list = (MARKET_RANK[kind] || []).map(function (r) { return { storeId: r.storeId, name: r.name, count: r.count }; });
-    var my = MINE >= 0 && mine; /* 장면을 만드는 도중(mine 이 정해지기 전)에도 불린다 */
+    var my = !!SCORE_ID; /* 장면을 만드는 도중(SCORE_ID 가 정해지기 전)에도 불린다 */
     if (my) {
       var local = kind === "apples" ? appleGot : stampN, hit = null;
-      list.forEach(function (r) { if (r.storeId === mine.storeId) hit = r; });
-      if (hit) hit.count = Math.max(hit.count, local); else if (local > 0) list.push({ storeId: mine.storeId, name: mine.name, count: local });
+      list.forEach(function (r) { if (r.storeId === SCORE_ID) hit = r; });
+      if (hit) hit.count = Math.max(hit.count, local); else if (local > 0) list.push({ storeId: SCORE_ID, name: SCORE_NAME, count: local });
     }
-    list.forEach(function (r) { r.me = !!my && r.storeId === mine.storeId; });
+    list.forEach(function (r) { r.me = my && r.storeId === SCORE_ID; });
     return list.sort(function (a, b) { return b.count - a.count; }).slice(0, 3);
   }
   /* 보물찾기: idle(시작 전 안내) → playing(시간 제한 없이 계속) → free(구경만). 상품이 없어서 오래 머물러도 되게 무제한으로 둔다.
@@ -1176,13 +1181,22 @@ function startMarket(SHOP_DATA, MINE_ID) {
     var key = appleGot + "/" + stampN;
     if (key !== lastScore) {
       lastScore = key; topTex.redraw(); pillarTex.redraw(); visitTex.redraw();
-      if (MINE >= 0) { clearTimeout(scoreT); scoreT = setTimeout(sendScore, 1500); }
+      if (SCORE_ID) { clearTimeout(scoreT); scoreT = setTimeout(sendScore, 1500); }
     }
+    saveGame();
   }
   var lastScore = "", scoreT = 0;
   function sendScore() {
     return fetch(MARKET_API + "/api/v1/booth/market/score", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ storeId: mine.storeId, apples: appleGot, visited: stampN }) }).catch(function () {});
+      body: JSON.stringify({ storeId: SCORE_ID, apples: appleGot, visited: stampN }) }).catch(function () {});
+  }
+  /* 관을 옮기면 페이지가 다시 열리므로, 하던 보물찾기를 이어서 하도록 탭에 임시로 기억해 둔다(탭을 닫으면 사라진다) */
+  function saveGame() {
+    if (MONITOR || game.state === "idle" || game.state === "over") return; /* 시작 전에는 덮어쓰지 않는다(이어하기 정보가 지워지면 안 된다) */
+    try { sessionStorage.setItem("ml_game", JSON.stringify({ state: game.state, got: appleGot, stamp: stampN, t0: game.t0 || 0 })); } catch (e) {}
+  }
+  function loadGame() {
+    try { var s = JSON.parse(sessionStorage.getItem("ml_game") || "null"); return s && (s.state === "playing" || s.state === "free") ? s : null; } catch (e) { return null; }
   }
   stats();
   var toastEl = $("toast"), toastT = 0;
@@ -1436,7 +1450,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
     gm.hidden = true; clearApples(); stopPlayUi(); nearEl.textContent = "";
     appleGot = 0; visited = {}; stampN = 0; lastScore = "";
     APPLE_KINDS.forEach(spawnApple);
-    game.state = "playing"; game.left = ROUND_SEC; game.since = performance.now(); game.endAt = performance.now() + ROUND_SEC * 1000; gTick = 0;
+    game.state = "playing"; game.left = ROUND_SEC; game.since = performance.now(); game.t0 = Date.now(); game.endAt = performance.now() + ROUND_SEC * 1000; gTick = 0;
     syncGBtn();
     stats(); toast(ROUND_SEC ? "⏱ " + mmss(ROUND_SEC) + " 시작! 황금 보물을 찾아보세요" : "🍎 시작! 황금 사과·양파·귤이 숨어 있어요"); sfx("start");
   }
@@ -1459,13 +1473,13 @@ function startMarket(SHOP_DATA, MINE_ID) {
   }
   /* 점수를 보낸 뒤 랭킹을 다시 받아서 결과 창의 순위 문구를 채운다 */
   function fillRank(n) {
-    if (MINE < 0) return;
+    if (!SCORE_ID) return;
     clearTimeout(scoreT); topTex.redraw(); pillarTex.redraw(); visitTex.redraw();
     var fill = function () { var el = gm.querySelector("#gmRank"); if (el && !gm.hidden) el.textContent = rankText(n); };
     sendScore().then(function () { return loadMarket(); }).then(fill).catch(fill);
   }
   var RANK_BODY = function (extra) {
-    return (MINE >= 0 ? '<p class="gm-rank" id="gmRank">순위를 확인하는 중…</p><p style="font-size:12px">사장님(가게) 이름으로 랭킹에 기록돼요</p>' : '<p style="font-size:12px">내 가게를 열면 랭킹에 기록돼요</p>');
+    return (SCORE_ID ? '<p class="gm-rank" id="gmRank">순위를 확인하는 중…</p><p style="font-size:12px">사장님(가게) 이름으로 랭킹에 기록돼요</p>' : '<p style="font-size:12px">내 가게를 열면 랭킹에 기록돼요</p>');
   };
   /* 무제한 모드: "순위 보기"를 누르면 지금까지의 기록과 순위를 보여 주고, 계속 찾거나 그만둘 수 있다 */
   function showStatus() {
@@ -1495,7 +1509,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
       '<li><b>❓</b>퀴즈를 맞히면 가져가요</li>' +
       '<li><b>👀</b>바닥에 납작하게 숨은 것도 있어요</li>' +
       '</ul>' +
-      '<p class="gm-foot">가까워지면 ✨ 힌트가 떠요 · ' + (MINE >= 0 ? 'TOP 3는 3D 전광판에 올라가요' : '내 가게를 열면 랭킹에 올라가요') + '</p>',
+      '<p class="gm-foot">가까워지면 ✨ 힌트가 떠요 · ' + (SCORE_ID ? 'TOP 3는 3D 전광판에 올라가요' : '내 가게를 열면 랭킹에 올라가요') + '</p>',
       [{ t: "구경만 할래요", fn: browseOnly }, { t: "시작하기", primary: true, fn: startRound }]);
   }
   function gameTick(dt) {
@@ -1512,7 +1526,19 @@ function startMarket(SHOP_DATA, MINE_ID) {
   /* 시험용: ?debug=1 로 열면 자동 시험이 사과 위치로 순간이동해 줍기·힌트·효과를 확인할 수 있다 */
   if (MARKET_PARAMS.get("debug") === "1") window.__g = { player: player, apples: function () { return apples; }, got: function () { return appleGot; }, game: game };
   if (MONITOR) { game.state = "free"; clearApples(); gBtn.hidden = true; }
-  else { syncGBtn(); setTimeout(gameIntro, 700); }
+  else {
+    var saved = loadGame();
+    if (saved && saved.state === "playing") {
+      /* 관을 옮기느라 페이지가 다시 열렸다면, 안내 창 없이 하던 보물찾기를 그 자리에서 이어서 한다(찾은 개수와 시간 유지) */
+      appleGot = saved.got || 0; stampN = saved.stamp || 0; visited = {}; lastScore = "";
+      clearApples(); APPLE_KINDS.forEach(spawnApple);
+      game.state = "playing"; game.t0 = saved.t0 || Date.now(); game.since = performance.now() - (Date.now() - game.t0);
+      game.endAt = performance.now() + ROUND_SEC * 1000; syncGBtn(); stats();
+      setTimeout(function () { toast("🍎 이어서 찾아요 · 지금까지 " + appleGot + "개"); }, 600);
+    } else if (saved && saved.state === "free") {
+      browseOnly();
+    } else { syncGBtn(); setTimeout(gameIntro, 700); }
+  }
 
   var mini = $("mini"), mg = mini.getContext("2d");
   function drawMini() {
