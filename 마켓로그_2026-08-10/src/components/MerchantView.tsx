@@ -55,13 +55,16 @@ const FRUIT_ORIGIN_OPTIONS: Record<string, string[]> = {
   사과: ["청송", "영주", "문경"],
   배: ["나주", "천안", "안성"],
   감: ["청도", "상주", "영동"],
-  감귤: ["제주시 애월", "제주시 조천", "서귀포시 남원"],
+  감귤: ["제주", "서귀포"],
+  양파: ["무안", "창녕", "함양"],
 };
 
 function getFruitOrigins(title: string, category: ProductItem["category"]): string[] {
-  if (category !== "과일") return [];
-  const item = ["감귤", "사과", "배", "감"].find((name) => title.includes(name));
-  return item ? FRUIT_ORIGIN_OPTIONS[item] : [];
+  const item = ["감귤", "사과", "양파", "배", "감"].find((name) => title.includes(name));
+  if (!item) return [];
+  // 양파는 야채지만 전시 품목이라 지역 목록을 준다. 나머지는 과일 카테고리일 때만.
+  if (item !== "양파" && category !== "과일") return [];
+  return FRUIT_ORIGIN_OPTIONS[item];
 }
 
 function parseProductOrigin(origin: string): { type: string; detail: string } {
@@ -909,7 +912,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
               ) : (
               <input
                 type="text"
-                placeholder={aiSummary ? "완도" : "AI 스캔을 먼저 진행해주세요"}
+                placeholder={aiSummary ? "예: 산지 지역 이름" : "AI 스캔을 먼저 진행해주세요"}
                 value={originDetail}
                 onChange={(e) => setOriginDetail(e.target.value)}
                 disabled={!aiSummary}
