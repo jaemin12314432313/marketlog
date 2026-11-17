@@ -243,6 +243,22 @@
   .monempty[hidden] { display: none !important; }
   @media (prefers-reduced-motion: reduce) { .monb { transition: none; } }
   .nogl { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; padding: 24px; text-align: center; color: var(--muted); }
+  .tbr { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+  .tbr .sample[hidden] { display: none; }
+  /* 미니맵(top 60px, 높이 93px)을 피해 그 아래에 둔다 */
+  #gBtn { position: absolute; top: 164px; right: 0; }
+  button.sample { font-family: inherit; cursor: pointer; }
+  .monitor .tbr { display: none !important; }
+  /* 보물찾기 안내·결과 창 */
+  .gm { position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15, 23, 42, 0.55); }
+  .gm[hidden] { display: none !important; }
+  .gm-box { width: 100%; max-width: 340px; background: var(--surface); color: var(--fg); border-radius: 20px; padding: 22px 20px 18px; text-align: center; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35); }
+  .gm-box h2 { margin: 0 0 8px; font-size: 22px; font-weight: 800; }
+  .gm-box p { margin: 6px 0; font-size: 14px; line-height: 1.55; color: var(--muted); }
+  .gm-box .big { margin: 10px 0 4px; font-size: 38px; font-weight: 800; color: #f2b400; }
+  .gm-row { display: flex; gap: 8px; margin-top: 18px; }
+  .gm-row button { flex: 1; min-height: 46px; border-radius: 12px; border: 1px solid var(--line); background: var(--chip); color: var(--fg); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+  .gm-row button.primary { background: #0052ff; border-color: #0046d6; color: #fff; }
   .app.nogl-on .nogl { display: flex; }
   .app.nogl-on #gl, .app.nogl-on .joy, .app.nogl-on .btns, .app.nogl-on .minimap, .app.nogl-on .hint { display: none; }
   @media (prefers-reduced-motion: reduce) { .toast { transition: none; } .hint { transition: none; } }
@@ -253,7 +269,7 @@
 
   <div class="topbar hud-x">
     <div class="plate"><small>CO-SHOW 2026</small><strong id="hallname">3D 가상 시장</strong><span id="stats"></span></div>
-    <a class="sample" id="myLink" href="#" hidden>내 가게 페이지</a>
+    <div class="tbr"><a class="sample" id="myLink" href="#" hidden>내 가게 페이지</a><button class="sample" id="gBtn" type="button" hidden>🍎 보물찾기</button></div>
   </div>
   <div class="hallnav hud-x" id="hallnav" hidden></div>
   <canvas class="minimap" id="mini" width="144" height="186" aria-hidden="true"></canvas>
@@ -261,7 +277,7 @@
 
   <div class="card hud-x" id="card" hidden></div>
   <button class="reopen" id="reopen" type="button" hidden>🛒 진열 상품 보기</button>
-  <div class="hint hud-x" id="hint">조이스틱 위아래는 걷기, 좌우는 몸 돌리기 · 점프로 가게 지붕 위를 건너 보세요</div>
+  <div class="hint hud-x" id="hint">조이스틱으로 걷기 · 화면을 끌어서 둘러보기 · 점프로 가게 지붕 위를 건너 보세요</div>
 
   <div class="joy" id="joy" style="left:max(16px, env(safe-area-inset-left, 0px))"><i id="knob"></i></div>
   <div class="btns" style="right:max(16px, env(safe-area-inset-right, 0px))">
@@ -1134,8 +1150,12 @@ function startMarket(SHOP_DATA, MINE_ID) {
     list.forEach(function (r) { r.me = !!my && r.storeId === mine.storeId; });
     return list.sort(function (a, b) { return b.count - a.count; }).slice(0, 3);
   }
+  /* 보물찾기는 3분 한 판: idle(시작 전 안내) → playing → over(결과), 구경만 하면 free */
+  var ROUND_SEC = Math.max(5, Math.min(600, +MARKET_PARAMS.get("round") || 180)), game = { state: "idle", left: ROUND_SEC }; /* ?round=초 로 시험용 시간 변경 */
   function stats() {
-    $("stats").textContent = MONITOR ? "가게 " + filled + "곳" : "가게 " + filled + "곳 · 둘러본 가게 " + stampN + "곳 · 찾은 황금 사과 " + appleGot + "개";
+    $("stats").textContent = MONITOR ? "가게 " + filled + "곳"
+      : game.state === "playing" ? "⏱ " + mmss(game.left) + " · 황금 사과 " + appleGot + "개 · 둘러본 가게 " + stampN + "곳"
+      : "가게 " + filled + "곳 · 둘러본 가게 " + stampN + "곳 · 찾은 황금 사과 " + appleGot + "개";
     var key = appleGot + "/" + stampN;
     if (key !== lastScore) {
       lastScore = key; topTex.redraw(); pillarTex.redraw(); visitTex.redraw();
@@ -1269,6 +1289,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
 
   function appleFree(x, z) { return Math.abs(x) < 25.5 && z > -31 && z < 41 && !blocked(x, z, 0) && !onStall(x, z); }
   function stepApples(dt, t) {
+    if (game.state !== "playing") return; /* 한 판이 아닐 때(안내·결과·구경)는 사과를 줍거나 퀴즈가 뜨지 않는다 */
     var nearDig = null;
     for (var i = 0; i < apples.length; i++) {
       var a = apples[i];
@@ -1313,7 +1334,61 @@ function startMarket(SHOP_DATA, MINE_ID) {
     setDigTarget(nearDig);
     if (apples.some(function (x) { return x.dead; })) apples = apples.filter(function (x) { return !x.dead; });
   }
-  setTimeout(function () { toast("✈ 황금 사과 찾기! 지붕 위·땅속·퀴즈·도망·납작 사과가 숨어 있어요. 찾을수록 새로 생겨요"); }, 1500);
+  /* ---------- 보물찾기 한 판(3분) ----------
+     예전엔 사과가 끝없이 새로 생겨서 오래 하는 사람이 무조건 1위였다. 이제 3분 한 판이고, 끝나면 결과를 보여 준다.
+     점수(황금 사과 수·둘러본 가게 수)는 한 판마다 0에서 시작하고, 서버에는 가게마다 가장 좋은 기록만 남는다. */
+  var gBtn = $("gBtn"), gm = document.createElement("div"), gTick = 0;
+  gm.className = "gm"; gm.hidden = true; $("app").appendChild(gm);
+  function gmShow(title, bodyHtml, buttons) {
+    gm.innerHTML = '<div class="gm-box"><h2></h2>' + bodyHtml + '<div class="gm-row"></div></div>';
+    gm.querySelector("h2").textContent = title;
+    var row = gm.querySelector(".gm-row");
+    buttons.forEach(function (b) {
+      var el = document.createElement("button"); el.type = "button"; el.textContent = b.t; if (b.primary) el.className = "primary";
+      el.addEventListener("click", b.fn); row.appendChild(el);
+    });
+    gm.hidden = false;
+  }
+  function clearApples() { apples.forEach(function (a) { scene.remove(a.root); }); apples = []; }
+  function stopPlayUi() {
+    setDigTarget(null);
+    if (quizApple) { qs.hidden = true; quizApple = null; } /* 퀴즈를 풀던 중 시간이 끝나면 닫는다 */
+  }
+  function startRound() {
+    gm.hidden = true; clearApples(); stopPlayUi();
+    appleGot = 0; visited = {}; stampN = 0; lastScore = "";
+    APPLE_KINDS.forEach(spawnApple);
+    game.state = "playing"; game.left = ROUND_SEC; game.endAt = performance.now() + ROUND_SEC * 1000; gBtn.hidden = true; gTick = 0;
+    stats(); toast("⏱ 3분 시작! 황금 사과를 찾아보세요");
+  }
+  function browseOnly() {
+    gm.hidden = true; game.state = "free"; clearApples(); stopPlayUi(); gBtn.hidden = MONITOR; stats();
+  }
+  function endRound() {
+    game.state = "over"; clearApples(); stopPlayUi(); gBtn.hidden = true;
+    var n = appleGot, v = stampN;
+    if (MINE >= 0) { clearTimeout(scoreT); sendScore(); topTex.redraw(); pillarTex.redraw(); visitTex.redraw(); }
+    stats();
+    gmShow("⏱ 끝! 수고했어요", '<p>3분 동안 찾은 황금 사과</p><div class="big">🍎 ' + n + '개</div><p>둘러본 가게 ' + v + '곳<br>' +
+      (MINE >= 0 ? '가게 이름으로 랭킹에 기록됐어요' : '내 가게를 열면 랭킹에 기록돼요') + '</p>',
+      [{ t: "구경하기", fn: browseOnly }, { t: "다시 도전", primary: true, fn: startRound }]);
+  }
+  function gameIntro() {
+    if (game.state === "playing") return;
+    gmShow("🍎 황금 사과 찾기", '<p>시장 곳곳에 숨은 황금 사과를 <b>3분 안에</b> 최대한 많이 찾아보세요!</p>' +
+      '<p style="font-size:12px">지붕 위 · 땅속(여러 번 파기) · 도망가는 사과 · 납작 사과 · 퀴즈 사과가 있어요<br>기록은 가게 이름으로 랭킹에 올라가요</p>',
+      [{ t: "구경만 할래요", fn: browseOnly }, { t: "시작하기", primary: true, fn: startRound }]);
+  }
+  function gameTick(dt) {
+    if (game.state !== "playing") return;
+    /* 프레임이 느린 폰에서도 3분이 실제 3분이 되도록 프레임 시간이 아니라 시계로 센다 */
+    game.left = Math.max(0, (game.endAt - performance.now()) / 1000); gTick += dt;
+    if (game.left <= 0) { endRound(); return; }
+    if (gTick >= 0.5) { gTick = 0; stats(); }
+  }
+  gBtn.addEventListener("click", gameIntro);
+  if (MONITOR) { game.state = "free"; clearApples(); gBtn.hidden = true; }
+  else { gBtn.hidden = false; setTimeout(gameIntro, 700); }
 
   var mini = $("mini"), mg = mini.getContext("2d");
   function drawMini() {
@@ -1564,13 +1639,16 @@ function startMarket(SHOP_DATA, MINE_ID) {
     var dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
 
     /* move */
-    var ix = joy.x + ((keys.d || keys.arrowright) ? 1 : 0) - ((keys.a || keys.arrowleft) ? 1 : 0);
+    var kx = ((keys.d || keys.arrowright) ? 1 : 0) - ((keys.a || keys.arrowleft) ? 1 : 0);
+    var ix = joy.x + kx;
     var iy = joy.y + ((keys.w || keys.arrowup) ? 1 : 0) - ((keys.s || keys.arrowdown) ? 1 : 0);
+    /* 걷기 모드: 키보드 A/D는 몸을 돌리고, 조이스틱 좌우는 옆걸음(시야는 화면을 끌어서 돌린다).
+       예전엔 조이스틱 좌우도 몸을 계속 돌려서, 앞으로 가며 살짝 비스듬히 밀면 제자리를 빙글빙글 돌았다. */
+    if (!aerial && kx) { cam.yaw -= kx * 2.1 * dt; lookAt = null; ix = joy.x; }
     var mx = 0, mz = 0, len = Math.hypot(ix, iy);
     if (len > 0.08) {
       if (len > 1) { ix /= len; iy /= len; }
-      /* first person: left/right turns your body (yaw), up/down walks forward/back. Bird's-eye keeps the sideways move. */
-      if (!aerial) { cam.yaw -= ix * 2.1 * dt; ix = 0; lookAt = null; }
+      if (!aerial) lookAt = null;
       var sy = Math.sin(cam.yaw), cy = Math.cos(cam.yaw);
       mx = -sy * iy + cy * ix; mz = -cy * iy - sy * ix;
     } else if (auto) {
@@ -1618,7 +1696,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
 
     if (MONITOR) monitorCam(dt);
     stepWalkers(dt, t);
-    stepApples(dt, t);
+    stepApples(dt, t); gameTick(dt);
     sun.position.set(player.x + 18, 36, player.z + 14); sun.target.position.set(player.x, 0, player.z); sun.target.updateMatrixWorld();
     lodTimer -= dt; if (lodTimer <= 0) { lodTimer = 0.2; updateDetail(); }
 
