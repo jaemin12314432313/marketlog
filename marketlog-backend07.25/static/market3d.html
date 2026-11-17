@@ -261,6 +261,9 @@
   .plate span.near:empty { display: none; }
   .pop { position: absolute; left: 50%; top: 36%; z-index: 6; font-size: 34px; font-weight: 800; color: #f2b400; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55); pointer-events: none; animation: popup 1s ease-out forwards; }
   @keyframes popup { 0% { opacity: 0; transform: translate(-50%, 12px) scale(0.8); } 20% { opacity: 1; transform: translate(-50%, 0) scale(1.15); } 100% { opacity: 0; transform: translate(-50%, -64px) scale(1); } }
+  .gm-box .gm-who { margin: 2px 0 0; font-size: 13px; font-weight: 700; color: var(--muted); }
+  .gm-chips { display: flex; gap: 8px; justify-content: center; margin-top: 6px; }
+  .gm-chips span { background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 700; color: var(--fg); }
   .gm-box .gm-rank { margin: 8px 0 2px; font-size: 16px; font-weight: 800; color: var(--fg); }
   .gm-hero { margin: 2px 0 0; font-size: 46px; font-weight: 800; color: #f2b400; font-variant-numeric: tabular-nums; line-height: 1.1; }
   .gm-box .gm-sub { margin: 6px 0 0; font-size: 15px; font-weight: 700; color: var(--fg); }
@@ -1541,14 +1544,20 @@ function startMarket(SHOP_DATA, MINE_ID) {
     var fill = function () { var el = gm.querySelector("#gmRank"); if (el && !gm.hidden) el.textContent = rankText(n); };
     sendScore().then(function () { return loadMarket(); }).then(fill).catch(fill);
   }
-  var RANK_BODY = function (extra) {
-    return (SCORE_ID ? '<p class="gm-rank" id="gmRank">순위를 확인하는 중…</p><p style="font-size:12px">사장님(가게) 이름으로 랭킹에 기록돼요</p>' : '<p style="font-size:12px">내 가게를 열면 랭킹에 기록돼요</p>');
-  };
-  /* 무제한 모드: "순위 보기"를 누르면 지금까지의 기록과 순위를 보여 주고, 계속 찾거나 그만둘 수 있다 */
+  /* 순위 창: 문장으로 길게 풀지 않고, 응원 한 줄 + 큰 개수 + 짧은 칩(시간·가게 수) + 순위 한 줄로 보여 준다 */
+  function cheer(n) { return n === 0 ? "아직 한 개도 못 찾았어요 👀" : n < 3 ? "좋은 출발이에요!" : n < 6 ? "보물 사냥꾼이시네요!" : n < 10 ? "시장을 꿰고 계시네요!" : "전설의 보물 사냥꾼 🏆"; }
+  function playedMin() { var s = Math.max(0, Math.floor((performance.now() - game.since) / 1000)); return s < 60 ? s + "초" : Math.floor(s / 60) + "분"; }
+  function statusBody(n, v, timeText) {
+    return '<div class="gm-who">' + (SCORE_ID ? esc(SCORE_NAME) + ' 사장님의 기록' : '내 가게를 열면 랭킹에 올라가요') + '</div>' +
+      '<div class="big">🍎 ' + n + '개</div>' +
+      '<div class="gm-chips"><span>⏱ ' + timeText + '</span><span>🏪 가게 ' + v + '곳 구경</span></div>' +
+      (SCORE_ID ? '<p class="gm-rank" id="gmRank">순위를 확인하는 중…</p>' : '');
+  }
+  /* 무제한 모드: "순위 보기"를 누르면 지금까지의 기록과 순위를 보여 주고, 계속 찾거나 구경 모드로 갈 수 있다 */
   function showStatus() {
     var n = appleGot, v = stampN;
-    gmShow("지금까지 기록", '<div class="big">✨ ' + n + '개</div><p>' + playedText().replace("째", " 동안") + ' 찾았어요<br>둘러본 가게 ' + v + '곳</p>' + RANK_BODY(),
-      [{ t: "그만하기", fn: browseOnly }, { t: "계속 찾기", primary: true, fn: function () { gm.hidden = true; } }]);
+    gmShow(cheer(n), statusBody(n, v, playedMin()),
+      [{ t: "구경 모드로", fn: browseOnly }, { t: "계속 찾기", primary: true, fn: function () { gm.hidden = true; } }]);
     fillRank(n);
   }
   /* 시간제(시험용 ?round=초)에서만 쓰인다 */
@@ -1557,11 +1566,10 @@ function startMarket(SHOP_DATA, MINE_ID) {
     var n = appleGot, v = stampN;
     sfx("end"); buzz([80, 60, 120]);
     stats();
-    gmShow("⏱ 끝! 수고했어요", '<p>' + mmss(ROUND_SEC) + ' 동안 찾은 황금 보물 (사과 · 양파 · 귤)</p><div class="big">✨ ' + n + '개</div><p>둘러본 가게 ' + v + '곳</p>' + RANK_BODY(),
+    gmShow("끝! " + cheer(n), statusBody(n, v, mmss(ROUND_SEC)),
       [{ t: "구경하기", fn: browseOnly }, { t: "다시 도전", primary: true, fn: startRound }]);
     fillRank(n);
-  }
-  function gameIntro() {
+  }  function gameIntro() {
     if (game.state === "playing") return;
     gmShow("황금 보물 찾기", (ROUND_SEC ? '<div class="gm-hero">⏱ ' + mmss(ROUND_SEC) + '</div><p class="gm-sub">🍎 🧅 🍊 황금 보물을 최대한 많이 찾아요!</p>'
       : '<div class="gm-hero">🍎 🧅 🍊</div><p class="gm-sub">시장 곳곳에 숨은 황금 보물을 마음껏 찾아요!</p>') +
