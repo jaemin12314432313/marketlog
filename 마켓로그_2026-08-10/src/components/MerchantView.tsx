@@ -52,11 +52,11 @@ function formatPriceInput(raw: string): string {
 // 대분류(국내산/수입산) + 상세 지역(필수)을 "국내산 · 완도" 형태 문자열로 합쳐 저장한다.
 const PRODUCT_ORIGIN_OPTIONS = ["국내산", "수입산"];
 const FRUIT_ORIGIN_OPTIONS: Record<string, string[]> = {
-  사과: ["청송", "영주", "문경"],
+  사과: ["경북 청송", "경북 영주", "경북 문경"],
   배: ["나주", "천안", "안성"],
   감: ["청도", "상주", "영동"],
-  감귤: ["제주", "서귀포"],
-  양파: ["무안", "창녕", "함양"],
+  감귤: ["제주시", "서귀포시"],
+  양파: ["전남 무안", "경남 창녕", "경남 함양"],
 };
 
 function getFruitOrigins(title: string, category: ProductItem["category"]): string[] {
