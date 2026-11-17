@@ -1,6 +1,6 @@
 import asyncio
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -85,6 +85,19 @@ app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
 os.makedirs("static/vendor", exist_ok=True)
 # 3D 시장(market3d.html)이 쓰는 three.js와 글꼴 — /vendor/... 로 불러온다
 app.mount("/vendor", StaticFiles(directory="static/vendor"), name="vendor")
+
+os.makedirs("static/icons", exist_ok=True)
+app.mount("/icons", StaticFiles(directory="static/icons"), name="icons")  # 홈 화면 아이콘(PWA)
+
+
+@app.get("/manifest.webmanifest")
+def serve_manifest():
+    """'홈 화면에 추가'로 설치하면 주소창 없이 앱처럼 열리게 하는 설치 정보 파일."""
+    path = "static/manifest.webmanifest"
+    if os.path.exists(path):
+        return FileResponse(path, media_type="application/manifest+json")
+    raise HTTPException(status_code=404)
+
 
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
