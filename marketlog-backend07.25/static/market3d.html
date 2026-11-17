@@ -1008,7 +1008,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
       var r = canvas.getBoundingClientRect();
       ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, camera);
       var hit = ray.intersectObjects(pickMeshes, false);
-      if (hit.length && hit[0].instanceId != null) { cardSlot = hit[0].instanceId; cardUntil = performance.now() + 7000; cardOff = -1; }
+      if (hit.length && hit[0].instanceId != null) { cardSlot = hit[0].instanceId; cardUntil = performance.now() + 7000; cardOpened = cardSlot; }
     }
     drag = null;
   });
@@ -1157,11 +1157,11 @@ function startMarket(SHOP_DATA, MINE_ID) {
     qs.scrollTop = 0; qs.hidden = false;
   }
   /* cardOff: 닫기를 누른 가게. 그 가게 앞에 있는 동안은 카드 대신 "진열 상품 보기" 버튼만 보인다 */
-  var cardOff = -1, reopenEl = $("reopen");
-  reopenEl.addEventListener("click", function () { cardOff = -1; });
+  var cardOpened = -1, lastWant = -1, reopenEl = $("reopen"); /* 가게 앞에 서면 "진열 상품 보기" 버튼만 뜨고, 누르면 카드가 열린다 */
+  reopenEl.addEventListener("click", function () { cardOpened = lastWant; });
   cardEl.addEventListener("click", function (e) {
     if (shownSlot < 0) return;
-    if (e.target.closest && e.target.closest(".cclose")) { cardOff = shownSlot; cardUntil = 0; return; }
+    if (e.target.closest && e.target.closest(".cclose")) { cardOpened = -1; cardUntil = 0; return; }
     var b = e.target.closest && e.target.closest("button[data-i]");
     openSheet(shownSlot, b ? +b.getAttribute("data-i") : 0);
   });
@@ -1597,7 +1597,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
   }
   gBtn.addEventListener("click", function () { if (game.state === "playing") showStatus(); else gameIntro(); });
   /* 시험용: ?debug=1 로 열면 자동 시험이 사과 위치로 순간이동해 줍기·힌트·효과를 확인할 수 있다 */
-  if (MARKET_PARAMS.get("debug") === "1") window.__g = { player: player, apples: function () { return apples; }, got: function () { return appleGot; }, game: game, spawn: spawnApple, pickKind: pickKind };
+  if (MARKET_PARAMS.get("debug") === "1") window.__g = { player: player, apples: function () { return apples; }, got: function () { return appleGot; }, game: game, spawn: spawnApple, pickKind: pickKind, cam: cam };
   if (MONITOR) { game.state = "free"; clearApples(); gBtn.hidden = true; }
   else {
     var saved = loadGame();
@@ -1954,10 +1954,12 @@ function startMarket(SHOP_DATA, MINE_ID) {
     for (var i = 0; i < filled; i++) { var s = stalls[i], fz = s.z + (s.side ? 2.0 : -2.0), d2 = (s.x - player.x) * (s.x - player.x) + (fz - player.z) * (fz - player.z); if (d2 < bd) { bd = d2; best = i; } }
     if (best >= 0 && !visited[best]) { visited[best] = true; stampN++; stats(); }
     var wantCard = performance.now() < cardUntil ? cardSlot : best;
-    if (cardOff >= 0 && wantCard !== cardOff) cardOff = -1; /* 다른 가게로 가면 다시 자동으로 뜬다 */
-    var off = cardOff >= 0;
-    showCard(off ? -1 : wantCard);
-    if (reopenEl.hidden !== !off) reopenEl.hidden = !off;
+    lastWant = wantCard;
+    if (cardOpened >= 0 && wantCard !== cardOpened) cardOpened = -1; /* 다른 곳으로 가면 카드는 닫힌다 */
+    var cardOn = wantCard >= 0 && cardOpened === wantCard;
+    showCard(cardOn ? wantCard : -1);
+    var needBtn = wantCard >= 0 && !cardOn;
+    if (reopenEl.hidden !== !needBtn) reopenEl.hidden = !needBtn;
 
     var pulse = reduced ? 0.5 : 0.5 + 0.2 * Math.sin(t * 3);
     beacon.material.opacity = pulse; pad.scale.setScalar(1 + (reduced ? 0 : 0.12 * Math.sin(t * 3)));
