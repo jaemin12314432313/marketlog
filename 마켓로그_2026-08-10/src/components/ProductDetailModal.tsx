@@ -1321,13 +1321,16 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         <span className="text-sm text-[#0F172A] font-medium">영업시간</span>
                         <span className="font-semibold text-[#0F172A]">{storeInfo?.hours || "정보 없음"}</span>
                       </div>
-                      <div className="flex justify-between py-1.5">
-                        <span className="text-sm text-[#0F172A] font-medium">주요 품목</span>
-                        {/* 점포에 등록된 주요 품목이 없을 때 지금 보고 있는 상품의 카테고리로
-                            대신 채우면, 그 점포가 실제로는 다른 걸 팔면서도 마치 이 상품
-                            카테고리가 주력인 것처럼 보여서 오해를 준다 — 정직하게 미등록 표시. */}
-                        <span className="font-semibold text-[#0F172A]">{storeInfo?.subtitle || "미등록"}</span>
-                      </div>
+                      {/* 부스(CO-SHOW) 가게의 주요 품목은 "AI 품질 인증 과일가게" 같은 자동 문구라 보여주지 않는다. */}
+                      {!/AI 판정|AI 품질 인증/.test(storeInfo?.subtitle || "") && (
+                        <div className="flex justify-between py-1.5">
+                          <span className="text-sm text-[#0F172A] font-medium">주요 품목</span>
+                          {/* 점포에 등록된 주요 품목이 없을 때 지금 보고 있는 상품의 카테고리로
+                              대신 채우면, 그 점포가 실제로는 다른 걸 팔면서도 마치 이 상품
+                              카테고리가 주력인 것처럼 보여서 오해를 준다 — 정직하게 미등록 표시. */}
+                          <span className="font-semibold text-[#0F172A]">{storeInfo?.subtitle || "미등록"}</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Shop Description Box */}

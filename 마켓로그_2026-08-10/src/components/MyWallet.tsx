@@ -1081,7 +1081,8 @@ export const MyWallet: React.FC<MyWalletProps> = ({
                   <span className="text-[#0F172A] font-medium shrink-0">영업시간</span>
                   <span className="font-bold text-[#334155] text-right">{shopInfo.hours || "미등록"}</span>
                 </div>
-                <div className="py-1.5">
+                {/* 부스(CO-SHOW) 가게의 주요 품목은 "AI 품질 인증 과일가게" 같은 자동 문구라 보여주지 않는다. */}
+                <div className={`py-1.5${/AI 판정|AI 품질 인증/.test(shopInfo.category || "") ? " hidden" : ""}`}>
                   {/* 값이 짧으면(한 줄에 다 들어가면) 화살표 없이 다른 행들처럼 평범하게
                       보여준다 — 안 그러면 접었다 펼 것도 없는데 화살표만 붙어서 어색하다. */}
                   {shopInfo.category.length > 14 ? (

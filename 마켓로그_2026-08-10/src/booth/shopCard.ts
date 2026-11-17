@@ -319,7 +319,7 @@ export async function makeShopSummaryCard(
   ctx.fillRect(0, 0, W, CH);
 
   // 머리 카드 + 통계
-  const subBottom = drawShopHead(ctx, PAD, headH, shopName, shopNumber, `AI 품질 인증 과일가게 · ${dateText(openedAt)} 개점`, 84, qr);
+  const subBottom = drawShopHead(ctx, PAD, headH, shopName, shopNumber, `AI 품질 인증 가게 · ${dateText(openedAt)} 개점`, 84, qr);
 
   const statTop = subBottom + 44;
   ctx.fillStyle = LINE;
@@ -507,7 +507,7 @@ export async function makeProductPageCard(
 
   // 1) 가게 머리 카드
   const headH = 300;
-  drawShopHead(ctx, PAD, headH, store.name, store.number, `AI 품질 인증 과일가게 · ${dateText(store.openedAt)} 개점`, 76, qr);
+  drawShopHead(ctx, PAD, headH, store.name, store.number, `AI 품질 인증 가게 · ${dateText(store.openedAt)} 개점`, 76, qr);
   let y = PAD + headH + GAP;
 
   // 카드 하나를 그리는 공통 순서: 내용 높이를 먼저 계산 → 흰 카드 → 내용
