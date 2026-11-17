@@ -254,6 +254,7 @@
   .tbr .sample[hidden] { display: none; }
   /* 미니맵(top 60px, 높이 93px)을 피해 그 아래에 둔다 */
   #gBtn { position: absolute; top: 164px; right: 0; }
+  #gBtn.cta { background: #f2b400; color: #1a1a1a; border-color: #d99a00; }
   button.sample { font-family: inherit; cursor: pointer; }
   .monitor .tbr { display: none !important; }
   /* 가까이 왔을 때만 뜨는 힌트(plate 안), +1 표시 */
@@ -1525,6 +1526,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
     if (MONITOR) { gBtn.hidden = true; return; }
     gBtn.hidden = game.state === "playing" && ROUND_SEC > 0;
     gBtn.textContent = game.state === "playing" ? "📊 순위 보기" : "🍎 보물찾기";
+    gBtn.classList.toggle("cta", game.state !== "playing"); /* 시작 전에는 노랗게 눈에 띄게 */
   }
   function browseOnly() {
     gm.hidden = true; game.state = "free"; clearApples(); stopPlayUi(); nearEl.textContent = ""; syncGBtn(); stats();
@@ -1581,7 +1583,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
       '<li><b>👀</b>납작하거나 깜빡이며 숨은 것도 있어요</li>' +
       '</ul>' +
       '<p class="gm-foot">가까워지면 ✨ 힌트가 떠요 · ' + (SCORE_ID ? 'TOP 3는 3D 전광판에 올라가요' : '내 가게를 열면 랭킹에 올라가요') + '</p>',
-      [{ t: "구경만 할래요", fn: browseOnly }, { t: "시작하기", primary: true, fn: startRound }]);
+      [{ t: "닫기", fn: browseOnly }, { t: "시작하기", primary: true, fn: startRound }]);
   }
   function gameTick(dt) {
     if (game.state !== "playing") return;
@@ -1609,7 +1611,10 @@ function startMarket(SHOP_DATA, MINE_ID) {
     } else if (saved && saved.state === "free") {
       appleGot = saved.got || 0; stampN = saved.stamp || 0; /* 그만둔 뒤에도 찾은 개수는 판에 계속 보인다 */
       browseOnly();
-    } else { syncGBtn(); setTimeout(gameIntro, 700); }
+    } else {
+      /* 보물찾기는 하고 싶은 사람만 한다 — 들어오면 안내 창을 띄우지 않고 그냥 시장을 보여 준다(오른쪽 위 버튼으로 시작) */
+      game.state = "free"; clearApples(); syncGBtn(); stats();
+    }
   }
 
   var mini = $("mini"), mg = mini.getContext("2d");
