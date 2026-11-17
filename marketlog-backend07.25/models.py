@@ -204,6 +204,18 @@ class BoothShop(Base):
     data_consent = Column(Boolean, nullable=False, default=False)  # (사용 안 함) 예전 데이터 활용 동의 칸 — 기존 DB에 있어 남겨 둠
 
 
+class PublicPrice(Base):
+    """KAMIS 소매 시세(원/kg)를 하루 한 번 받아서 저장해 두는 표 — 스캔할 때마다 KAMIS를 부르지 않고
+    여기 저장된 값을 읽는다. 서버가 다시 켜져도 같은 날 값을 바로 쓸 수 있다."""
+    __tablename__ = "public_prices"
+
+    item_name = Column(String, primary_key=True)
+    rank = Column(String, primary_key=True)  # KAMIS 등급: 상품/중품
+    price = Column(Integer, nullable=False)
+    regday = Column(String, nullable=True)  # KAMIS 기준일
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+
 # 전시 성과 집계용 기록(체험 시작, 스캔 성공/실패, 등록, QR 결과 페이지 조회).
 class BoothEvent(Base):
     __tablename__ = "booth_events"

@@ -128,7 +128,8 @@ def _build_prices_for_date(regday: str) -> "tuple[dict, bool]":
     return prices, all_ok
 
 
-def _refresh_cache() -> None:
+def _refresh_cache() -> bool:
+    """KAMIS에서 시세를 받아 메모리 캐시를 갱신한다. 새로 받았으면 True."""
     today = date.today()
     today_iso = today.isoformat()
     prices: dict = {}
@@ -161,6 +162,7 @@ def _refresh_cache() -> None:
         # 완료"로 착각해 자정까지 방치하면 안 되므로 stale로 남겨두고 짧게 재확인한다.
         _cache["date"] = None
         _cache["retry_after"] = datetime.now() + _STALE_DATA_RECHECK_COOLDOWN
+    return bool(prices)
 
 
 async def auto_refresh_loop() -> None:
@@ -209,27 +211,100 @@ async def ensure_fresh(timeout: float = 25.0) -> None:
         pass  # 제한 시간 안에 못 끝나면 지금 있는 캐시(비어있으면 폴백 대상)로 그냥 진행
 
 
-# 전시 기간용 고정 시세(원/kg, KAMIS 소매가 기준으로 직접 옮겨 적은 값). 시세는 하루 단위로만 바뀌는데
-# 스캔할 때마다 KAMIS를 불러오면 KAMIS가 느린 날 손님이 최대 25초를 기다리거나 엉뚱한 대체값이 들어갔다.
-# 그래서 기본은 이 값을 바로 쓰고, 날마다 아침에 값만 바꿔서 배포한다. 실시간 조회로 되돌리려면
-# 환경변수 KAMIS_LIVE=1 을 준다.
-LIVE_ENABLED = os.getenv("KAMIS_LIVE") == "1"
-MANUAL_PRICES = {"양파": 2019, "사과": 6101, "감귤": 3858}  # 2026-11 서버가 KAMIS에서 받은 소매가
+# ---------- 하루 한 번 갱신 + DB 저장 ----------
+# 시세는 하루 단위로만 바뀌는데, 스캔할 때마다 KAMIS를 부르면 KAMIS가 느린 날 손님이 최대 25초를 기다리거나
+# 엉뚱한 정적 값이 들어갔다. 그래서 "하루에 한 번만" KAMIS에서 받아 DB(public_prices)에 저장하고,
+# 스캔은 저장된 값만 읽는다. 서버가 꺼졌다 켜져도 같은 날 값을 DB에서 바로 읽는다.
+_DAILY_RECHECK = timedelta(hours=20)
+_DAILY_RETRY = timedelta(minutes=5)  # 갱신에 실패하면 5분 뒤 다시 시도
+_DAILY_TIMEOUT = 12.0  # 하루 첫 요청이 이 시간만큼만 기다린다
+_store: dict = {"prices": {}, "updated_at": None, "loaded": False, "retry_after": None}
+
+# DB도 비어 있고 KAMIS도 못 받았을 때만 쓰는 마지막 안전값(원/kg, 2026-11 KAMIS 소매가).
+SEED_PRICES = {"양파": 2019, "사과": 6101, "감귤": 3858}
+
+
+def _load_from_db() -> None:
+    from db import SessionLocal
+    from models import PublicPrice
+
+    session = SessionLocal()
+    try:
+        prices: dict = {}
+        newest = None
+        for row in session.query(PublicPrice).all():
+            prices.setdefault(row.item_name, {})[row.rank] = row.price
+            if row.updated_at and (newest is None or row.updated_at > newest):
+                newest = row.updated_at
+        _store["prices"] = prices
+        _store["updated_at"] = newest
+    except Exception as e:
+        print(f"공공시세 DB 읽기 실패: {e}")
+    finally:
+        session.close()
+        _store["loaded"] = True
+
+
+def _save_to_db(prices: dict, regday: "str | None") -> None:
+    from db import SessionLocal
+    from models import PublicPrice
+
+    session = SessionLocal()
+    try:
+        now = datetime.utcnow()
+        for item_name, by_rank in prices.items():
+            for rank, price in by_rank.items():
+                session.merge(PublicPrice(item_name=item_name, rank=rank, price=int(price), regday=regday, updated_at=now))
+        session.commit()
+        _store["updated_at"] = now
+    except Exception as e:
+        session.rollback()
+        print(f"공공시세 DB 저장 실패: {e}")
+    finally:
+        session.close()
+
+
+def _refresh_and_store() -> bool:
+    with _refresh_lock:
+        if not _refresh_cache():
+            return False
+        _store["prices"] = {k: dict(v) for k, v in _cache["prices"].items()}
+        _save_to_db(_store["prices"], _cache["regday"])
+        _store["updated_at"] = datetime.utcnow()
+        return True
+
+
+async def ensure_daily() -> None:
+    """저장된 시세가 20시간 안에 받은 것이면 그대로 쓰고, 아니면 KAMIS에서 새로 받아 DB에 저장한다.
+    하루 첫 요청만 최대 12초 기다리고, 실패해도 DB에 있던 직전 시세를 그대로 쓴다."""
+    if not _store["loaded"]:
+        await asyncio.to_thread(_load_from_db)
+    now = datetime.utcnow()
+    updated = _store["updated_at"]
+    if updated is not None and now - updated < _DAILY_RECHECK:
+        return
+    retry_after = _store["retry_after"]
+    if retry_after is not None and now < retry_after:
+        return
+    if _refresh_lock.locked():
+        return  # 다른 요청이 이미 갱신 중 — 지금 있는 값으로 진행
+    try:
+        ok = await asyncio.wait_for(asyncio.to_thread(_refresh_and_store), timeout=_DAILY_TIMEOUT)
+    except Exception:
+        ok = False
+    _store["retry_after"] = None if ok else datetime.utcnow() + _DAILY_RETRY
 
 
 async def get_public_price(item_name: str, grade_kor: str) -> "int | None":
-    """오늘(없으면 최근 영업일) KAMIS 소매가격에서 등급에 맞는 가격을 원/kg 단위로 반환.
-    데이터가 없으면(휴장일, 비계절 품목, 인증키 미설정, API 실패, 시간 안에 못 받아옴 등)
-    None — 호출부는 이 경우 기존 정적 PUBLIC_PRICE_MAP으로 폴백해야 한다.
-    기본(전시 모드)은 KAMIS를 부르지 않고 위 MANUAL_PRICES의 고정 시세를 돌려준다.
+    """오늘 KAMIS 소매가격에서 등급에 맞는 가격을 원/kg 단위로 반환(하루 한 번 받아 DB에 저장한 값).
+    저장된 값이 없고 KAMIS도 못 받았으면 SEED_PRICES, 그것도 없으면 None — 호출부는 None이면
+    정적 PUBLIC_PRICE_MAP으로 폴백한다.
     """
-    if not LIVE_ENABLED:
-        return MANUAL_PRICES.get(item_name)
-    await ensure_fresh()
+    await ensure_daily()
 
-    by_rank = _cache["prices"].get(item_name)
+    by_rank = _store["prices"].get(item_name)
     if not by_rank:
-        return None
+        return SEED_PRICES.get(item_name)
     rank = GRADE_TO_RANK.get(grade_kor, "상품")
     if rank in by_rank:
         return by_rank[rank]

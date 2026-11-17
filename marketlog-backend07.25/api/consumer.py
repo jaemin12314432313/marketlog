@@ -15,7 +15,7 @@ from PIL import Image
 
 from db import get_db
 from models import Market, Product, Store, product_to_dict
-from kamis import get_public_price as get_kamis_price, LIVE_ENABLED as KAMIS_LIVE
+from kamis import get_public_price as get_kamis_price
 
 router = APIRouter(tags=["Consumer"])
 
@@ -521,7 +521,7 @@ async def analyze_product(request: ScanRequest):
                         # 2단계 폴백 경로는 None.
                         "attributeLabels": attribute_labels,
                         "publicGuarantee": (
-                            ("농산물유통정보(KAMIS) 소매가격 실시간 연동" if KAMIS_LIVE else "농산물유통정보(KAMIS) 소매가격 기준 (전시 기간 고정 시세)")
+                            "농산물유통정보(KAMIS) 소매가격 실시간 연동"
                             if is_kamis_verified
                             else "참고 시세 (KAMIS 데이터 없음 — 자체 추정치)"
                         ),

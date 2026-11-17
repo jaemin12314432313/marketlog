@@ -27,6 +27,7 @@ from api.auth import create_access_token, hash_password, serialize_user
 from image_storage import upload_base64_image
 from api.consumer import _cached_or_generate, _generate_openai_text, ensure_models_loaded, get_gemini_client
 import api.consumer as consumer_module
+import kamis as kamis_module
 from api.merchant import _generate_product_copy
 
 router = APIRouter(prefix="/api/v1/booth", tags=["Booth"])
@@ -111,6 +112,11 @@ async def warmup():
     모델 로딩 시간(수십 초)을 기다리지 않게 하기 위함. 로딩은 백그라운드로 돌리고 바로 응답한다."""
     if not consumer_module._models_load_attempted:
         asyncio.create_task(asyncio.to_thread(ensure_models_loaded))
+    # 하루 한 번 받는 공공시세도 여기서 미리 확인해 둔다(첫 손님 스캔이 기다리지 않게). 오래 걸리면 포기한다.
+    try:
+        await asyncio.wait_for(kamis_module.ensure_daily(), timeout=14)
+    except Exception:
+        pass
     return {
         "success": True,
         "modelsLoaded": consumer_module.vision_pipeline is not None,
