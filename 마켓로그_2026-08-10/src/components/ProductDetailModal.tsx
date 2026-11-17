@@ -393,23 +393,6 @@ function getRecipeRecommendations(product: ProductItem): RecipeRecommendation[] 
         ],
         "TFB9wk30SlA"
       ),
-      base(
-        "상큼한 귤 드레싱 샐러드",
-        "10분",
-        "쉬움",
-        "새콤달콤한 귤 드레싱을 곁들인 양상추 샐러드로, 가볍게 즐기기 좋은 곁들임 요리입니다.",
-        "귤 드레싱 샐러드 레시피",
-        [
-          { name: `${title} (본 상품)`, amount: "적당량", isMain: true },
-          { name: "양상추", amount: "적당량", isMain: false },
-          { name: "땅콩", amount: "한 줌 (견과류)", isMain: true },
-          { name: "올리브오일", amount: "적당량", isMain: false },
-          { name: "레몬즙", amount: "약간", isMain: false },
-          { name: "꿀 (또는 올리고당)", amount: "약간", isMain: false },
-          { name: "소금", amount: "약간", isMain: false },
-        ],
-        "MooNKruuI9U"
-      ),
     ];
   }
 
