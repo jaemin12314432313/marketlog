@@ -1191,7 +1191,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
   }
   function stats() {
     $("stats").textContent = MONITOR ? "가게 " + filled + "곳"
-      : game.state === "playing" ? (ROUND_SEC ? "⏱ " + mmss(game.left) : "🍎 " + playedText()) + " · 황금 보물 " + appleGot + "개 · 둘러본 가게 " + stampN + "곳"
+      : game.state === "playing" ? (ROUND_SEC ? "⏱ " + mmss(game.left) + " · " : "🍎 ") + "황금 보물 " + appleGot + "개 · 둘러본 가게 " + stampN + "곳"
       : "가게 " + filled + "곳 · 둘러본 가게 " + stampN + "곳 · 찾은 황금 보물 " + appleGot + "개";
     var key = appleGot + "/" + stampN;
     if (key !== lastScore) {
@@ -1547,16 +1547,16 @@ function startMarket(SHOP_DATA, MINE_ID) {
   /* 순위 창: 문장으로 길게 풀지 않고, 응원 한 줄 + 큰 개수 + 짧은 칩(시간·가게 수) + 순위 한 줄로 보여 준다 */
   function cheer(n) { return n === 0 ? "아직 한 개도 못 찾았어요 👀" : n < 3 ? "좋은 출발이에요!" : n < 6 ? "보물 사냥꾼이시네요!" : n < 10 ? "시장을 꿰고 계시네요!" : "전설의 보물 사냥꾼 🏆"; }
   function playedMin() { var s = Math.max(0, Math.floor((performance.now() - game.since) / 1000)); return s < 60 ? s + "초" : Math.floor(s / 60) + "분"; }
-  function statusBody(n, v, timeText) {
+  function statusBody(n, v) {
     return '<div class="gm-who">' + (SCORE_ID ? esc(SCORE_NAME) + ' 사장님의 기록' : '내 가게를 열면 랭킹에 올라가요') + '</div>' +
       '<div class="big">🍎 ' + n + '개</div>' +
-      '<div class="gm-chips"><span>⏱ ' + timeText + '</span><span>🏪 가게 ' + v + '곳 구경</span></div>' +
+      '<div class="gm-chips"><span>🏪 가게 ' + v + '곳 구경</span></div>' +
       (SCORE_ID ? '<p class="gm-rank" id="gmRank">순위를 확인하는 중…</p>' : '');
   }
   /* 무제한 모드: "순위 보기"를 누르면 지금까지의 기록과 순위를 보여 주고, 계속 찾거나 구경 모드로 갈 수 있다 */
   function showStatus() {
     var n = appleGot, v = stampN;
-    gmShow(cheer(n), statusBody(n, v, playedMin()),
+    gmShow(cheer(n), statusBody(n, v),
       [{ t: "구경 모드로", fn: browseOnly }, { t: "계속 찾기", primary: true, fn: function () { gm.hidden = true; } }]);
     fillRank(n);
   }
@@ -1566,7 +1566,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
     var n = appleGot, v = stampN;
     sfx("end"); buzz([80, 60, 120]);
     stats();
-    gmShow("끝! " + cheer(n), statusBody(n, v, mmss(ROUND_SEC)),
+    gmShow("끝! " + cheer(n), statusBody(n, v),
       [{ t: "구경하기", fn: browseOnly }, { t: "다시 도전", primary: true, fn: startRound }]);
     fillRank(n);
   }  function gameIntro() {
