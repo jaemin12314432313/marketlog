@@ -57,11 +57,15 @@
 
   .minimap { position: absolute; top: 60px; right: max(16px, env(safe-area-inset-right, 0px)); width: 72px; height: 93px; border-radius: 10px; border: 1px solid var(--line); background: var(--chip); pointer-events: none; }
 
-  .toast { position: absolute; top: 72px; left: max(16px, env(safe-area-inset-left, 0px)); max-width: calc(100% - 130px); background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 600; opacity: 0; transform: translateY(-6px); transition: opacity 0.3s, transform 0.3s; pointer-events: none; }
+  .toast { position: absolute; top: 138px; left: max(16px, env(safe-area-inset-left, 0px)); max-width: calc(100% - 130px); background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 600; opacity: 0; transform: translateY(-6px); transition: opacity 0.3s, transform 0.3s; pointer-events: none; }
   .toast.on { opacity: 1; transform: none; }
 
   .card { position: absolute; bottom: 206px; max-width: 420px; background: var(--surface); background: color-mix(in srgb, var(--surface) 70%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3); }
   .card[hidden] { display: none !important; }
+  /* 보물을 찾는 중에는 지나가는 가게마다 큰 카드가 화면 가운데를 가리지 않도록 이름 한 줄로 줄인다(누르면 상품이 열린다) */
+  .card.mini { padding: 8px 12px; }
+  .card.mini .items { display: none; }
+  .card.mini .row { align-items: center; }
   .card .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
   .card h2 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 20px; line-height: 1.2; }
   .card .meta { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
@@ -1050,7 +1054,8 @@ function startMarket(SHOP_DATA, MINE_ID) {
   function showCard(k) {
     if (k === shownSlot) return; shownSlot = k;
     if (k < 0) { cardEl.hidden = true; return; }
-    var s = stalls[k];
+    var s = stalls[k], mini = game.state === "playing";
+    cardEl.classList.toggle("mini", mini);
     var html = '<div class="row"><div><h2></h2><p class="meta"></p></div><button class="cclose" type="button" aria-label="닫기">×</button></div>';
     if (s.items.length) {
       html += '<ul class="items">' + s.items.map(function (it, i) {
@@ -1063,7 +1068,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
     } else html += '<p class="meta" style="margin-top:8px">아직 진열한 상품이 없어요.</p>';
     cardEl.innerHTML = html;
     cardEl.querySelector("h2").textContent = s.name;
-    cardEl.querySelector(".meta").innerHTML = (s.mine ? '<span class="tag">내 가게</span>' : "") + "No." + s.number + " · 진열 상품 " + s.count + "개" + (s.items.length > 1 ? " · 눌러서 골라 보세요" : "");
+    cardEl.querySelector(".meta").innerHTML = (s.mine ? '<span class="tag">내 가게</span>' : "") + "No." + s.number + (mini ? " · 눌러서 상품 보기" : " · 진열 상품 " + s.count + "개" + (s.items.length > 1 ? " · 눌러서 골라 보세요" : ""));
     cardEl.hidden = false;
   }
   var qs = $("qs");
@@ -1513,6 +1518,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
   }
   /* 위쪽 버튼: 시작 전·구경 중에는 "보물찾기", 하는 중(무제한)에는 "순위 보기", 시간제 시험 중에는 숨김 */
   function syncGBtn() {
+    shownSlot = -2; /* 가게 카드를 큰 모양/작은 모양으로 다시 그리게 */
     if (MONITOR) { gBtn.hidden = true; return; }
     gBtn.hidden = game.state === "playing" && ROUND_SEC > 0;
     gBtn.textContent = game.state === "playing" ? "📊 순위 보기" : "🍎 보물찾기";
