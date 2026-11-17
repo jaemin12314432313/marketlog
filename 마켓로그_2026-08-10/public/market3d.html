@@ -392,8 +392,12 @@ function startMarket(SHOP_DATA, MINE_ID) {
     st.awn = AWN[Math.floor(r() * AWN.length)]; st.sign = SIGN[Math.floor(r() * SIGN.length)];
     st.mine = !!MINE_ID && d.storeId === MINE_ID;
   }
-  /* 공공시세가 10개 기준인 품목(감귤)은 "20개 가격"을 10개 가격으로 환산해서 비교한다 */
-  function cmpPrice(price, unit) { var m = String(unit || "").trim().match(/^(\d+(?:\.\d+)?)\s*개$/), n = m ? +m[1] : 0; return n > 0 ? price / (n / 10) : price; }
+  /* 공공시세는 kg 품목은 1kg, 감귤은 10개 기준 — 판매가를 같은 기준 가격으로 환산해서 비교한다("3kg 12,000원" → 4,000원, "20개 8,000원" → 4,000원) */
+  function cmpPrice(price, unit) {
+    var t = String(unit || "").trim(), m = t.match(/^(\d+(?:\.\d+)?)\s*개$/), n = m ? +m[1] / 10 : 0;
+    if (!(n > 0)) { m = t.match(/^(\d+(?:\.\d+)?)\s*kg$/i); n = m ? +m[1] : 0; }
+    return n > 0 ? price / n : price;
+  }
   function pctOf(st) { return st.pub > 0 ? Math.round((1 - cmpPrice(st.price, st.unit) / st.pub) * 100) : null; }
   var SHOW_ON_COUNTER = 3; /* 매대 상자에 칸을 나눠 담는 최대 품목 수 */
   /* ---------- hall plan: stalls in 12 x 12 slots, opened from the center outward ---------- */

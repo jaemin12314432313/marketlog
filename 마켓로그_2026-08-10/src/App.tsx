@@ -261,20 +261,29 @@ export default function App() {
 
   // 웹(크롬·설치한 앱)에서는 뒤로가기가 브라우저 히스토리를 타는데, 이 앱은 화면 전환을 상태로만
   // 해서 히스토리가 비어 있어 한 번만 눌러도 앱이 꺼졌다. 닫을 화면(상세·지도·로그인 등)이 있는
-  // 동안에는 히스토리 칸을 하나 쌓아 두고, 뒤로가기가 오면 그 칸을 쓰면서 화면을 한 단계만 닫는다.
-  const canGoBack =
-    isLoginModalOpen || isNotificationOpen || !!selectedProduct || isAiScanOpen || activeTab !== "home";
-  const backSignature = [isLoginModalOpen, isNotificationOpen, selectedProduct?.id ?? "", isAiScanOpen, activeTab].join("|");
-  const webBackPushedRef = useRef(false);
-  const webBackIgnoreRef = useRef(false);
+  // 동안에는 열려 있는 화면 겹침(깊이)만큼 히스토리 칸을 쌓아 두고, 뒤로가기가 오면 그 칸을 쓰면서
+  // 화면을 한 단계만 닫는다.
+  // 칸은 화면을 "여는 순간"(손님이 누른 직후)에 쌓는다 — 크롬은 손님 조작 없이 쌓은 칸(예: 뒤로가기 직후 다시 쌓기)을
+  // 뒤로가기에서 건너뛰어 버려서, 지도 → 상품 상세 → 뒤로가기에서 앱이 꺼지던 원인이었다.
+  // 깊이: 로그인·알림·스캔·상품 상세·(홈이 아닌) 탭이 각각 1, 레시피에서 지도로 간 경우는 돌아갈 상품 상세와
+  // 그 상품을 열었던 탭까지 더해 센다.
+  const backDepth =
+    (isLoginModalOpen ? 1 : 0) +
+    (isNotificationOpen ? 1 : 0) +
+    (isAiScanOpen ? 1 : 0) +
+    (selectedProduct ? 1 : 0) +
+    (activeTab !== "home" ? 1 : 0) +
+    (activeTab === "map" && mapReturnProduct ? 1 + (mapReturnTab && mapReturnTab !== "home" ? 1 : 0) : 0);
+  const webBackPushedRef = useRef(0); // 지금 쌓여 있는 히스토리 칸 수
+  const webBackIgnoreRef = useRef(0); // 우리가 직접 되돌린 뒤 올 popstate 횟수(무시한다)
   useEffect(() => {
     if (Capacitor.isNativePlatform()) return;
     const onPop = () => {
-      if (webBackIgnoreRef.current) {
-        webBackIgnoreRef.current = false;
+      if (webBackIgnoreRef.current > 0) {
+        webBackIgnoreRef.current -= 1;
         return;
       }
-      webBackPushedRef.current = false; // 브라우저가 쌓아 둔 칸을 방금 소비했다
+      webBackPushedRef.current = Math.max(0, webBackPushedRef.current - 1); // 칸 하나를 방금 소비했다
       backActionRef.current();
     };
     window.addEventListener("popstate", onPop);
@@ -282,16 +291,17 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (Capacitor.isNativePlatform()) return;
-    if (canGoBack && !webBackPushedRef.current) {
-      window.history.pushState({ marketlogBack: true }, "");
-      webBackPushedRef.current = true;
-    } else if (!canGoBack && webBackPushedRef.current) {
-      // 화면의 닫기 버튼으로 모두 닫은 경우 — 남은 칸을 치워서 다음 뒤로가기가 헛돌지 않게 한다.
-      webBackPushedRef.current = false;
-      webBackIgnoreRef.current = true;
-      window.history.back();
+    const pushed = webBackPushedRef.current;
+    if (backDepth > pushed) {
+      for (let i = pushed; i < backDepth; i++) window.history.pushState({ marketlogBack: i + 1 }, "");
+      webBackPushedRef.current = backDepth;
+    } else if (backDepth < pushed) {
+      // 화면의 닫기·뒤로 버튼으로 닫은 경우 — 남은 칸을 한꺼번에 치워서 다음 뒤로가기가 헛돌지 않게 한다.
+      webBackPushedRef.current = backDepth;
+      webBackIgnoreRef.current += 1;
+      window.history.go(-(pushed - backDepth));
     }
-  }, [backSignature, canGoBack]);
+  }, [backDepth]);
 
   const handleLoginSuccess = (
     role: UserRole,

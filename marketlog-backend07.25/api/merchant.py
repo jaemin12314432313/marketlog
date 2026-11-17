@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 import asyncio
 import json
 import os
+import re
 import uuid
 from datetime import datetime
 
@@ -99,7 +100,12 @@ def create_product(
     if market_id == "coshow":
         if payload.price > 1_000_000:
             raise HTTPException(status_code=400, detail="가격이 너무 커요. 1kg 기준 가격으로 다시 적어주세요.")
-        if payload.publicPrice > 0 and payload.price * 5 < payload.publicPrice:
+        # 판매가는 올린 단위(3kg, 20개)의 가격이라, 시세 기준(1kg 또는 10개) 가격으로 환산해서 비교한다.
+        unit_match = re.match(r"^\s*(\d+(?:\.\d+)?)\s*(kg|개)\s*$", payload.unit or "", re.IGNORECASE)
+        factor = 1.0
+        if unit_match and float(unit_match.group(1)) > 0:
+            factor = float(unit_match.group(1)) / (10 if unit_match.group(2) == "개" else 1)
+        if payload.publicPrice > 0 and (payload.price / factor) * 5 < payload.publicPrice:
             raise HTTPException(status_code=400, detail="공공 시세보다 너무 낮은 가격이에요. 가격을 다시 확인해 주세요.")
     store = require_store_ready(db, market_id, shop_name)
     market = db.query(Market).filter(Market.id == market_id).first()

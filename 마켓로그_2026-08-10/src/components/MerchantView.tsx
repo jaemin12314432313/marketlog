@@ -486,7 +486,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     }
 
     const unit = isCountItem ? `${countAmount}개` : unitAmount.trim() ? `${unitAmount.trim()}${PRODUCT_UNIT}` : "";
-    const numPublicPrice = publicPrice ? Number(publicPrice) : Math.round(numPrice * 1.2);
+    const numPublicPrice = publicPrice ? Number(publicPrice) : Math.round(priceForCompare(numPrice, unit) * 1.2);
     // 감귤은 시세가 10개 기준이라 20개 가격이면 10개 가격으로 환산해서 비교한다.
     const diffPercent = Math.round(((numPublicPrice - priceForCompare(numPrice, unit)) / numPublicPrice) * 100);
     const priceTag = diffPercent > 0 ? `공공 시세 대비 ${diffPercent}% 저렴` : "시세 적정가";

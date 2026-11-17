@@ -392,7 +392,13 @@ function startMarket(SHOP_DATA, MINE_ID) {
     st.awn = AWN[Math.floor(r() * AWN.length)]; st.sign = SIGN[Math.floor(r() * SIGN.length)];
     st.mine = !!MINE_ID && d.storeId === MINE_ID;
   }
-  function pctOf(st) { return st.pub > 0 ? Math.round((1 - st.price / st.pub) * 100) : null; }
+  /* 공공시세는 kg 품목은 1kg, 감귤은 10개 기준 — 판매가를 같은 기준 가격으로 환산해서 비교한다("3kg 12,000원" → 4,000원, "20개 8,000원" → 4,000원) */
+  function cmpPrice(price, unit) {
+    var t = String(unit || "").trim(), m = t.match(/^(\d+(?:\.\d+)?)\s*개$/), n = m ? +m[1] / 10 : 0;
+    if (!(n > 0)) { m = t.match(/^(\d+(?:\.\d+)?)\s*kg$/i); n = m ? +m[1] : 0; }
+    return n > 0 ? price / n : price;
+  }
+  function pctOf(st) { return st.pub > 0 ? Math.round((1 - cmpPrice(st.price, st.unit) / st.pub) * 100) : null; }
   var SHOW_ON_COUNTER = 3; /* 매대 상자에 칸을 나눠 담는 최대 품목 수 */
   /* ---------- hall plan: stalls in 12 x 12 slots, opened from the center outward ---------- */
   var COLS = 12, ROWS = 12, CAP = COLS * ROWS, OFF = 1.3, PITCH = 3.4, X0 = 4.8;
@@ -587,7 +593,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
       var y = 495 + i * 120;
       g.textAlign = "left"; g.fillStyle = it.grade === "A+" ? "#3ddc84" : "#9aa3b2"; g.font = FONT(44); g.fillText(gradeName(it.grade), 70, y);
       g.fillStyle = "#ffffff"; fit(g, it.title || "", 70, 560); g.fillText(it.title || "", 200, y);
-      var pct = it.pub > 0 ? Math.round((1 - it.price / it.pub) * 100) : null;
+      var pct = it.pub > 0 ? Math.round((1 - cmpPrice(it.price, it.unit) / it.pub) * 100) : null;
       g.textAlign = "right"; g.fillStyle = "#f2c200"; g.font = FONT(70); g.fillText((it.price || 0).toLocaleString("ko-KR") + "원", w - 70, y);
       if (pct != null && pct > 0) { g.fillStyle = "#4d8bff"; g.font = FONT(40); g.fillText("시세보다 " + pct + "% ↓", w - 70, y + 50); }
     });
@@ -1044,7 +1050,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
       qs.scrollTop = 0; qs.hidden = false; return;
     }
     var top = it.grade === "A+", gname = gradeName(it.grade);
-    var pct = it.pub > 0 ? Math.round((it.pub - it.price) / it.pub * 100) : 0;
+    var pct = it.pub > 0 ? Math.round((it.pub - cmpPrice(it.price, it.unit)) / it.pub * 100) : 0;
     var attrs = Object.keys(it.attrs || {});
     var html = '<div class="ps-hero"><img alt="" src="' + MARKET_API + '/api/v1/booth/result/' + encodeURIComponent(it.id) + '/image">' +
       '<div class="ps-grad"></div><span class="ps-badge' + (top ? " top" : "") + '">' + PS_CHECK + esc(gname) + '</span>' +
