@@ -259,11 +259,11 @@ export const MapView: React.FC<MapViewProps> = ({
   const [activePin, setActivePin] = useState<string | null>(null);
   const [naverLoaded, setNaverLoaded] = useState(false);
   // 체크리스트 X를 누르면 완전히 사라지는 대신 오른쪽에 작은 탭으로 접혀 있다가 다시
-  // 눌러서 펼칠 수 있게 한다. 지도를 처음 열 때(레시피로 들어올 때마다)는 지도가 먼저 보이도록
-  // 기본을 접힌 상태로 둔다 — 오른쪽 작은 버튼을 누르면 펼쳐진다.
-  const [isRecipeChecklistMinimized, setIsRecipeChecklistMinimized] = useState(true);
+  // 눌러서 펼칠 수 있게 한다. 레시피로 들어올 때마다 기본은 펼친 상태(지도를 가리지 않게 작게
+  // 펼친다) — X를 누르면 오른쪽 작은 버튼으로 접힌다.
+  const [isRecipeChecklistMinimized, setIsRecipeChecklistMinimized] = useState(false);
   useEffect(() => {
-    setIsRecipeChecklistMinimized(true);
+    setIsRecipeChecklistMinimized(false);
   }, [recipeIngredients]);
   // 재료 구성이 같은 레시피(정렬한 재료 이름 목록이 같음)는 같은 키를 갖는다 — 그
   // 레시피로 다시 들어오면 전에 빼뒀던 재료/골라둔 점포를 이 기기에서 그대로 복원한다.
@@ -574,6 +574,7 @@ export const MapView: React.FC<MapViewProps> = ({
   const otherBoundaryRefs = useRef<any[]>([]);
   const otherBoundaryLabelRefs = useRef<any[]>([]);
   const recipeRouteLineRef = useRef<any>(null);
+  const recipeStartMarkerRef = useRef<any>(null);
 
   useEffect(() => {
     isDocentExpandedRef.current = isDocentExpanded;
@@ -1098,6 +1099,10 @@ export const MapView: React.FC<MapViewProps> = ({
       recipeRouteLineRef.current.setMap(null);
       recipeRouteLineRef.current = null;
     }
+    if (recipeStartMarkerRef.current) {
+      recipeStartMarkerRef.current.setMap(null);
+      recipeStartMarkerRef.current = null;
+    }
 
     if (!recipeRoute || recipeRoute.order.length === 0 || !recipeRouteStart) {
       // 레시피 체크리스트를 보러 들어왔는데 이 시장엔 매칭된 재료가 하나도 없는 경우 —
@@ -1123,22 +1128,46 @@ export const MapView: React.FC<MapViewProps> = ({
       strokeStyle: "shortdash",
     });
 
+    // 출발점이 점포가 아니라 시장 중심(또는 내 위치)이면 점선이 허공에서 시작해 끊겨 보이므로,
+    // 시작 지점에 "출발" 표시를 찍어 선이 어디서 시작하는지 보이게 한다.
+    if (!recipeStartStore) {
+      recipeStartMarkerRef.current = new naver.maps.Marker({
+        map: mapRef.current,
+        position: path[0],
+        zIndex: 50,
+        icon: {
+          content:
+            '<div style="transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;pointer-events:none">' +
+            '<span style="background:#10B981;color:#fff;font-weight:800;font-size:11px;padding:3px 9px;border-radius:999px;box-shadow:0 2px 6px rgba(0,0,0,.25);white-space:nowrap">출발</span>' +
+            '<span style="width:2px;height:8px;background:#10B981"></span>' +
+            '<span style="width:10px;height:10px;border-radius:50%;background:#10B981;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3)"></span>' +
+            "</div>",
+          anchor: new naver.maps.Point(0, 0),
+        },
+      });
+    }
+
     const bounds = new naver.maps.LatLngBounds(path[0], path[0]);
     path.forEach((p) => bounds.extend(p));
     // 예전엔 fitBounds가 고른 줌이 낮으면 MIN_ZOOM_FOR_MARKERS로 강제로 올렸는데, 그러면
     // 동선이 넓을 때 일부 점포가 화면 밖으로 잘려나갔다 — 레시피 모드에서는 마커 표시
     // 자체가 줌과 무관해졌으니(위 recipeRelevantStoreIds 효과) 이제 강제로 올릴 필요가
     // 없다. fitBounds가 고른 줌 그대로 전체 동선이 한 화면에 다 들어오게 둔다.
-    mapRef.current.fitBounds(bounds, { top: 160, right: 40, bottom: 200, left: 40 });
+    // 아래쪽은 하단 탭과 도슨트 패널에 가리지 않게 넉넉히 비운다(점포 핀이 탭에 반쯤 가려지던 문제).
+    mapRef.current.fitBounds(bounds, { top: 170, right: 60, bottom: 300, left: 60 });
 
     return () => {
       if (recipeRouteLineRef.current) {
         recipeRouteLineRef.current.setMap(null);
         recipeRouteLineRef.current = null;
       }
+      if (recipeStartMarkerRef.current) {
+        recipeStartMarkerRef.current.setMap(null);
+        recipeStartMarkerRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [naverLoaded, recipeRoute, recipeRouteStart, recipeIngredients, mapCenter]);
+  }, [naverLoaded, recipeRoute, recipeRouteStart, recipeStartStore, recipeIngredients, mapCenter]);
 
   // Elapsed time is derived from a real wall-clock start time (speechStartRef), not a
   // fixed 1%/sec loop -- Web Speech API gives no true duration, so "seeking" below works
@@ -1521,7 +1550,7 @@ export const MapView: React.FC<MapViewProps> = ({
             <span className="material-symbols-outlined text-xl">checklist</span>
           </button>
         ) : (
-        <div className="absolute top-[calc(6.5rem+env(safe-area-inset-top))] right-4 z-30 w-56 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-xl border border-[#E2E8F0] overflow-hidden">
+        <div className="absolute top-[calc(6.5rem+env(safe-area-inset-top))] right-4 z-30 w-48 max-w-[calc(100vw-2rem)] bg-white/95 rounded-2xl shadow-xl border border-[#E2E8F0] overflow-hidden">
           <div className="flex items-center justify-between px-3 py-1.5 bg-emerald-50 border-b border-emerald-100">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="material-symbols-outlined text-emerald-600 text-base shrink-0">checklist</span>
@@ -1535,7 +1564,7 @@ export const MapView: React.FC<MapViewProps> = ({
               <span className="material-symbols-outlined text-base">close</span>
             </button>
           </div>
-          <div className="max-h-36 overflow-y-auto divide-y divide-[#F1F5F9]">
+          <div className="max-h-28 overflow-y-auto divide-y divide-[#F1F5F9]">
             {!storesLoaded ? (
               <div className="flex items-center justify-center gap-2 px-3 py-3 text-xs text-slate-400">
                 <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />

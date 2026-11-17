@@ -209,30 +209,43 @@ export default function App() {
   // 뒤로가기(하드웨어 버튼/제스처)가 기본 동작(WebView 히스토리 뒤로가기)을 타면 갈 곳이
   // 없어 곧바로 앱이 꺼져버린다. 열려있는 모달/탭을 앱 상태 기준으로 직접 닫아주고,
   // 더 이상 닫을 게 없는 홈 화면에서만 앱을 백그라운드로 보낸다(완전 종료 아님).
+  // 뒤로가기로 닫을 게 있으면 하나 닫고 true, 닫을 게 없으면(홈 화면) false.
+  const handleBackAction = (): boolean => {
+    if (isLoginModalOpen && loginModalRef.current?.handleBackPress()) {
+      // 로그인 화면 안(회원가입/아이디 찾기/비밀번호 찾기)에서 처리됨 — 여기서 끝낸다.
+      return true;
+    }
+    if (isNotificationOpen) {
+      setIsNotificationOpen(false);
+    } else if (selectedProduct) {
+      setSelectedProduct(null);
+    } else if (isAiScanOpen) {
+      setIsAiScanOpen(false);
+    } else if (activeTab === "map" && mapReturnProduct) {
+      setSelectedProduct(mapReturnProduct);
+      setMapReturnProduct(null);
+      setActiveTab(mapReturnTab ?? "home");
+      setMapReturnTab(null);
+      // 레시피로 지도에 들어왔다가 상품 상세로 돌아가는 거라면 이 지도 방문은 끝난
+      // 것 — 안 지우면 이후 무관한 경로로 다시 지도에 들어왔을 때도 체크리스트가
+      // 계속 떠 있게 된다 (화면 위 뒤로가기 버튼과 동일하게 처리).
+      setRecipeIngredients(null);
+      setRecipeStartShopName(null);
+    } else if (activeTab !== "home") {
+      setActiveTab("home");
+    } else {
+      return false;
+    }
+    return true;
+  };
+  const backActionRef = useRef(handleBackAction);
+  backActionRef.current = handleBackAction;
+
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const listener = CapacitorApp.addListener("backButton", () => {
-      if (isLoginModalOpen && loginModalRef.current?.handleBackPress()) {
-        // 로그인 화면 안(회원가입/아이디 찾기/비밀번호 찾기)에서 처리됨 — 여기서 끝낸다.
-      } else if (isNotificationOpen) {
-        setIsNotificationOpen(false);
-      } else if (selectedProduct) {
-        setSelectedProduct(null);
-      } else if (isAiScanOpen) {
-        setIsAiScanOpen(false);
-      } else if (activeTab === "map" && mapReturnProduct) {
-        setSelectedProduct(mapReturnProduct);
-        setMapReturnProduct(null);
-        setActiveTab(mapReturnTab ?? "home");
-        setMapReturnTab(null);
-        // 레시피로 지도에 들어왔다가 상품 상세로 돌아가는 거라면 이 지도 방문은 끝난
-        // 것 — 안 지우면 이후 무관한 경로로 다시 지도에 들어왔을 때도 체크리스트가
-        // 계속 떠 있게 된다 (화면 위 뒤로가기 버튼과 동일하게 처리).
-        setRecipeIngredients(null);
-        setRecipeStartShopName(null);
-      } else if (activeTab !== "home") {
-        setActiveTab("home");
-      } else if (isMerchantFormDirty) {
+      if (backActionRef.current()) return;
+      if (isMerchantFormDirty) {
         if (window.confirm("작성 중인 상품 정보가 있습니다. 저장하지 않고 나가시겠어요?")) {
           setIsMerchantFormDirty(false);
           CapacitorApp.minimizeApp();
@@ -244,7 +257,41 @@ export default function App() {
     return () => {
       listener.then((l) => l.remove());
     };
-  }, [isLoginModalOpen, isNotificationOpen, selectedProduct, isAiScanOpen, activeTab, isMerchantFormDirty, mapReturnProduct, mapReturnTab]);
+  }, [isMerchantFormDirty]);
+
+  // 웹(크롬·설치한 앱)에서는 뒤로가기가 브라우저 히스토리를 타는데, 이 앱은 화면 전환을 상태로만
+  // 해서 히스토리가 비어 있어 한 번만 눌러도 앱이 꺼졌다. 닫을 화면(상세·지도·로그인 등)이 있는
+  // 동안에는 히스토리 칸을 하나 쌓아 두고, 뒤로가기가 오면 그 칸을 쓰면서 화면을 한 단계만 닫는다.
+  const canGoBack =
+    isLoginModalOpen || isNotificationOpen || !!selectedProduct || isAiScanOpen || activeTab !== "home";
+  const backSignature = [isLoginModalOpen, isNotificationOpen, selectedProduct?.id ?? "", isAiScanOpen, activeTab].join("|");
+  const webBackPushedRef = useRef(false);
+  const webBackIgnoreRef = useRef(false);
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) return;
+    const onPop = () => {
+      if (webBackIgnoreRef.current) {
+        webBackIgnoreRef.current = false;
+        return;
+      }
+      webBackPushedRef.current = false; // 브라우저가 쌓아 둔 칸을 방금 소비했다
+      backActionRef.current();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) return;
+    if (canGoBack && !webBackPushedRef.current) {
+      window.history.pushState({ marketlogBack: true }, "");
+      webBackPushedRef.current = true;
+    } else if (!canGoBack && webBackPushedRef.current) {
+      // 화면의 닫기 버튼으로 모두 닫은 경우 — 남은 칸을 치워서 다음 뒤로가기가 헛돌지 않게 한다.
+      webBackPushedRef.current = false;
+      webBackIgnoreRef.current = true;
+      window.history.back();
+    }
+  }, [backSignature, canGoBack]);
 
   const handleLoginSuccess = (
     role: UserRole,
