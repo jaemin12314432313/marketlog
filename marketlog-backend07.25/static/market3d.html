@@ -272,6 +272,13 @@
   @media (max-height: 520px) { .gm-list { display: none !important; } .gm-hero { font-size: 34px; } .gm-row { margin-top: 12px; } }
   .gm-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 7px; text-align: left; }
   .gm-list li { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: var(--fg); background: var(--chip); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
+  .gm-top { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; text-align: left; }
+  .gm-top li { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 700; color: var(--fg); background: var(--chip); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
+  .gm-top li.me { border-color: #f2b400; }
+  .gm-top b { width: 24px; text-align: center; font-size: 18px; color: #f2b400; }
+  .gm-top i { flex: 1; min-width: 0; font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gm-top em { font-style: normal; color: #f2b400; font-variant-numeric: tabular-nums; }
+  .gm-mine { margin: 12px 0 0; font-size: 14px; font-weight: 700; color: var(--muted); }
   .gm-list b { width: 26px; text-align: center; font-size: 20px; font-weight: 400; }
   .gm-box .gm-foot { margin: 12px 0 0; font-size: 12px; }
   /* 보물찾기 안내·결과 창 */
@@ -1543,24 +1550,29 @@ function startMarket(SHOP_DATA, MINE_ID) {
   function fillRank(n) {
     if (!SCORE_ID) return;
     clearTimeout(scoreT); topTex.redraw(); pillarTex.redraw(); visitTex.redraw();
-    var fill = function () { var el = gm.querySelector("#gmRank"); if (el && !gm.hidden) el.textContent = rankText(n); };
+    var fill = function () { var el = gm.querySelector("#gmRank"); if (el && !gm.hidden) el.textContent = rankText(n); var tp = gm.querySelector("#gmTop"); if (tp && !gm.hidden) tp.innerHTML = topHtml(); };
     sendScore().then(function () { return loadMarket(); }).then(fill).catch(fill);
   }
   /* 순위 창: 문장으로 길게 풀지 않고, 응원 한 줄 + 큰 개수 + 짧은 칩(시간·가게 수) + 순위 한 줄로 보여 준다 */
   function cheer(n) { return n === 0 ? "아직 한 개도 못 찾았어요 👀" : n < 3 ? "좋은 출발이에요!" : n < 6 ? "보물 사냥꾼이시네요!" : n < 10 ? "시장을 꿰고 계시네요!" : "전설의 보물 사냥꾼 🏆"; }
   function playedMin() { var s = Math.max(0, Math.floor((performance.now() - game.since) / 1000)); return s < 60 ? s + "초" : Math.floor(s / 60) + "분"; }
+  function topHtml() {
+    var list = rankList("apples");
+    if (!list.length) return '<li><i style="text-align:center;color:var(--muted)">아직 기록이 없어요 · 첫 번째가 되어 보세요!</i></li>';
+    return list.map(function (r, i) { return '<li' + (r.me ? ' class="me"' : '') + '><b>' + (i + 1) + '</b><i>' + esc(r.name) + (r.me ? ' (나)' : '') + '</i><em>🍎 ' + r.count + '개</em></li>'; }).join("");
+  }
   function statusBody(n, v) {
-    return '<div class="gm-who">' + (SCORE_ID ? esc(SCORE_NAME) + ' 사장님의 기록' : '내 가게를 열면 랭킹에 올라가요') + '</div>' +
-      '<div class="big">🍎 ' + n + '개</div>' +
-      '<div class="gm-chips"><span>🏪 가게 ' + v + '곳 구경</span></div>' +
+    return '<ul class="gm-top" id="gmTop">' + topHtml() + '</ul>' +
+      '<p class="gm-mine">내 기록 🍎 ' + n + '개 · 🏪 가게 ' + v + '곳 구경' + (SCORE_ID ? '' : '<br>내 가게를 열면 랭킹에 올라가요') + '</p>' +
       (SCORE_ID ? '<p class="gm-rank" id="gmRank">순위를 확인하는 중…</p>' : '');
   }
-  /* 무제한 모드: "순위 보기"를 누르면 지금까지의 기록과 순위를 보여 주고, 계속 찾거나 구경 모드로 갈 수 있다 */
+  /* 무제한 모드: "순위 보기"를 누르면 TOP 3와 내 기록을 보여 주고, 닫으면 계속 찾는다 */
   function showStatus() {
     var n = appleGot, v = stampN;
-    gmShow(cheer(n), statusBody(n, v),
-      [{ t: "구경 모드로", fn: browseOnly }, { t: "계속 찾기", primary: true, fn: function () { gm.hidden = true; } }]);
-    fillRank(n);
+    gmShow("🏆 황금 보물 순위", statusBody(n, v),
+      [{ t: "계속 찾기", primary: true, fn: function () { gm.hidden = true; } }]);
+    var refresh = function () { var el = gm.querySelector("#gmTop"); if (el && !gm.hidden) el.innerHTML = topHtml(); };
+    if (SCORE_ID) fillRank(n); else loadMarket().then(refresh).catch(function () {});
   }
   /* 시간제(시험용 ?round=초)에서만 쓰인다 */
   function endRound() {
