@@ -209,11 +209,22 @@ async def ensure_fresh(timeout: float = 25.0) -> None:
         pass  # 제한 시간 안에 못 끝나면 지금 있는 캐시(비어있으면 폴백 대상)로 그냥 진행
 
 
+# 전시 기간용 고정 시세(원/kg, KAMIS 소매가 기준으로 직접 옮겨 적은 값). 시세는 하루 단위로만 바뀌는데
+# 스캔할 때마다 KAMIS를 불러오면 KAMIS가 느린 날 손님이 최대 25초를 기다리거나 엉뚱한 대체값이 들어갔다.
+# 그래서 기본은 이 값을 바로 쓰고, 날마다 아침에 값만 바꿔서 배포한다. 실시간 조회로 되돌리려면
+# 환경변수 KAMIS_LIVE=1 을 준다.
+LIVE_ENABLED = os.getenv("KAMIS_LIVE") == "1"
+MANUAL_PRICES = {"양파": 2019, "사과": 6101, "감귤": 3858}  # 2026-11 서버가 KAMIS에서 받은 소매가
+
+
 async def get_public_price(item_name: str, grade_kor: str) -> "int | None":
     """오늘(없으면 최근 영업일) KAMIS 소매가격에서 등급에 맞는 가격을 원/kg 단위로 반환.
     데이터가 없으면(휴장일, 비계절 품목, 인증키 미설정, API 실패, 시간 안에 못 받아옴 등)
     None — 호출부는 이 경우 기존 정적 PUBLIC_PRICE_MAP으로 폴백해야 한다.
+    기본(전시 모드)은 KAMIS를 부르지 않고 위 MANUAL_PRICES의 고정 시세를 돌려준다.
     """
+    if not LIVE_ENABLED:
+        return MANUAL_PRICES.get(item_name)
     await ensure_fresh()
 
     by_rank = _cache["prices"].get(item_name)

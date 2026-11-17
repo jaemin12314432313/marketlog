@@ -142,7 +142,8 @@ def health_check():
 
 @app.on_event("startup")
 async def start_kamis_auto_refresh():
-    asyncio.create_task(kamis.auto_refresh_loop())
+    if kamis.LIVE_ENABLED:  # 전시 모드(기본)는 고정 시세를 쓰므로 KAMIS를 부르지 않는다
+        asyncio.create_task(kamis.auto_refresh_loop())
 
 if __name__ == "__main__":
     import uvicorn
