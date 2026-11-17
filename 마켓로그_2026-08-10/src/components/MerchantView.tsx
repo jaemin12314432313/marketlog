@@ -32,6 +32,10 @@ function formatProductDisplayTitle(product: ProductItem): string {
 // 단위는 항상 kg로 고정한다 — 상인마다 개/포기/마리 등 다른 단위를 쓰면 공공시세(kg 기준)
 // 대비 할인율 비교가 서로 다른 기준으로 뒤섞여서 의미가 없어진다.
 const PRODUCT_UNIT = "kg";
+// 감귤은 KAMIS 소매 시세가 "10개" 기준이라, kg로 바꿔 쓰면 개당 무게 가정 때문에 시세가 어긋난다 —
+// 감귤만 "10개" 단위로 고정해서 판매가와 공공시세를 같은 10개 기준으로 비교한다.
+const COUNT_ITEM_KEYWORD = "귤";
+const COUNT_ITEM_UNIT = "10개";
 
 // 상품 목록에 저장된 "1.5kg" 같은 값에서 수량만 다시 뽑아 입력칸에 채워준다. 예전에
 // 다른 단위(개/포기 등)로 저장된 값이어도 앞의 숫자만 취하고 단위는 kg로 맞춘다.
@@ -181,6 +185,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
   const [title, setTitle] = useState("");
   const [unitAmount, setUnitAmount] = useState("1");
   const [unitCustom, setUnitCustom] = useState(false);
+  const isCountItem = title.includes(COUNT_ITEM_KEYWORD); // 감귤: "10개" 단위
   const [originType, setOriginType] = useState(PRODUCT_ORIGIN_OPTIONS[0]);
   const [originDetail, setOriginDetail] = useState("");
   const [originCustom, setOriginCustom] = useState(false);
@@ -463,7 +468,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
       alert("원산지 상세 지역(예: 완도)을 입력해 주세요.");
       return;
     }
-    if (!unitAmount.trim() || !Number.isFinite(Number(unitAmount)) || Number(unitAmount) <= 0) {
+    if (!isCountItem && (!unitAmount.trim() || !Number.isFinite(Number(unitAmount)) || Number(unitAmount) <= 0)) {
       alert("단위/중량을 0보다 크게 입력해 주세요.");
       return;
     }
@@ -480,7 +485,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
     const numPublicPrice = publicPrice ? Number(publicPrice) : Math.round(numPrice * 1.2);
     const diffPercent = Math.round(((numPublicPrice - numPrice) / numPublicPrice) * 100);
     const priceTag = diffPercent > 0 ? `공공 시세 대비 ${diffPercent}% 저렴` : "시세 적정가";
-    const unit = unitAmount.trim() ? `${unitAmount.trim()}${PRODUCT_UNIT}` : "";
+    const unit = isCountItem ? COUNT_ITEM_UNIT : unitAmount.trim() ? `${unitAmount.trim()}${PRODUCT_UNIT}` : "";
     const origin = buildProductOrigin(originType, originDetail);
     const tags = selectedTags.join(",");
 
@@ -931,9 +936,13 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
               단위를 kg 하나로 고정한다. 무게와 가격은 서로 짝을 이루는 값이라 한 줄에 뒀다. */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700">단위/중량 * (kg 기준)</label>
+              <label className="text-xs font-semibold text-slate-700">{isCountItem ? "단위/수량 * (10개 기준)" : "단위/중량 * (kg 기준)"}</label>
               <div className="flex items-center gap-1">
-                {unitCustom ? (
+                {isCountItem ? (
+                  <div className="flex-1 min-w-0 px-2 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-xs font-bold text-slate-700">
+                    {COUNT_ITEM_UNIT} (고정)
+                  </div>
+                ) : unitCustom ? (
                   <div className="relative flex-1 min-w-0">
                     <input
                       type="text"
@@ -983,9 +992,11 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                   <option value="custom">직접 입력</option>
                 </select>
                 )}
-                <span className="w-9 shrink-0 text-center px-1 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-xs text-slate-600 font-bold">
-                  kg
-                </span>
+                {!isCountItem && (
+                  <span className="w-9 shrink-0 text-center px-1 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-xs text-slate-600 font-bold">
+                    kg
+                  </span>
+                )}
               </div>
             </div>
 

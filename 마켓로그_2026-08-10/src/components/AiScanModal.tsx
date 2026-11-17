@@ -672,7 +672,7 @@ export const AiScanModal: React.FC<AiScanModalProps> = ({
               <div className="grid grid-cols-2 gap-3 pb-3 border-b border-[#D1D1D1]">
                 <div>
                   <span className="text-xs font-bold text-[#0F172A] flex items-center gap-1.5">
-                    공공시세{inspectionResult?.publicPriceUnit === "kg" ? " (1kg 기준)" : ""}
+                    공공시세{inspectionResult?.publicPriceUnit === "kg" ? " (1kg 기준)" : inspectionResult?.publicPriceUnit ? ` (${inspectionResult.publicPriceUnit} 기준)` : ""}
                   </span>
                   <div className="text-lg font-semibold text-[#0F172A] mt-0.5">
                     {inspectionResult?.publicMarketPrice ? `${inspectionResult.publicMarketPrice.toLocaleString()}원` : "-"}

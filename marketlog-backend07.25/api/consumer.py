@@ -509,7 +509,8 @@ async def analyze_product(request: ScanRequest):
                         # 판정) KAMIS/PUBLIC_PRICE_MAP의 원/kg 값을 그대로 쓴다. SCAN_MOCK
                         # 경로처럼 pack_weight_kg를 곱해 "1단/2kg" 단위로 환산하지 못하므로,
                         # 프론트가 "(1kg 기준)"이라고 정직하게 표시할 수 있도록 단위를 알려준다.
-                        "publicPriceUnit": "kg",
+                        # 감귤은 KAMIS 소매가가 10개 기준이라 10개 단위 그대로 쓴다(kg 환산 안 함).
+                        "publicPriceUnit": "10개" if "귤" in item_name else "kg",
                         "priceDiffPercent": 0,
                         "priceTrafficLight": "SAFE",
                         "freshnessScore": freshness,
