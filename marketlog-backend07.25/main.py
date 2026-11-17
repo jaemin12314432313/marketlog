@@ -99,6 +99,15 @@ def serve_manifest():
     raise HTTPException(status_code=404)
 
 
+@app.get("/sw.js")
+def serve_sw():
+    """앱 설치(PWA)에 필요한 서비스 워커. 캐시는 하지 않는다."""
+    path = "static/sw.js"
+    if os.path.exists(path):
+        return FileResponse(path, media_type="application/javascript", headers={"Cache-Control": "no-cache"})
+    raise HTTPException(status_code=404)
+
+
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

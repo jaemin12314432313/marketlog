@@ -8,6 +8,7 @@
     <meta name="theme-color" content="#ffffff" />
     <meta name="mobile-web-app-capable" content="yes" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <script>if ("serviceWorker" in navigator && location.protocol === "https:") window.addEventListener("load", function () { navigator.serviceWorker.register("/sw.js").catch(function () {}); });</script>
     <title>마켓로그 (MarketLog) - AI 전통시장 연계 소비 플랫폼</title>
     
     <!-- Tailwind CSS CDN -->
