@@ -45,6 +45,11 @@ interface MapViewProps {
 }
 
 const NAVER_SCRIPT_ID = "naver-maps-sdk";
+// 레시피 재료 이름 → 점포 "주요 품목"에 적혀 있을 수 있는 같은 뜻의 이름들
+const RECIPE_NAME_ALIASES: Record<string, string[]> = {
+  감귤: ["감귤", "귤", "과일"],
+  사과: ["사과", "과일"],
+};
 // Stores sit only meters apart inside the same market building, so pins overlap
 // badly when zoomed out. Only show them once the user has zoomed in close enough
 // to tell them apart.
@@ -453,11 +458,13 @@ export const MapView: React.FC<MapViewProps> = ({
           break;
         }
         // 2순위: 점포 "주요 품목"(subtitle)을 토큰 단위로 쪼갰을 때 정확히 일치
+        // AI가 "감귤"로 읽어도 점포 품목에 "귤"/"과일"로 적힌 곳이 잡히도록 같은 뜻 이름을 함께 본다.
+        const aliases = RECIPE_NAME_ALIASES[part] ?? [part];
         const tokenMatches = stores.filter((s) =>
           s.subtitle
             .split(/[.,·]/)
             .map((t) => t.trim())
-            .some((token) => token === part)
+            .some((token) => aliases.includes(token))
         );
         if (tokenMatches.length > 0) {
           candidates = tokenMatches;

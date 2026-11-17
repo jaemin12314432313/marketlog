@@ -366,6 +366,19 @@ function getRecipeRecommendations(product: ProductItem): RecipeRecommendation[] 
   if (title.includes("감귤") || title.includes("귤")) {
     return [
       base(
+        "귤 생강 대추차",
+        "20분",
+        "쉬움",
+        "귤 껍질째 얇게 썰어 생강, 대추와 함께 달이면 감기철에 좋은 따뜻한 차가 됩니다. 재료는 모두 시장에서 구할 수 있어요.",
+        "귤 생강차 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "3개", isMain: true },
+          { name: "생강", amount: "1쪽", isMain: true },
+          { name: "대추", amount: "5알", isMain: true },
+          { name: "꿀", amount: "적당량", isMain: false },
+        ]
+      ),
+      base(
         "상큼한 귤청",
         "20분",
         "쉬움",
@@ -387,7 +400,7 @@ function getRecipeRecommendations(product: ProductItem): RecipeRecommendation[] 
         [
           { name: `${title} (본 상품)`, amount: "적당량", isMain: true },
           { name: "양상추", amount: "적당량", isMain: false },
-          { name: "견과류", amount: "약간", isMain: false },
+          { name: "견과류", amount: "약간", isMain: true },
           { name: "올리브오일", amount: "적당량", isMain: false },
           { name: "레몬즙", amount: "약간", isMain: false },
           { name: "꿀 (또는 올리고당)", amount: "약간", isMain: false },
@@ -434,6 +447,35 @@ function getRecipeRecommendations(product: ProductItem): RecipeRecommendation[] 
 
   if (title.includes("사과")) {
     return [
+      // 양동시장 점포의 주요 품목(대추·밤·땅콩·생강 등)과 실제로 맞는 재료를 주재료로 둔 레시피 — 연계지도에서 점포가 나온다.
+      base(
+        "사과 대추 견과 샐러드",
+        "10분",
+        "쉬움",
+        "아삭한 사과에 쫀득한 대추와 고소한 땅콩을 더해 요거트로 버무린, 시장에서 재료를 다 구할 수 있는 샐러드입니다.",
+        "사과 견과 샐러드 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "1개", isMain: true },
+          { name: "대추", amount: "5알", isMain: true },
+          { name: "땅콩", amount: "한 줌", isMain: true },
+          { name: "요거트", amount: "3큰술", isMain: false },
+          { name: "꿀", amount: "1큰술", isMain: false },
+        ]
+      ),
+      base(
+        "사과 밤 대추 조림",
+        "30분",
+        "쉬움",
+        "사과와 밤, 대추를 생강 향이 나는 물에 졸여 만드는 달큰한 전통 간식입니다.",
+        "사과 대추 조림 레시피",
+        [
+          { name: `${title} (본 상품)`, amount: "2개", isMain: true },
+          { name: "밤", amount: "10알", isMain: true },
+          { name: "대추", amount: "10알", isMain: true },
+          { name: "생강", amount: "1쪽", isMain: true },
+          { name: "설탕", amount: "3큰술", isMain: false },
+        ]
+      ),
       base(
         "사과잼",
         "40분",
