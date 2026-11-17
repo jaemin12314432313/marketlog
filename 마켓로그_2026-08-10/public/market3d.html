@@ -1612,8 +1612,8 @@ function startMarket(SHOP_DATA, MINE_ID) {
       appleGot = saved.got || 0; stampN = saved.stamp || 0; /* 그만둔 뒤에도 찾은 개수는 판에 계속 보인다 */
       browseOnly();
     } else {
-      /* 보물찾기는 하고 싶은 사람만 한다 — 들어오면 안내 창을 띄우지 않고 그냥 시장을 보여 준다(오른쪽 위 버튼으로 시작) */
-      game.state = "free"; clearApples(); syncGBtn(); stats();
+      /* 들어오면 안내 창·버튼 없이 바로 보물찾기가 시작된 상태 — 구경하다 마주치면 줍는다(오른쪽 위 버튼은 순위 보기) */
+      startRound();
     }
   }
 
