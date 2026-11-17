@@ -966,7 +966,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
   /* y/vy: 점프용 높이와 위아래 속도. 지붕(ROOF) 높이를 넘으면 가게 위에 올라설 수 있다 */
   var player = { x: 0, z: 36, face: Math.PI, y: 0, vy: 0, grounded: true };
   var GRAVITY = 22, JUMP_V = 12.2, ROOF = 2.75, STEP = 0.35; /* 최고 높이 약 3.4m — 차양 지붕(약 2.7m)을 넘는다 */
-  if (MINE >= 0) { player.x = mine.x; player.z = mine.z + frontOff * 1.25; }
+  if (MINE >= 0) { player.x = mine.x; player.z = mine.z + frontOff * 1.7; /* 진열대가 너무 크게 보이지 않게 조금 뒤에서 본다 */ }
   me.position.set(player.x, 0, player.z);
 
   /* ---------- input ---------- */
@@ -1016,7 +1016,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
 
   if (MINE < 0) $("goMine").hidden = true;
   else { var ml = $("myLink"); ml.hidden = false; ml.href = "/s/" + encodeURIComponent(mine.storeId); }
-  $("goMine").addEventListener("click", function () { auto = { x: mine.x, z: mine.z + frontOff }; if (aerial) toggleAerial(); seen(); });
+  $("goMine").addEventListener("click", function () { auto = { x: mine.x, z: mine.z + frontOff * 1.7 }; if (aerial) toggleAerial(); seen(); });
   function toggleAerial() {
     aerial = !aerial; $("aerial").setAttribute("aria-pressed", String(aerial)); $("aerial").textContent = aerial ? "걸어서 보기" : "위에서 보기";
     cam.gDist = aerial ? 85 : homeDist(); cam.gPitch = aerial ? 1.2 : 0.5;
