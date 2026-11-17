@@ -88,6 +88,28 @@ class ProductIn(BaseModel):
     timeAgo: str = "방금 전 등록"
 
 
+def _check_booth_price(payload: "ProductIn") -> None:
+    """CO-SHOW 부스: 장난 가격(1원 등)이 "시세보다 99% 저렴"으로 모두가 보는 화면에 뜨지 않게 막는다."""
+    if payload.price > 1_000_000:
+        raise HTTPException(status_code=400, detail="가격이 너무 커요. 가격을 다시 확인해 주세요.")
+    # 판매가는 올린 단위(3kg, 20개)의 가격이라, 시세 기준(1kg 또는 10개) 가격으로 환산해서 비교한다.
+    unit_match = re.match(r"^\s*(\d+(?:\.\d+)?)\s*(kg|개)\s*$", payload.unit or "", re.IGNORECASE)
+    factor = 1.0
+    if unit_match and float(unit_match.group(1)) > 0:
+        factor = float(unit_match.group(1)) / (10 if unit_match.group(2) == "개" else 1)
+    # 시세의 10%보다 낮으면 장난 가격으로 보고 막는다(전시에서 손님이 아무 숫자나 넣어 보는 것은 허용).
+    if payload.publicPrice > 0 and (payload.price / factor) * 10 < payload.publicPrice:
+        unit_label = (payload.unit or "").strip() or "1kg"
+        min_price = max(1, round(payload.publicPrice * factor / 10))
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"공공 시세({payload.publicPrice:,}원)보다 너무 낮은 가격이에요. "
+                f"{unit_label} 가격은 {min_price:,}원 이상으로 적어주세요."
+            ),
+        )
+
+
 @router.post("/api/v1/merchant/products")
 def create_product(
     payload: ProductIn,
@@ -96,17 +118,8 @@ def create_product(
 ):
     shop_name = require_merchant(current_user)
     market_id = merchant_market_id(db, current_user)
-    # CO-SHOW 부스: 장난 가격(1원 등)이 "시세보다 99% 저렴"으로 모두가 보는 화면에 뜨지 않게 막는다.
     if market_id == "coshow":
-        if payload.price > 1_000_000:
-            raise HTTPException(status_code=400, detail="가격이 너무 커요. 1kg 기준 가격으로 다시 적어주세요.")
-        # 판매가는 올린 단위(3kg, 20개)의 가격이라, 시세 기준(1kg 또는 10개) 가격으로 환산해서 비교한다.
-        unit_match = re.match(r"^\s*(\d+(?:\.\d+)?)\s*(kg|개)\s*$", payload.unit or "", re.IGNORECASE)
-        factor = 1.0
-        if unit_match and float(unit_match.group(1)) > 0:
-            factor = float(unit_match.group(1)) / (10 if unit_match.group(2) == "개" else 1)
-        if payload.publicPrice > 0 and (payload.price / factor) * 5 < payload.publicPrice:
-            raise HTTPException(status_code=400, detail="공공 시세보다 너무 낮은 가격이에요. 가격을 다시 확인해 주세요.")
+        _check_booth_price(payload)
     store = require_store_ready(db, market_id, shop_name)
     market = db.query(Market).filter(Market.id == market_id).first()
     product = Product(
@@ -154,6 +167,8 @@ def update_product(
         raise HTTPException(status_code=404, detail="상품을 찾을 수 없습니다.")
     if product.shop_name != shop_name:
         raise HTTPException(status_code=403, detail="본인 점포의 상품만 수정할 수 있습니다.")
+    if product.market_id == "coshow":
+        _check_booth_price(payload)
 
     product.title = payload.title
     product.unit = payload.unit

@@ -25,6 +25,7 @@ import {
   deleteMerchantProduct,
   getAuthToken,
   clearAuthToken,
+  ApiError,
 } from "./lib/api";
 import { Header } from "./components/Header";
 import { HomeFeed } from "./components/HomeFeed";
@@ -435,7 +436,9 @@ export default function App() {
       return true;
     } catch (err) {
       console.error("상품 등록 실패", err);
-      alert("상품 등록에 실패했습니다. 판매자 계정으로 로그인되어 있는지 확인해주세요.");
+      // 서버가 이유를 알려 줬으면(예: 시세보다 너무 낮은 가격) 그 문구를 그대로 보여 준다.
+      const reason = err instanceof ApiError && err.status === 400 && err.detail ? err.detail : null;
+      alert(reason ?? "상품 등록에 실패했습니다. 판매자 계정으로 로그인되어 있는지 확인해주세요.");
       return false;
     }
   };
@@ -448,7 +451,7 @@ export default function App() {
       return true;
     } catch (err) {
       console.error("상품 수정 실패", err);
-      alert("상품 수정에 실패했습니다.");
+      alert(err instanceof ApiError && err.status === 400 && err.detail ? err.detail : "상품 수정에 실패했습니다.");
       return false;
     }
   };

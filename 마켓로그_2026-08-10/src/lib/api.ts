@@ -27,11 +27,14 @@ export function clearAuthToken(): void {
 export class ApiError extends Error {
   status?: number;
   isTimeout: boolean;
-  constructor(message: string, status?: number, isTimeout = false) {
+  // 서버가 사람에게 보여 주라고 보낸 안내 문구(FastAPI의 detail). 있으면 화면에 그대로 보여 준다.
+  detail?: string;
+  constructor(message: string, status?: number, isTimeout = false, detail?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.isTimeout = isTimeout;
+    this.detail = detail;
   }
 }
 
@@ -66,7 +69,14 @@ async function apiFetch<T>(
   }
 
   if (!res.ok) {
-    throw new ApiError(`API ${path} failed: ${res.status}`, res.status);
+    let detail: string | undefined;
+    try {
+      const body = await res.json();
+      if (typeof body?.detail === "string") detail = body.detail;
+    } catch {
+      // 본문이 JSON이 아니면 안내 문구 없이 넘어간다.
+    }
+    throw new ApiError(`API ${path} failed: ${res.status}`, res.status, false, detail);
   }
   return res.json() as Promise<T>;
 }
