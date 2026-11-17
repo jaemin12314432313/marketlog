@@ -753,6 +753,34 @@ def _require_admin(key: str | None) -> None:
         raise HTTPException(status_code=403, detail="관리 키가 올바르지 않습니다.")
 
 
+@router.get("/prices")
+async def booth_prices(refresh: bool = False, x_booth_key: str | None = Header(None), db: Session = Depends(get_db)):
+    """공공시세 확인 — 스태프 전용. DB에 저장된 KAMIS 시세와 기준일·저장 시각을 보여 준다.
+    refresh=1이면 지금 KAMIS에서 새로 받아 저장한 뒤 보여 준다(실제로 받아지는지 확인용)."""
+    _require_admin(x_booth_key)
+    refreshed = None
+    if refresh:
+        refreshed = await asyncio.to_thread(kamis_module._refresh_and_store)
+    from models import PublicPrice
+
+    rows = db.query(PublicPrice).order_by(PublicPrice.item_name, PublicPrice.rank).all()
+    return {
+        "success": True,
+        "refreshed": refreshed,
+        "kamisKeyConfigured": bool(os.getenv("KAMIS_CERT_KEY") and os.getenv("KAMIS_CERT_ID")),
+        "prices": [
+            {
+                "item": r.item_name,
+                "rank": r.rank,
+                "pricePerKg": r.price,
+                "kamisDate": r.regday,
+                "savedAtUtc": r.updated_at.isoformat() if r.updated_at else None,
+            }
+            for r in rows
+        ],
+    }
+
+
 @router.get("/report")
 def booth_report(x_booth_key: str | None = Header(None), db: Session = Depends(get_db)):
     """전시 성과 집계(날짜별 체험/등록/QR 조회 수) — 스태프 전용."""
