@@ -658,7 +658,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
   /* 가운데 기둥(이정표): 황금 사과를 가장 많이 찾은 가게 TOP 3 */
   var pillarTex = canvasTex(512, 1024, function (g, w, h) {
     g.fillStyle = "#0d0e11"; g.fillRect(0, 0, w, h); g.textAlign = "center"; g.textBaseline = "middle";
-    g.fillStyle = "#f2c200"; g.font = FONT(58); g.fillText("황금 보물", w / 2, 80); g.fillText("많이 찾은 가게", w / 2, 146);
+    g.fillStyle = "#f2c200"; g.font = FONT(58); g.fillText("황금 보물", w / 2, 80); g.fillText("많이 찾은 사장님", w / 2, 146);
     g.fillStyle = "#ffffff"; g.font = FONT(76); g.fillText("TOP 3", w / 2, 226); g.fillStyle = "#f2c200"; g.fillRect(40, 280, w - 80, 8);
     var list = typeof rankList === "function" ? rankList("apples") : [];
     if (!list.length) { g.fillStyle = "#9aa3b2"; g.font = FONT(44); g.fillText("황금 보물을 찾으면", w / 2, 520); g.fillText("순위가 나와요", w / 2, 580); }
@@ -689,7 +689,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
   /* 오른쪽 벽 전광판: 황금 사과를 가장 많이 찾은 가게 TOP 3 */
   var topTex = canvasTex(1024, 640, function (g, w, h) {
     g.fillStyle = "#0d0e11"; g.fillRect(0, 0, w, h); g.fillStyle = "#f2c200"; g.fillRect(0, 96, w, 6);
-    g.textBaseline = "middle"; g.textAlign = "left"; g.fillStyle = "#ffffff"; g.font = FONT(60); g.fillText("황금 보물 많이 찾은 가게 TOP 3", 36, 52);
+    g.textBaseline = "middle"; g.textAlign = "left"; g.fillStyle = "#ffffff"; fit(g, "황금 보물 많이 찾은 사장님 TOP 3", 60, w - 72); g.fillText("황금 보물 많이 찾은 사장님 TOP 3", 36, 52);
     var list = typeof rankList === "function" ? rankList("apples") : [];
     if (!list.length) { g.fillStyle = "#9aa3b2"; g.font = FONT(44); g.fillText("황금 보물을 찾으면 순위가 나와요", 40, 300); }
     list.forEach(function (r, i) {
@@ -704,7 +704,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
   /* 왼쪽 벽 전광판(오른쪽 황금 사과 전광판 맞은편): 시장을 가장 많이 둘러본 가게 TOP 3 */
   var visitTex = canvasTex(1024, 640, function (g, w, h) {
     g.fillStyle = "#0d0e11"; g.fillRect(0, 0, w, h); g.fillStyle = "#f2c200"; g.fillRect(0, 96, w, 6);
-    g.textBaseline = "middle"; g.textAlign = "left"; g.fillStyle = "#ffffff"; g.font = FONT(60); g.fillText("많이 둘러본 가게 TOP 3", 36, 52);
+    g.textBaseline = "middle"; g.textAlign = "left"; g.fillStyle = "#ffffff"; fit(g, "많이 둘러본 사장님 TOP 3", 60, w - 72); g.fillText("많이 둘러본 사장님 TOP 3", 36, 52);
     var list = typeof rankList === "function" ? rankList("visited") : [];
     if (!list.length) { g.fillStyle = "#9aa3b2"; g.font = FONT(44); g.fillText("가게를 둘러보면 순위가 나와요", 40, 300); }
     list.forEach(function (r, i) {
@@ -1233,7 +1233,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
       leaf = new THREE.Mesh(leafGeo, leafMat); leaf.scale.set(1.4, 0.35, 0.7); leaf.position.set(0.1, 0.36, 0); leaf.rotation.z = -0.5; g.add(leaf);
     }
     var halo = new THREE.Sprite(haloMat.clone()); halo.scale.set(1.5, 1.5, 1); g.add(halo);
-    g.scale.setScalar(0.7); g.position.y = y; root.add(g);
+    g.scale.setScalar(kind === "roof" ? 0.55 : 0.7); g.position.y = y; root.add(g);
     /* 납작 사과: 바닥에 눌어붙은 것처럼 납작하게, 반짝임 없이. 주우면 원래 모양으로 부풀며 떠오른다 */
     if (kind === "flat") { g.scale.set(0.85, 0.12, 0.85); halo.visible = false; }
     var a = { variant: variant, root: root, g: g, halo: halo, x: x, z: z, y: y, got: false, fade: 0, ph: Math.random() * 6.28, kind: kind || "plain", orig: orig || kind || "plain", born: performance.now(), dig: 0, armed: true, wait: 0 };
@@ -1269,7 +1269,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
       /* 지붕 사과: 플레이어와 떨어진 가게 지붕 위. 가게가 없으면 보통 사과로 대신한다 */
       var cand = [], k;
       for (k = 0; k < filled; k++) if (Math.hypot(stalls[k].x - player.x, stalls[k].z - player.z) > 8) cand.push(k);
-            if (cand.length) { k = cand[Math.floor(Math.random() * cand.length)]; makeApple(stalls[k].x, ROOF + 1.9, stalls[k].z, "roof"); return; }
+            if (cand.length) { k = cand[Math.floor(Math.random() * cand.length)]; makeApple(stalls[k].x, ROOF + 0.45, stalls[k].z, "roof"); return; } /* 지붕 위에 살짝 얹혀 있어서 땅에서는 안 보이고, 올라가 봐야 찾는다 */
       /* 멀리 있는 가게가 없으면(가게가 적을 때) 이번엔 바닥에 두고, 다음번엔 다시 지붕을 노린다 */
       var p0 = freeSpot(); makeApple(p0[0], 0.9, p0[1], "plain", "roof"); return;
     }
@@ -1388,7 +1388,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
       a.g.rotation.y += dt * (a.kind === "runner" && dist < 5 ? 6 : 1.6);
       if (a.rise != null && a.rise < 1) { a.rise = Math.min(1, a.rise + dt * 2); a.g.position.y = -0.3 + (a.y + 0.3) * a.rise; }
       else a.g.position.y = a.y + (reduced || a.kind === "flat" ? 0 : Math.sin(t * 2.2 + a.ph) * 0.12);
-      a.halo.visible = a.kind !== "flat" && dist < 12; /* 가까이 와야 반짝인다(납작 사과는 안 반짝임) */
+      a.halo.visible = a.kind !== "flat" && dist < (a.kind === "roof" ? 3.5 : 12); /* 가까이 와야 반짝인다(납작 사과는 안 반짝이고, 지붕 위 보물은 바로 옆에서만 반짝인다) */
       a.halo.material.opacity = 0.7 + Math.sin(t * 3 + a.ph) * 0.3;
       if (a.kind === "quiz") {
         if (a.q) a.q.position.y = a.y + 0.75 + (reduced ? 0 : Math.sin(t * 3) * 0.06);
@@ -1465,7 +1465,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
     sendScore().then(function () { return loadMarket(); }).then(fill).catch(fill);
   }
   var RANK_BODY = function (extra) {
-    return (MINE >= 0 ? '<p class="gm-rank" id="gmRank">순위를 확인하는 중…</p><p style="font-size:12px">가게 이름으로 랭킹에 기록돼요</p>' : '<p style="font-size:12px">내 가게를 열면 랭킹에 기록돼요</p>');
+    return (MINE >= 0 ? '<p class="gm-rank" id="gmRank">순위를 확인하는 중…</p><p style="font-size:12px">사장님(가게) 이름으로 랭킹에 기록돼요</p>' : '<p style="font-size:12px">내 가게를 열면 랭킹에 기록돼요</p>');
   };
   /* 무제한 모드: "순위 보기"를 누르면 지금까지의 기록과 순위를 보여 주고, 계속 찾거나 그만둘 수 있다 */
   function showStatus() {
