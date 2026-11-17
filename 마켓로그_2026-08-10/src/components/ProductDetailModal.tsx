@@ -434,21 +434,6 @@ function getRecipeRecommendations(product: ProductItem): RecipeRecommendation[] 
     return [
       // 양동시장 점포의 주요 품목(대추·밤·땅콩·생강 등)과 실제로 맞는 재료를 주재료로 둔 레시피 — 연계지도에서 점포가 나온다.
       base(
-        "사과 대추 견과 샐러드",
-        "10분",
-        "쉬움",
-        "아삭한 사과에 쫀득한 대추와 고소한 땅콩을 더해 요거트로 버무린, 시장에서 재료를 다 구할 수 있는 샐러드입니다.",
-        "사과 견과 샐러드 레시피",
-        [
-          { name: `${title} (본 상품)`, amount: "1개", isMain: true },
-          { name: "대추", amount: "5알", isMain: true },
-          { name: "땅콩", amount: "한 줌", isMain: true },
-          { name: "요거트", amount: "3큰술", isMain: false },
-          { name: "꿀", amount: "1큰술", isMain: false },
-        ],
-        "UfLf7TMTdrQ"
-      ),
-      base(
         "사과 밤 대추 조림",
         "30분",
         "쉬움",
@@ -475,19 +460,6 @@ function getRecipeRecommendations(product: ProductItem): RecipeRecommendation[] 
           { name: "레몬즙", amount: "약간", isMain: false },
         ],
         "RXmVL7_f6Y0"
-      ),
-      base(
-        "새콤달콤 사과정과",
-        "30분 (건조 반나절)",
-        "쉬움",
-        "얇게 썬 사과를 설탕물에 졸여 말리는 전통 저장 간식 정과로, 새콤달콤하고 쫀득한 맛을 오래 즐길 수 있습니다.",
-        "사과정과 레시피",
-        [
-          { name: `${title} (본 상품)`, amount: "2개", isMain: true },
-          { name: "설탕", amount: "6큰술", isMain: true },
-          { name: "소금", amount: "약간", isMain: false },
-        ],
-        "y0wx1gU7Apc"
       ),
     ];
   }
