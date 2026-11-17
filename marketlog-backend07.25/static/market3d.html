@@ -1258,7 +1258,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
     g.scale.setScalar(kind === "roof" ? 0.55 : 0.7); g.position.y = y; root.add(g);
     /* 납작 사과: 바닥에 눌어붙은 것처럼 납작하게, 반짝임 없이. 주우면 원래 모양으로 부풀며 떠오른다 */
     if (kind === "flat") { g.scale.set(0.85, 0.12, 0.85); halo.visible = false; }
-    var a = { variant: variant, root: root, g: g, halo: halo, x: x, z: z, y: y, got: false, fade: 0, ph: Math.random() * 6.28, kind: kind || "plain", orig: orig || kind || "plain", born: performance.now(), dig: 0, armed: true, wait: 0 };
+    var a = { variant: variant, root: root, g: g, halo: halo, x: x, z: z, y: y, got: false, fade: 0, ph: Math.random() * 6.28, kind: kind || "plain", orig: orig || kind || "plain", born: performance.now(), dig: 0, armed: true, wait: 0, moveAt: performance.now() + 90000 + Math.random() * 90000, tele: 0, teleAt: 0, dir: 0, dirT: 0, vis: true, cy: null };
     if (a.kind === "buried") {
       /* 땅속 사과: 사과는 숨기고 흙더미(+자갈)만 보인다. 바닥과 비슷한 색이라 잘 봐야 보인다 */
       g.visible = false;
@@ -1298,7 +1298,22 @@ function startMarket(SHOP_DATA, MINE_ID) {
     var p = freeSpot();
     makeApple(p[0], kind === "quiz" ? 1.3 : kind === "flat" ? 0.04 : 0.9, p[1], kind);
   }
-  APPLE_KINDS.forEach(spawnApple);
+  /* 보물 종류 풀(가중치): 한 판마다 6~8개를 무작위로 흩뿌리고, 하나를 가져가면 다음 보물도 종류를 무작위로 뽑는다(퀴즈는 동시에 1개, 지붕은 2개까지) */
+  var KIND_POOL = [["plain", 3], ["roof", 2], ["runner", 2], ["flat", 2], ["quiz", 1], ["blink", 2], ["wander", 2], ["hopper", 2], ["teleporter", 1]];
+  function pickKind() {
+    var live = apples.filter(function (a) { return !a.got && !a.dead; });
+    var cnt = function (k) { return live.filter(function (a) { return a.orig === k; }).length; };
+    var pool = KIND_POOL.filter(function (p) { return p[0] === "quiz" ? cnt("quiz") < 1 : cnt(p[0]) < 2; });
+    var total = pool.reduce(function (s, p) { return s + p[1]; }, 0), r = Math.random() * total;
+    for (var i = 0; i < pool.length; i++) { r -= pool[i][1]; if (r < 0) return pool[i][0]; }
+    return "plain";
+  }
+  function spawnInitial() {
+    var n = 6 + Math.floor(Math.random() * 3);
+    spawnApple("plain"); /* 처음 하는 손님을 위해 눈에 띄는 보물은 꼭 하나 둔다 */
+    for (var i = 1; i < n; i++) spawnApple(pickKind());
+  }
+  spawnInitial();
 
   /* ---------- 효과: 소리·진동·+1 표시 ---------- */
   var actx = null;
@@ -1398,7 +1413,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
   function stepApples(dt, t) {
     if (game.state !== "playing") return; /* 한 판이 아닐 때(안내·결과·구경)는 사과를 줍거나 퀴즈가 뜨지 않는다 */
     if (!gm.hidden) return; /* 순위·기록 창이 떠 있는 동안에도 잠시 멈춘다 */
-    var nearDig = null, nearest = 99;
+    var nearDig = null, nearest = 99, nMoved = 0, nowMs = performance.now();
     for (var i = 0; i < apples.length; i++) {
       var a = apples[i];
       if (a.got) {
@@ -1406,6 +1421,8 @@ function startMarket(SHOP_DATA, MINE_ID) {
         continue;
       }
       var dist = Math.hypot(a.x - player.x, a.z - player.z);
+      /* 한참(1분 반~3분) 안 잡힌 보물은, 플레이어가 멀리 있을 때 조용히 다른 곳으로 옮겨 간다(랜덤 간격) — 못 찾는 자리에 갇히지 않게 */
+      if (a.kind !== "quiz" && nowMs > a.moveAt && dist > 12) { scene.remove(a.root); a.dead = true; nMoved++; continue; }
       if (dist < nearest) nearest = dist;
       if (a.kind === "buried") {
         if (dist < 2.2 && player.grounded && player.y < 0.5) nearDig = a; /* 예전엔 1.3m라 흙더미 바로 위에 서야 했다 — 폰에서 그렇게 멈추기 어려워서 넓혔다 */
@@ -1420,10 +1437,27 @@ function startMarket(SHOP_DATA, MINE_ID) {
         }
         a.root.position.x = a.x; a.root.position.z = a.z;
       }
+      /* 떠돌이 보물: 천천히 아무 방향으로 걸어 다닌다 */
+      if (a.kind === "wander") {
+        a.dirT -= dt;
+        if (a.dirT <= 0) { a.dir = Math.random() * 6.283; a.dirT = 2 + Math.random() * 3; }
+        var wx = a.x + Math.sin(a.dir) * 1.3 * dt, wz = a.z + Math.cos(a.dir) * 1.3 * dt;
+        if (appleFree(wx, wz)) { a.x = wx; a.z = wz; a.root.position.x = wx; a.root.position.z = wz; } else a.dirT = 0;
+      }
+      /* 순간이동 보물: 5m 안으로 가면 다른 곳으로 사라진다(두 번까지, 그다음엔 잡을 수 있다) */
+      if (a.orig === "teleporter" && a.kind === "teleporter" && dist < 5 && nowMs > a.teleAt) {
+        var tp = freeSpot(); a.x = tp[0]; a.z = tp[1]; a.root.position.x = a.x; a.root.position.z = a.z;
+        a.tele++; a.teleAt = nowMs + 2500; tone(1250, 0.08, "sine", 0.1);
+        if (a.tele >= 2) a.kind = "plain";
+        dist = Math.hypot(a.x - player.x, a.z - player.z);
+      }
       a.g.rotation.y += dt * (a.kind === "runner" && dist < 5 ? 6 : 1.6);
       if (a.rise != null && a.rise < 1) { a.rise = Math.min(1, a.rise + dt * 2); a.g.position.y = -0.3 + (a.y + 0.3) * a.rise; }
-      else a.g.position.y = a.y + (reduced || a.kind === "flat" ? 0 : Math.sin(t * 2.2 + a.ph) * 0.12);
-      a.halo.visible = a.kind !== "flat" && dist < (a.kind === "roof" ? 3.5 : 12); /* 가까이 와야 반짝인다(납작 사과는 안 반짝이고, 지붕 위 보물은 바로 옆에서만 반짝인다) */
+      else a.g.position.y = a.y + (reduced || a.kind === "flat" ? 0 : a.kind === "hopper" ? Math.abs(Math.sin(t * 2.6 + a.ph)) * 1.5 : Math.sin(t * 2.2 + a.ph) * 0.12);
+      a.cy = a.g.position.y;
+      /* 깜빡이 보물: 9초 중 2.6초만 보인다(안 보일 때는 주울 수 없다) */
+      if (a.kind === "blink") { a.vis = ((t + a.ph) % 9) < 2.6; a.g.visible = a.vis; }
+      a.halo.visible = a.kind !== "flat" && (a.kind !== "blink" || a.vis) && dist < (a.kind === "roof" ? 3.5 : 12); /* 가까이 와야 반짝인다(납작 사과는 안 반짝이고, 지붕 위 보물은 바로 옆에서만 반짝인다) */
       a.halo.material.opacity = 0.7 + Math.sin(t * 3 + a.ph) * 0.3;
       if (a.kind === "quiz") {
         if (a.q) a.q.position.y = a.y + 0.75 + (reduced ? 0 : Math.sin(t * 3) * 0.06);
@@ -1432,19 +1466,21 @@ function startMarket(SHOP_DATA, MINE_ID) {
         if (dist < 1.4 && a.armed && a.wait <= 0 && !quizApple) openQuiz(a);
         continue; /* 퀴즈를 맞히기 전엔 줍지 못한다 */
       }
-      if (dist < 1.0 && Math.abs(player.y + 0.9 - a.y) < (a.kind === "flat" ? 1.0 : 0.8) && !(a.rise != null && a.rise < 1) && performance.now() - a.born > 800) {
+      if (dist < 1.0 && Math.abs(player.y + 0.9 - (a.cy != null ? a.cy : a.y)) < (a.kind === "flat" ? 1.0 : 0.8) && (a.kind !== "blink" || a.vis) && !(a.rise != null && a.rise < 1) && performance.now() - a.born > 800) {
         a.got = true; appleGot++;
         var gname = GOLD_NAME[a.variant] || "황금 사과", gicon = GOLD_ICON[a.variant] || "🍎";
-        toast((a.orig === "runner" ? "🏃 도망가던 " + gname + "를 잡았어요!" : a.orig === "buried" ? "⛏ 땅속 " + gname + "를 캤어요!" : a.orig === "quiz" ? "❓ 퀴즈 " + gname + " 획득!" : a.orig === "flat" ? "🫓 바닥에 붙은 " + gname + " 발견!" : gicon + " " + gname + "를 찾았어요!") +
+        var MSG = { runner: "🏃 도망가던 " + gname + "를 잡았어요!", quiz: "❓ 퀴즈 " + gname + " 획득!", flat: "🫓 바닥에 붙은 " + gname + " 발견!", blink: "✨ 깜빡이던 " + gname + "를 잡았어요!", wander: "🚶 떠돌던 " + gname + "를 잡았어요!", hopper: "🦘 통통 튀던 " + gname + "를 잡았어요!", teleporter: "🌀 순간이동하던 " + gname + "를 잡았어요!" };
+        toast((MSG[a.orig] || (gicon + " " + gname + "를 찾았어요!")) +
           " (" + appleGot + "개째) · 어딘가에 새로 숨었어요");
         sfx("get"); buzz(60); pop("+1 " + gicon);
-        spawnApple(a.orig);
+        spawnApple(pickKind()); /* 다음 보물은 종류도 무작위로 */
         stats();
       }
     }
     showNear(nearest);
     setDigTarget(nearDig);
     if (apples.some(function (x) { return x.dead; })) apples = apples.filter(function (x) { return !x.dead; });
+    for (var mi = 0; mi < nMoved; mi++) spawnApple(pickKind()); /* 옮겨 간 보물 자리에 새로 숨긴다 */
   }
   /* ---------- 보물찾기 한 판(3분) ----------
      예전엔 사과가 끝없이 새로 생겨서 오래 하는 사람이 무조건 1위였다. 이제 3분 한 판이고, 끝나면 결과를 보여 준다.
@@ -1470,7 +1506,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
     audio(); /* 버튼을 누른 순간(손님 조작)에 소리를 켠다 — 그래야 폰에서 소리가 난다 */
     gm.hidden = true; clearApples(); stopPlayUi(); nearEl.textContent = "";
     appleGot = 0; visited = {}; stampN = 0; lastScore = "";
-    APPLE_KINDS.forEach(spawnApple);
+    spawnInitial();
     game.state = "playing"; game.left = ROUND_SEC; game.since = performance.now(); game.t0 = Date.now(); game.endAt = performance.now() + ROUND_SEC * 1000; gTick = 0;
     syncGBtn();
     stats(); toast(ROUND_SEC ? "⏱ " + mmss(ROUND_SEC) + " 시작! 황금 보물을 찾아보세요" : "🍎 시작! 황금 사과·양파·귤이 숨어 있어요"); sfx("start");
@@ -1526,9 +1562,9 @@ function startMarket(SHOP_DATA, MINE_ID) {
       '<ul class="gm-list">' +
       '<li><b>🏠</b>가게 지붕 위에 올라가 보세요</li>' +
       '<li><b>✨</b>눈에 띄는 곳에 반짝이는 보물도 있어요</li>' +
-      '<li><b>🏃</b>도망가는 보물을 잡아요</li>' +
+      '<li><b>🏃</b>도망가고, 떠돌고, 순간이동하는 보물도 있어요</li>' +
       '<li><b>❓</b>퀴즈를 맞히면 가져가요</li>' +
-      '<li><b>👀</b>바닥에 납작하게 숨은 것도 있어요</li>' +
+      '<li><b>👀</b>납작하거나 깜빡이며 숨은 것도 있어요</li>' +
       '</ul>' +
       '<p class="gm-foot">가까워지면 ✨ 힌트가 떠요 · ' + (SCORE_ID ? 'TOP 3는 3D 전광판에 올라가요' : '내 가게를 열면 랭킹에 올라가요') + '</p>',
       [{ t: "구경만 할래요", fn: browseOnly }, { t: "시작하기", primary: true, fn: startRound }]);
@@ -1545,14 +1581,14 @@ function startMarket(SHOP_DATA, MINE_ID) {
   }
   gBtn.addEventListener("click", function () { if (game.state === "playing") showStatus(); else gameIntro(); });
   /* 시험용: ?debug=1 로 열면 자동 시험이 사과 위치로 순간이동해 줍기·힌트·효과를 확인할 수 있다 */
-  if (MARKET_PARAMS.get("debug") === "1") window.__g = { player: player, apples: function () { return apples; }, got: function () { return appleGot; }, game: game };
+  if (MARKET_PARAMS.get("debug") === "1") window.__g = { player: player, apples: function () { return apples; }, got: function () { return appleGot; }, game: game, spawn: spawnApple, pickKind: pickKind };
   if (MONITOR) { game.state = "free"; clearApples(); gBtn.hidden = true; }
   else {
     var saved = loadGame();
     if (saved && saved.state === "playing") {
       /* 관을 옮기느라 페이지가 다시 열렸다면, 안내 창 없이 하던 보물찾기를 그 자리에서 이어서 한다(찾은 개수와 시간 유지) */
       appleGot = saved.got || 0; stampN = saved.stamp || 0; visited = {}; lastScore = "";
-      clearApples(); APPLE_KINDS.forEach(spawnApple);
+      clearApples(); spawnInitial();
       game.state = "playing"; game.t0 = saved.t0 || Date.now(); game.since = performance.now() - (Date.now() - game.t0);
       game.endAt = performance.now() + ROUND_SEC * 1000; syncGBtn(); stats();
       setTimeout(function () { toast("🍎 이어서 찾아요 · 지금까지 " + appleGot + "개"); }, 600);
