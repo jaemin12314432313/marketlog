@@ -82,6 +82,9 @@
   /* 점프 버튼: 엄지로 누르기 쉽게 크고 둥글게. 누르는 순간 반응하도록 pointerdown으로 처리한다 */
   .btn.jump { width: 72px; height: 72px; padding: 0; border-radius: 50%; font-size: 15px; font-weight: 700; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); touch-action: none; user-select: none; -webkit-user-select: none; }
   .btn.jump:active { transform: scale(0.92); }
+  .btn.jump.dig { background: #f2b400; color: #1a1a1a; border-color: #d99a00; font-size: 14px; animation: digpulse 0.9s ease-in-out infinite; }
+  @keyframes digpulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(242, 180, 0, 0.7); } 50% { box-shadow: 0 0 0 12px rgba(242, 180, 0, 0); } }
+  @media (prefers-reduced-motion: reduce) { .btn.jump.dig { animation: none; } }
   .hint { position: absolute; bottom: 206px; font-size: 12px; color: var(--fg); background: var(--chip); border-radius: 999px; padding: 6px 12px; transition: opacity 0.6s; pointer-events: none; width: max-content; max-width: calc(100% - 32px); }
   .hint.gone { opacity: 0; }
   .card:not([hidden]) ~ .hint { display: none; }
@@ -1336,8 +1339,11 @@ function startMarket(SHOP_DATA, MINE_ID) {
   /* ---------- 땅 파기 ---------- */
   var jumpBtn = $("jump");
   function setDigTarget(a) {
-    if (digTarget === a) return; digTarget = a;
+    if (digTarget === a) return;
+    var wasNone = !digTarget; digTarget = a;
     jumpBtn.textContent = a ? "⛏ 파기" : "점프"; jumpBtn.setAttribute("aria-label", a ? "땅 파기" : "점프");
+    jumpBtn.classList.toggle("dig", !!a); /* 노랗게 바뀌어서 한눈에 알아보게 */
+    if (a && wasNone) { toast("⛏ 흙더미를 찾았어요! 오른쪽 아래 노란 버튼을 세 번 눌러 파 보세요"); buzz(40); }
   }
   function dig() {
     var a = digTarget; if (!a) return;
@@ -1403,7 +1409,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
       var dist = Math.hypot(a.x - player.x, a.z - player.z);
       if (dist < nearest) nearest = dist;
       if (a.kind === "buried") {
-        if (dist < 1.3 && player.grounded && player.y < 0.5) nearDig = a;
+        if (dist < 2.2 && player.grounded && player.y < 0.5) nearDig = a; /* 예전엔 1.3m라 흙더미 바로 위에 서야 했다 — 폰에서 그렇게 멈추기 어려워서 넓혔다 */
         continue; /* 땅속 사과는 파기 전엔 줍지 못한다 */
       }
       /* 도망 사과: 5m 안에 들어오면 반대쪽으로 달아난다(사람보다 조금 느림). 막히면 옆으로 틀어 본다 */
