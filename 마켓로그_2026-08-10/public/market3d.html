@@ -257,6 +257,8 @@
   .gm-box .gm-rank { margin: 8px 0 2px; font-size: 16px; font-weight: 800; color: var(--fg); }
   .gm-hero { margin: 2px 0 0; font-size: 46px; font-weight: 800; color: #f2b400; font-variant-numeric: tabular-nums; line-height: 1.1; }
   .gm-box .gm-sub { margin: 6px 0 0; font-size: 15px; font-weight: 700; color: var(--fg); }
+  /* 가로로 눕힌 폰처럼 화면이 낮으면 목록을 접어서 "시작하기" 버튼이 스크롤 없이 보이게 한다 */
+  @media (max-height: 520px) { .gm-list { display: none !important; } .gm-hero { font-size: 34px; } .gm-row { margin-top: 12px; } }
   .gm-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 7px; text-align: left; }
   .gm-list li { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: var(--fg); background: var(--chip); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; }
   .gm-list b { width: 26px; text-align: center; font-size: 20px; font-weight: 400; }
@@ -264,7 +266,7 @@
   /* 보물찾기 안내·결과 창 */
   .gm { position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15, 23, 42, 0.55); }
   .gm[hidden] { display: none !important; }
-  .gm-box { width: 100%; max-width: 340px; background: var(--surface); color: var(--fg); border-radius: 20px; padding: 22px 20px 18px; text-align: center; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35); }
+  .gm-box { width: 100%; max-width: 340px; max-height: 100%; overflow-y: auto; background: var(--surface); color: var(--fg); border-radius: 20px; padding: 22px 20px 18px; text-align: center; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35); }
   .gm-box h2 { margin: 0 0 8px; font-size: 22px; font-weight: 800; }
   .gm-box p { margin: 6px 0; font-size: 14px; line-height: 1.55; color: var(--muted); }
   .gm-box .big { margin: 10px 0 4px; font-size: 38px; font-weight: 800; color: #f2b400; }
@@ -1085,6 +1087,8 @@ function startMarket(SHOP_DATA, MINE_ID) {
     return (type ? "[" + type + "] " : "") + (detail ? detail + " " : "") + (it.title || "상품") + (it.unit ? " " + it.unit : "");
   }
   function openSheet(k, idx) {
+    /* 퀴즈 창이 떠 있는 중에 가게 상세를 열면 같은 패널을 덮어쓰게 되므로, 퀴즈는 접고 잠시 뒤 다시 풀 수 있게 풀어 준다(안 풀면 퀴즈 사과가 영영 안 열린다) */
+    if (quizApple) { quizApple.wait = 2; quizApple = null; }
     var shop = stalls[k], items = shop.items;
     idx = Math.max(0, Math.min(idx || 0, items.length - 1));
     var it = items[idx];
@@ -1193,10 +1197,11 @@ function startMarket(SHOP_DATA, MINE_ID) {
   /* 관을 옮기면 페이지가 다시 열리므로, 하던 보물찾기를 이어서 하도록 탭에 임시로 기억해 둔다(탭을 닫으면 사라진다) */
   function saveGame() {
     if (MONITOR || game.state === "idle" || game.state === "over") return; /* 시작 전에는 덮어쓰지 않는다(이어하기 정보가 지워지면 안 된다) */
-    try { sessionStorage.setItem("ml_game", JSON.stringify({ state: game.state, got: appleGot, stamp: stampN, t0: game.t0 || 0 })); } catch (e) {}
+    try { sessionStorage.setItem("ml_game", JSON.stringify({ state: game.state, got: appleGot, stamp: stampN, t0: game.t0 || 0, sid: SCORE_ID || "" })); } catch (e) {}
   }
   function loadGame() {
-    try { var s = JSON.parse(sessionStorage.getItem("ml_game") || "null"); return s && (s.state === "playing" || s.state === "free") ? s : null; } catch (e) { return null; }
+    /* 같은 가게(같은 사람)일 때만 이어서 한다 — 한 탭에서 다른 가게로 들어오면 앞사람 기록이 따라오지 않게 */
+    try { var s = JSON.parse(sessionStorage.getItem("ml_game") || "null"); return s && (s.state === "playing" || s.state === "free") && (s.sid || "") === (SCORE_ID || "") ? s : null; } catch (e) { return null; }
   }
   stats();
   var toastEl = $("toast"), toastT = 0;
@@ -1536,6 +1541,7 @@ function startMarket(SHOP_DATA, MINE_ID) {
       game.endAt = performance.now() + ROUND_SEC * 1000; syncGBtn(); stats();
       setTimeout(function () { toast("🍎 이어서 찾아요 · 지금까지 " + appleGot + "개"); }, 600);
     } else if (saved && saved.state === "free") {
+      appleGot = saved.got || 0; stampN = saved.stamp || 0; /* 그만둔 뒤에도 찾은 개수는 판에 계속 보인다 */
       browseOnly();
     } else { syncGBtn(); setTimeout(gameIntro, 700); }
   }
