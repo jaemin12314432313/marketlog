@@ -850,3 +850,15 @@ def hide_booth_product(product_id: str, x_booth_key: str | None = Header(None), 
     shop.hidden = True
     db.commit()
     return {"success": True}
+
+
+@router.delete("/shops/{number}")
+def hide_booth_shop(number: int, x_booth_key: str | None = Header(None), db: Session = Depends(get_db)):
+    """상품이 없는 빈 가게(테스트로 열기만 한 가게)도 스태프가 번호로 숨길 수 있게 한다."""
+    _require_admin(x_booth_key)
+    shop = db.query(BoothShop).filter(BoothShop.number == number).first()
+    if not shop:
+        raise HTTPException(status_code=404, detail="그 번호의 가게가 없습니다.")
+    shop.hidden = True
+    db.commit()
+    return {"success": True}
