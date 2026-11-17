@@ -376,7 +376,8 @@ function getRecipeRecommendations(product: ProductItem): RecipeRecommendation[] 
           { name: "생강", amount: "1쪽", isMain: true },
           { name: "대추", amount: "5알", isMain: true },
           { name: "꿀", amount: "적당량", isMain: false },
-        ]
+        ],
+        "tfOuhcajcps"
       ),
       base(
         "상큼한 귤청",
@@ -460,7 +461,8 @@ function getRecipeRecommendations(product: ProductItem): RecipeRecommendation[] 
           { name: "땅콩", amount: "한 줌", isMain: true },
           { name: "요거트", amount: "3큰술", isMain: false },
           { name: "꿀", amount: "1큰술", isMain: false },
-        ]
+        ],
+        "UfLf7TMTdrQ"
       ),
       base(
         "사과 밤 대추 조림",
@@ -474,7 +476,8 @@ function getRecipeRecommendations(product: ProductItem): RecipeRecommendation[] 
           { name: "대추", amount: "10알", isMain: true },
           { name: "생강", amount: "1쪽", isMain: true },
           { name: "설탕", amount: "3큰술", isMain: false },
-        ]
+        ],
+        "NkvaV0BvXsg"
       ),
       base(
         "사과잼",
