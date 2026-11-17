@@ -279,10 +279,18 @@ def generate_openai_attribute_summary(image: Image.Image, item: str, grades: dic
         grades_text = ", ".join(f"{name}: {grade}" for name, grade in grades.items())
         prompt = (
             f"이 사진 속 품목은 '{item}'입니다. 전용 비전 모델이 이미 아래처럼 속성별 상태를 "
-            f"판정해 최종 등급 '{final_grade}'를 확정했습니다.\n{grades_text}\n"
-            "이 판정은 이미 확정된 값이니 절대 바꾸거나 새로 매기지 말고, 그대로 반영해서 "
-            "사진을 참고해 구매자에게 도움이 되는 자연스러운 한국어 종합의견을 2문장 내외로만 "
-            "작성하세요. 다른 설명 없이 문장만 출력하세요."
+            f"판정해 최종 등급 '{final_grade}'를 확정했습니다.\n{grades_text}\n\n"
+            "[판정 읽는 법] 손상·흠집은 '적음'이 좋고 '많음'이 나쁜 상태입니다. 그 밖의 속성"
+            "(착색도, 신선도, 모양상태, 손질상태, 껍질상태 등)은 특상 > 상 > 중 순으로 좋습니다. "
+            "'보통'은 평범한 수준입니다. 이 판정은 확정된 값이니 바꾸거나 새로 매기지 말고, "
+            "'적음'을 '없음'처럼, '보통'을 '적음'처럼 부풀려 쓰지 마세요.\n\n"
+            "[써야 할 것] 한국어 친근한 말투('~예요', '~해요')로 정확히 3문장.\n"
+            "1문장: 사진에서 실제로 보이는 모습(색·모양·표면)과 판정 중 가장 두드러진 장점을 구체적으로.\n"
+            "2문장: 판정에서 아쉬운 점이 있으면 솔직하게 한 가지만(없으면 이 품목이 잘 보이는 점 하나).\n"
+            f"3문장: '{item}'을(를) 어떻게 고르거나 보관하거나 요리하면 좋은지 쓸모 있는 팁 하나.\n"
+            "[쓰면 안 되는 것] '이 ○○는'으로 문장 시작, '구매에 안심', '추천드립니다', '좋은 선택', "
+            "등급 이름 반복, 사진에서 확인할 수 없는 맛·산지 단정.\n"
+            "다른 설명 없이 3문장만 출력하세요."
         )
         response = client.chat.completions.create(
             model=OPENAI_MODEL,
@@ -293,7 +301,8 @@ def generate_openai_attribute_summary(image: Image.Image, item: str, grades: dic
                     {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
                 ],
             }],
-            max_tokens=200,
+            max_tokens=280,
+            temperature=0.8,
         )
         return (response.choices[0].message.content or "").strip() or None
     except Exception as e:
