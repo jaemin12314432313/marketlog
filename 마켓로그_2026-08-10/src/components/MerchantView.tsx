@@ -96,8 +96,17 @@ const AI_TAG_SUGGESTIONS: Record<string, string[]> = {
 };
 const AI_TAG_SUGGESTIONS_DEFAULT = ["#신선한", "#산지직송", "#인기상품", "#오늘특가", "#추천상품", "#가성비", "#단골추천", "#품절임박"];
 
-function getAiRecommendedTags(rawCategory: string, index: number): string[] {
-  const pool = AI_TAG_SUGGESTIONS[rawCategory] || AI_TAG_SUGGESTIONS_DEFAULT;
+// 전시 품목(양파·사과·귤)에 맞는 태그를 앞에 둔다 — 새로고침을 누르면 카테고리 공통 태그까지 이어서 보인다.
+const ITEM_TAG_SUGGESTIONS: { key: string; tags: string[] }[] = [
+  { key: "양파", tags: ["#달큰한", "#볶음요리", "#국물맛", "#단단한", "#묵직한", "#양념기본"] },
+  { key: "사과", tags: ["#아삭한", "#꿀사과", "#향긋한", "#당도높은", "#윤기나는", "#아침사과"] },
+  { key: "귤", tags: ["#새콤달콤", "#상큼한", "#겨울간식", "#손에쏙", "#달콤한", "#귤차"] },
+];
+
+function getAiRecommendedTags(rawCategory: string, index: number, rawTitle = ""): string[] {
+  const itemTags = ITEM_TAG_SUGGESTIONS.find((it) => rawTitle.includes(it.key))?.tags ?? [];
+  const base = AI_TAG_SUGGESTIONS[rawCategory] || AI_TAG_SUGGESTIONS_DEFAULT;
+  const pool = [...itemTags, ...base.filter((t) => !itemTags.includes(t))];
   const offset = (index * 3) % pool.length;
   return [...pool.slice(offset), ...pool.slice(0, offset)].slice(0, 5);
 }
@@ -204,7 +213,72 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
   const getAiRecommendations = (rawTitle: string, rawCategory: string, index: number) => {
     const name = rawTitle.trim() || `${rawCategory || "인기"} 상품`;
     const market = marketName || "전통시장";
+    // 전시 품목(양파·사과·귤)은 그 품목 문구를 맨 앞에 둬서 첫 추천부터 어울리게 한다.
+    const itemSets: string[][] = [];
+    if (name.includes("양파")) {
+      itemSets.push(
+        [
+          `달큰하고 단단한 ${name}, 볶음이든 국이든 요리의 기본이 되는 재료예요 🧅`,
+          `썰어서 볶으면 단맛이 올라오는 ${name}! 오늘 저녁 반찬 걱정 끝이에요 🍳`,
+          `AI가 품질을 확인한 ${name}, 시장에서 고르는 재미까지 챙겨 가세요 ✨`,
+        ],
+        [
+          `국물 요리의 감칠맛을 살려 주는 ${name}입니다. 한 망 담아 가세요! 🍲`,
+          `카라멜색으로 천천히 볶아 보세요. 달큰한 ${name}의 진짜 맛이 나요 🔥`,
+          `${market}에서 만나는 단단한 ${name}, AI 품질 판정으로 한 번 더 확인했어요 👍`,
+        ]
+      );
+    }
+    if (name.includes("사과")) {
+      itemSets.push(
+        [
+          `아삭하고 향긋한 ${name}! 한 입 베어 물면 달콤한 과즙이 가득해요 🍎`,
+          `붉게 잘 익은 ${name}, 아침 한 알로 하루를 상큼하게 시작해 보세요 ☀️`,
+          `AI가 품질을 확인한 ${name}, 선물용으로도 손색없어요 🎁`,
+        ],
+        [
+          `껍질째 먹기 좋은 깨끗한 ${name}입니다. 간식으로 딱이에요 😋`,
+          `달고 아삭한 ${name} 한 상자, 온 가족이 함께 나눠 드세요 ❤️`,
+          `${market}에서 골라 담은 윤기 나는 ${name}, 사진으로 품질까지 확인했어요 ✨`,
+        ]
+      );
+    }
+    if (name.includes("귤")) {
+      itemSets.push(
+        [
+          `새콤달콤 ${name}! 까먹는 재미에 자꾸 손이 가요 🍊`,
+          `상큼한 향이 가득한 ${name}, 겨울 간식으로 제일이에요 ❄️`,
+          `AI가 품질을 확인한 ${name}, 한 봉지 담아 가세요 ✨`,
+        ],
+        [
+          `손에 쏙 들어오는 ${name}, 달콤함이 한 알 한 알 가득해요 😊`,
+          `차로 우려도 맛있는 ${name}입니다. 생강과 함께 따뜻하게 드셔 보세요 🍵`,
+          `${market}에서 만나는 ${name}, 한 번 까면 멈출 수 없어요 🧡`,
+        ]
+      );
+    }
     const sets = [
+      ...itemSets,
+      [
+        `${name}, 오늘 들어온 신선한 물건이에요. 눈으로 보고 믿고 고르세요 👀`,
+        `사진 한 장으로 AI가 품질을 확인한 ${name}입니다. 믿고 골라 보세요 ✅`,
+        `${market}의 정이 듬뿍 담긴 ${name}, 덤은 마음으로 드려요 💛`,
+      ],
+      [
+        `하나를 사도 정성껏 골랐어요. ${name} 한번 맛보시면 단골 되십니다 🙌`,
+        `정직한 가격, 정직한 품질. ${name}으로 오늘 식탁을 채워 보세요 🍽️`,
+        `첫 손님 환영! ${name} 맛보고 가세요 🎉`,
+      ],
+      [
+        `싱싱함은 기본, 맛은 덤! 오늘의 추천 ${name}을 만나보세요 🌿`,
+        `시장 한 바퀴 돌고 우리 가게 ${name}을 꼭 들러 보세요 🚶`,
+        `AI 판정으로 확인한 ${name}, 가격도 시세와 비교해 보세요 📊`,
+      ],
+      [
+        `오래 두고 먹어도 든든한 ${name}입니다 💪`,
+        `가족에게 주는 마음으로 골랐어요. ${name} 가져가 보세요 🏠`,
+        `좋은 건 알아보는 눈이 있어요. ${name} 직접 보고 고르세요 ⭐`,
+      ],
       [
         `오늘 새벽 산지에서 직송되어 신선함이 남다른 ${name}입니다! 신선도와 맛이 최고예요 👍`,
         `${market} 단골 손님들이 가장 많이 찾으시는 인기 폭발 ${name}! 자신 있게 추천합니다 🔥`,
@@ -989,7 +1063,7 @@ export const MerchantView: React.FC<MerchantViewProps> = ({
                   {/* 이미 골라둔 태그는 새로고침으로 화면에서 밀려나도 계속 보이게, 이번에
                       새로 뜬 추천 태그 앞에 고정으로 붙여준다 — 안 그러면 골라놓고 새로고침
                       했을 때 "방금 고른 게 없어졌나?" 하고 헷갈리게 된다. */}
-                  {[...selectedTags, ...getAiRecommendedTags(category, tagSetIndex)]
+                  {[...selectedTags, ...getAiRecommendedTags(category, tagSetIndex, title)]
                     .filter((tag, idx, arr) => arr.indexOf(tag) === idx)
                     .map((tag) => {
                     const isSelected = selectedTags.includes(tag);
