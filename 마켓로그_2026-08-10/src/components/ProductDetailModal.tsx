@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Browser } from "@capacitor/browser";
 import { ProductItem, MarketInfo, AttributeGradeLabel } from "../types";
-import { perBasisText, priceForCompare, unitBasisLabel } from "../lib/priceUnit";
+import { priceForCompare, publicForUnit, qtyLabel } from "../lib/priceUnit";
 import { fetchStoreByName, StoreInfo } from "../lib/api";
 import { MARKETS_DATA } from "../data/initialData";
 import { UserRole } from "./LoginModal";
@@ -1064,7 +1064,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       )}
                     </span>
                     <div className="text-xl font-semibold text-[#0F172A] mt-0.5">
-                      {product.publicPrice ? `${product.publicPrice.toLocaleString()}원` : "-"}
+                      {product.publicPrice ? `${publicForUnit(product.publicPrice, product.unit).toLocaleString()}원` : "-"}
                     </div>
                   </div>
                 </div>
@@ -1098,16 +1098,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         </span>
                       )}
                     </div>
-                    {perBasisText(product.price, product.unit) && (
-                      <p className="mt-0.5 text-[11px] font-semibold text-slate-400">
-                        {product.unit} 가격 · {perBasisText(product.price, product.unit)}
-                      </p>
-                    )}
                   </div>
 
                   <div>
                     <span className="text-xs font-bold text-[#0F172A] h-4 flex items-center gap-1 relative">
-                      공공 시세{unitBasisLabel(product.unit) ? ` (${unitBasisLabel(product.unit)} 기준)` : ""}
+                      공공 시세{qtyLabel(product.unit) ? ` (${qtyLabel(product.unit)} 기준)` : ""}
                       <button
                         type="button"
                         onClick={() => setShowPublicPriceInfo((v) => !v)}
@@ -1124,7 +1119,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       )}
                     </span>
                     <div className="text-xl font-semibold text-[#0F172A] mt-0.5">
-                      {product.publicPrice ? `${product.publicPrice.toLocaleString()}원` : "-"}
+                      {product.publicPrice ? `${publicForUnit(product.publicPrice, product.unit).toLocaleString()}원` : "-"}
                     </div>
                   </div>
                 </div>

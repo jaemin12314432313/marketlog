@@ -29,6 +29,21 @@ export function perBasisText(price: number, unit?: string | null): string | null
   return `${label}당 ${Math.round(price / factor).toLocaleString("ko-KR")}원`;
 }
 
+/** 시세를 판매 단위 분량으로 환산한 값: 판매가가 "2kg 12,000원"이면 1kg 시세 5,119원 → 10,238원(2kg 분량). 환산 단위가 아니면 그대로. */
+export function publicForUnit(publicPrice: number, unit?: string | null): number {
+  return Math.round(publicPrice * unitFactor(unit));
+}
+
+/** 판매 단위 그대로의 라벨: "2kg" / "20개". 환산 단위가 아니면 null. */
+export function qtyLabel(unit?: string | null): string | null {
+  const t = (unit || "").trim();
+  let m = t.match(/^(\d+(?:\.\d+)?)\s*개$/);
+  if (m) return `${Number(m[1])}개`;
+  m = t.match(/^(\d+(?:\.\d+)?)\s*kg$/i);
+  if (m) return `${Number(m[1])}kg`;
+  return null;
+}
+
 /** 화면에 붙일 시세 기준 라벨: "10개" / "1kg" / 환산 단위가 아니면 null. */
 export function unitBasisLabel(unit?: string | null): string | null {
   const t = (unit || "").trim();

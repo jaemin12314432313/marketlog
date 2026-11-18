@@ -3,7 +3,7 @@
 import React from "react";
 import logoIcon from "../assets/logo-icon.png";
 import type { AttributeGradeLabel } from "../types";
-import { perBasisText, priceForCompare, unitBasisLabel } from "../lib/priceUnit";
+import { priceForCompare, publicForUnit, qtyLabel } from "../lib/priceUnit";
 
 export const APP_BG = "bg-[#F1F5F9]";
 // 앱 카드: 흰 바탕 + 연한 테두리 + 얕은 그림자
@@ -104,8 +104,7 @@ export function PriceRow({ price, publicPrice, unit }: { price: number; publicPr
   const [showInfo, setShowInfo] = React.useState(false);
   // 감귤처럼 시세가 10개 기준인 품목은 "20개 가격"을 10개 가격으로 환산해서 비교한다.
   const pct = publicPrice > 0 ? Math.round(((publicPrice - priceForCompare(price, unit)) / publicPrice) * 100) : null;
-  const basisLabel = unitBasisLabel(unit);
-  const perBasis = perBasisText(price, unit); // 예: "1kg당 2,000원" — 시세와 같은 기준 가격
+  const basisLabel = qtyLabel(unit); // 시세도 판매 단위 분량으로 보여 준다(2kg 판매 → 시세 2배)
   return (
     <div className="grid grid-cols-2 gap-3">
       <div>
@@ -116,7 +115,6 @@ export function PriceRow({ price, publicPrice, unit }: { price: number; publicPr
             <span className="inline-block translate-y-px text-[11px] font-semibold text-[#0052FF] bg-blue-50 px-1.5 py-0.5 rounded-full">{pct}% 저렴</span>
           )}
         </div>
-        {perBasis && <p className="mt-0.5 text-[11px] font-semibold text-slate-400">{unit} 가격 · {perBasis}</p>}
       </div>
       <div>
         <span className="text-xs font-bold text-[#0F172A] h-4 flex items-center gap-1 relative">
@@ -124,7 +122,7 @@ export function PriceRow({ price, publicPrice, unit }: { price: number; publicPr
           <button type="button" onClick={() => setShowInfo((value) => !value)} className="material-symbols-outlined text-xs text-slate-400 hover:text-slate-600 cursor-pointer leading-none" style={{ fontSize: "14px" }} aria-label="공공 시세 안내" aria-expanded={showInfo}>info</button>
           {showInfo && <span className="absolute left-0 top-full mt-1 z-20 w-56 bg-[#0F172A] text-white text-[11px] font-medium leading-relaxed rounded-lg p-2.5 shadow-xl">한국농수산식품유통공사(KAMIS)에서 제공하는 해당 품목의 최신 소매 평균 시세입니다.</span>}
         </span>
-        <div className="text-xl font-semibold text-[#0F172A] mt-0.5">{publicPrice ? `${publicPrice.toLocaleString()}원` : "-"}</div>
+        <div className="text-xl font-semibold text-[#0F172A] mt-0.5">{publicPrice ? `${publicForUnit(publicPrice, unit).toLocaleString()}원` : "-"}</div>
       </div>
     </div>
   );

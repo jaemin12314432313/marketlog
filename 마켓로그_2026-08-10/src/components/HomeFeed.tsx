@@ -3,7 +3,7 @@ import { ProductItem, MarketInfo } from "../types";
 import { UserRole } from "./LoginModal";
 import { ProductFilterModal } from "./ProductFilterModal";
 import { MARKETS_DATA } from "../data/initialData";
-import { perBasisText, priceForCompare } from "../lib/priceUnit";
+import { priceForCompare } from "../lib/priceUnit";
 
 // 비전 파이프라인이 2단계(특상/보통) 등급으로 바뀌어서, 화면에도 A+/B 같은 영문 등급
 // 대신 실제 판정 체계와 맞는 한글 표기를 쓴다 (데이터 자체는 여전히 A+/B 등 문자로 저장됨).
@@ -441,7 +441,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
                         </div>
                         {discountPercent(product) !== null && (
                           <span className="block text-[10px] font-bold text-[#94A3B8] mt-1 leading-tight">
-                            {perBasisText(product.price, product.unit) ? `${perBasisText(product.price, product.unit)} 기준 저렴` : "공공시세 대비 저렴"}
+                            공공시세 대비 저렴
                           </span>
                         )}
                       </div>
@@ -565,7 +565,7 @@ export const HomeFeed: React.FC<HomeFeedProps> = ({
                       </div>
                       {discountPercent(product) !== null && (
                         <span className="block text-[11px] font-bold text-[#94A3B8] mt-1">
-                          {perBasisText(product.price, product.unit) ? `${perBasisText(product.price, product.unit)} 기준 저렴` : "공공시세 대비 저렴"}
+                          공공시세 대비 저렴
                         </span>
                       )}
                     </div>
