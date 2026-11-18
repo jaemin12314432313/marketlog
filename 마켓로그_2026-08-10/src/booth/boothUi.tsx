@@ -72,8 +72,7 @@ export function priceDiffText(price: number, publicPrice: number): { text: strin
   if (!publicPrice) return { text: "", tone: "same" };
   const diff = Math.round(((publicPrice - price) / publicPrice) * 100);
   if (diff > 0) return { text: `공공 시세보다 ${diff}% 저렴`, tone: "good" };
-  if (diff < 0) return { text: `공공 시세보다 ${-diff}% 비쌈`, tone: "high" };
-  return { text: "공공 시세와 같은 가격", tone: "same" };
+  return { text: "공공 시세와 비슷한 가격", tone: "same" }; // 시세보다 높아도 "비쌈" 문구는 쓰지 않는다
 }
 
 export function won(n: number): string {

@@ -3,7 +3,7 @@
 //  - makeShopSummaryCard: 내 가게 페이지(/s/{id})의 "요약본 저장" — 가게 전체
 import QRCode from "qrcode";
 import { boothResultImageUrl, type BoothProduct } from "./boothApi";
-import { priceForCompare } from "../lib/priceUnit";
+import { priceForCompare, publicForUnit, qtyLabel } from "../lib/priceUnit";
 
 const W = 1080;
 const H = 1350;
@@ -334,7 +334,7 @@ export async function makeShopSummaryCard(
     ["AI 특상", `${premium}개`, "#059669"],
     [
       "시세 대비",
-      avgDiff == null ? "-" : avgDiff > 0 ? `${avgDiff}% 저렴` : avgDiff < 0 ? `${-avgDiff}% 높음` : "시세 수준",
+      avgDiff == null ? "-" : avgDiff > 0 ? `${avgDiff}% 저렴` : "시세 수준",
       avgDiff != null && avgDiff > 0 ? BLUE : NAVY,
     ],
   ];
@@ -397,10 +397,10 @@ export async function makeShopSummaryCard(
     ctx.font = `900 42px ${FONT}`;
     ctx.fillText(priceText, right, y + 76);
     const diff = diffPercent(p);
-    if (diff != null && diff !== 0) {
-      ctx.fillStyle = diff > 0 ? "#059669" : "#E11D48";
+    if (diff != null && diff > 0) {
+      ctx.fillStyle = "#059669";
       ctx.font = `700 22px ${FONT}`;
-      ctx.fillText(diff > 0 ? `시세보다 ${diff}% 저렴` : `시세보다 ${-diff}% 높음`, right, y + 116);
+      ctx.fillText(`시세보다 ${diff}% 저렴`, right, y + 116);
     }
     ctx.textAlign = "left";
   }
@@ -618,7 +618,7 @@ export async function makeProductPageCard(
       const boxW = (innerW - 20) / 2;
       const boxes: [string, number, string][] = [
         ["우리 가게", product.price, BLUE],
-        ["공공 시세", product.publicPrice, NAVY],
+        [qtyLabel(product.unit) ? `공공 시세 (${qtyLabel(product.unit)} 기준)` : "공공 시세", publicForUnit(product.publicPrice, product.unit), NAVY],
       ];
       boxes.forEach(([label, value, color], i) => {
         const bx = x + i * (boxW + 20);
@@ -633,11 +633,11 @@ export async function makeProductPageCard(
         ctx.fillText(`${value.toLocaleString("ko-KR")}원`, bx + 24, top + 92 + 88);
       });
       const diff = diffPercent(product);
-      if (diff != null && diff !== 0) {
+      if (diff != null && diff > 0) {
         ctx.textAlign = "right";
-        ctx.fillStyle = diff > 0 ? "#059669" : "#E11D48";
+        ctx.fillStyle = "#059669";
         ctx.font = `800 24px ${FONT}`;
-        ctx.fillText(diff > 0 ? `공공 시세보다 ${diff}% 저렴` : `공공 시세보다 ${-diff}% 높음`, right, top + 64);
+        ctx.fillText(`공공 시세보다 ${diff}% 저렴`, right, top + 64);
         ctx.textAlign = "left";
       }
     });

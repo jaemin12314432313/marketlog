@@ -197,9 +197,7 @@ def _price_tag(price: int, public_price: int) -> str:
     diff = round((public_price - price) / public_price * 100)
     if diff > 0:
         return f"공공 시세 대비 {diff}% 저렴"
-    if diff < 0:
-        return f"공공 시세 대비 {-diff}% 비쌈"
-    return "공공 시세와 동일"
+    return "공공 시세와 비슷한 가격"  # 시세보다 높아도 "비쌈" 같은 문구는 쓰지 않는다
 
 
 def _confidence_percent(payload: BoothRegisterRequest) -> int | None:

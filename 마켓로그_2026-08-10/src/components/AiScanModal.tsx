@@ -53,8 +53,7 @@ function buildPriceTag(price: number, publicPrice: number): string {
   if (!price || !publicPrice) return "공공 시세 연동 검증";
   const diffPercent = Math.round(((publicPrice - price) / publicPrice) * 100);
   if (diffPercent > 0) return `공공 시세 대비 ${diffPercent}% 저렴`;
-  if (diffPercent < 0) return `공공 시세보다 ${Math.abs(diffPercent)}% 비쌈`;
-  return "공공 시세와 동일";
+  return "공공 시세와 비슷한 가격";
 }
 
 // 비전 파이프라인이 2단계(특상/보통) 등급으로 바뀌어서, 화면에도 A+/B 같은 영문 등급
