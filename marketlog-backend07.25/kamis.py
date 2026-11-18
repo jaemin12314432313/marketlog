@@ -308,5 +308,11 @@ async def get_public_price(item_name: str, grade_kor: str) -> "int | None":
     rank = GRADE_TO_RANK.get(grade_kor, "상품")
     if rank in by_rank:
         return by_rank[rank]
-    # 감귤처럼 상품/중품이 아니라 크기 등급(M과/S과 등)만 있는 경우 아무 값이나 대표로 사용
+    # 감귤처럼 상품/중품이 아니라 크기 등급(M과/S과 등)만 있으면: 좋은 등급 → 비싼 쪽, 보통 등급 → 싼 쪽
+    if "상품" not in by_rank and "중품" not in by_rank:
+        ordered = sorted(by_rank.values(), reverse=True)
+        return ordered[0] if rank == "상품" else ordered[-1]
+    # 양파처럼 KAMIS가 중품 값을 안 주는 날: 보통 등급은 상품 시세의 90%로 근사한다
+    if rank == "중품" and "상품" in by_rank:
+        return round(by_rank["상품"] * 0.9)
     return next(iter(by_rank.values()))
